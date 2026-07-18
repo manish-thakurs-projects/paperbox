@@ -7,6 +7,8 @@ const SETTINGS_KEY = "@paper-box/settings-v1";
 type Persisted = Settings;
 
 type State = Settings & {
+  lockSuppressed: boolean;
+  setLockSuppressed: (enabled: boolean) => void;
   setTheme: (theme: Settings["theme"]) => void;
   setLockEnabled: (enabled: boolean) => void;
   toggle: (key: "hidePreviews") => void;
@@ -45,6 +47,7 @@ export const useSettingsStore = create<State>((set, get) => {
     theme: "light",
     hidePreviews: false,
     lockEnabled: false,
+    lockSuppressed: false,
     setTheme: (theme) => {
       set({ theme });
       const p = get();
@@ -54,6 +57,9 @@ export const useSettingsStore = create<State>((set, get) => {
       set({ lockEnabled: enabled });
       const p = get();
       save({ theme: p.theme, hidePreviews: p.hidePreviews, lockEnabled: enabled });
+    },
+    setLockSuppressed: (enabled) => {
+      set({ lockSuppressed: enabled });
     },
     toggle: (key) => {
       set((s) => {
