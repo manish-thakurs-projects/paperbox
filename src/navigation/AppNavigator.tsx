@@ -6,6 +6,8 @@ import { FolderDetailScreen } from "../screens/FolderDetailScreen";
 import { PreviewScreen } from "../screens/PreviewScreen";
 import { PdfReviewScreen } from "../screens/PdfReviewScreen";
 import { SearchScreen } from "../screens/SearchScreen";
+import { AllFilesScreen } from "../screens/AllFilesScreen";
+import { CapturedFilesScreen } from "../screens/CapturedFilesScreen";
 import { RootStackParams } from "../navigation/types";
 import { usePaperTheme } from "../theme/usePaperTheme";
 const Stack = createNativeStackNavigator<RootStackParams>();
@@ -49,6 +51,16 @@ export function AppNavigator() {
         name="PdfReview"
         component={PdfReviewScreen}
         options={{ title: "Review pages" }}
+      />
+      <Stack.Screen
+        name="AllFiles"
+        component={AllFilesScreen}
+        options={{ title: "All files" }}
+      />
+      <Stack.Screen
+        name="CapturedFiles"
+        component={CapturedFilesScreen}
+        options={{ title: "Captured files" }}
       />
     </Stack.Navigator>
   );

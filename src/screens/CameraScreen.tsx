@@ -7,6 +7,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Pressable,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -307,35 +308,39 @@ export function CameraScreen() {
     <Screen style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.title}>Camera</Text>
-        <Text style={styles.subtitle}>Choose how you want to scan documents.</Text>
       </View>
 
       <View style={styles.buttonGroup}>
         <TouchableOpacity
-          style={[styles.optionButton, isScanning && styles.disabledButton]}
+          style={[styles.optionCard, isScanning && styles.disabledButton]}
           onPress={() => scanFromCamera("photo")}
           disabled={isScanning}
         >
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Feather name="camera" size={18} color={colors.text} style={{ marginRight: 10 }} />
-            <Text style={styles.optionText}>Take picture</Text>
+          <View style={styles.cardContent}>
+            <Feather name="camera" size={30} color={colors.text} style={styles.cardIcon} />
+            <Text style={styles.cardLabel}>Take picture</Text>
           </View>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.optionButton, isScanning && styles.disabledButton]}
+          style={[styles.optionCard, isScanning && styles.disabledButton]}
           onPress={() => scanFromCamera("pdf")}
           disabled={isScanning}
         >
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Feather name="file-text" size={18} color={colors.text} style={{ marginRight: 10 }} />
-            <Text style={styles.optionText}>Create PDF</Text>
+          <View style={styles.cardContent}>
+            <Feather name="file-text" size={30} color={colors.text} style={styles.cardIcon} />
+            <Text style={styles.cardLabel}>Create PDF</Text>
           </View>
         </TouchableOpacity>
       </View>
 
       <View style={styles.recentSection}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent captures</Text>
+        <View style={styles.labelRow}>
+          <Text style={styles.sectionTitle}>RECENT CAPTURES</Text>
+          {recentFiles.length > 5 ? (
+            <Pressable style={styles.viewAllLink} onPress={() => navigation.navigate("CapturedFiles")}>
+              <Text style={styles.viewAllLinkText}>View all ›</Text>
+            </Pressable>
+          ) : null}
         </View>
 
         {recentFiles.length === 0 ? (
@@ -472,17 +477,36 @@ const getStyles = (c: {
       flexDirection: "row",
       flexWrap: "wrap",
     },
-    optionButton: {
-      display: "flex",
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
+    optionCard: {
       backgroundColor: c.surface,
-      borderRadius: 14,
-      paddingVertical: 12,
-      paddingHorizontal: 20,
-      marginBottom: 16,
-      minWidth: "47%",
+      borderRadius: 18,
+      width: "47%",
+      height: 120,
+      marginBottom: 5,
+      alignItems: "center",
+      justifyContent: "flex-start",
+      paddingTop: 18,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    cardContent: {
+      alignItems: "center",
+      justifyContent: "flex-start",
+      paddingHorizontal: 12,
+      flex: 1,
+    },
+    cardIcon: {
+      marginTop: 6,
+      marginBottom: 20,
+    },
+    cardLabel: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: c.text,
+      textAlign: "center",
     },
     disabledButton: {
       opacity: 0.5,
@@ -495,14 +519,30 @@ const getStyles = (c: {
     recentSection: {
       marginTop: 32,
     },
+    labelRow: {
+      marginBottom: 18,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
     sectionHeader: {
       marginBottom: 18,
     },
     sectionTitle: {
-      color: c.text,
-      fontSize: 18,
-      fontWeight: "800",
-      marginBottom: 6,
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 1.1,
+      color: c.secondary,
+    },
+    viewAllLink: {
+      paddingVertical: 4,
+      paddingHorizontal: 8,
+      borderRadius: 8,
+    },
+    viewAllLinkText: {
+      color: c.secondary,
+      fontSize: 13,
+      fontWeight: "700",
     },
     sectionDescription: {
       color: c.secondary,

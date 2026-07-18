@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
   Alert,
   Share,
+  TextInput,
 } from "react-native";
 import { Screen } from "../components/Screen";
 import { usePaperTheme } from "../theme/usePaperTheme";
@@ -62,8 +63,8 @@ export function SettingsScreen() {
   const theme = useSettingsStore((s) => s.theme),
     setTheme = useSettingsStore((s) => s.setTheme),
     lock = useSettingsStore((s) => s.lockEnabled),
-    hide = useSettingsStore((s) => s.hidePreviews),
-    toggle = useSettingsStore((s) => s.toggle);
+    biometricEnabled = useSettingsStore((s) => (s as any).biometricEnabled),
+    setBiometricEnabled = useSettingsStore((s) => (s as any).setBiometricEnabled);
 
   const files = useVaultStore((state) => state.files);
   const folders = useVaultStore((state) => state.folders);
@@ -88,6 +89,18 @@ export function SettingsScreen() {
   const [scannerPermission, setScannerPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
+
+  // Lock/passcode setup
+  const setPasscode = useSettingsStore((s) => s.setPasscode);
+  const setLockEnabled = useSettingsStore((s) => s.setLockEnabled);
+  const verifyPasscode = useSettingsStore((s) => s.verifyPasscode);
+  const [passcodeSetupVisible, setPasscodeSetupVisible] = useState(false);
+  const [newPass, setNewPass] = useState("");
+  const [confirmPass, setConfirmPass] = useState("");
+  const [passError, setPassError] = useState<string | null>(null);
+  const [passDisableVisible, setPassDisableVisible] = useState(false);
+  const [disablePass, setDisablePass] = useState("");
+  const [disableError, setDisableError] = useState<string | null>(null);
 
   const folderSelection = useMemo(
     () => [...folders].sort((a, b) => a.name.localeCompare(b.name)),
@@ -411,6 +424,32 @@ export function SettingsScreen() {
     }
   };
 
+  const handleSetPasscodeConfirm = async () => {
+    setPassError(null);
+    if (!newPass || newPass.length < 4) {
+      setPassError("Passcode must be at least 4 characters");
+      return;
+    }
+    if (newPass !== confirmPass) {
+      setPassError("Passcodes do not match");
+      return;
+    }
+    await setPasscode(newPass);
+    await setLockEnabled(true);
+    setPasscodeSetupVisible(false);
+  };
+
+  const handleDisablePasscodeConfirm = async () => {
+    setDisableError(null);
+    const ok = await verifyPasscode(disablePass);
+    if (!ok) {
+      setDisableError("Incorrect passcode");
+      return;
+    }
+    await setLockEnabled(false);
+    setPassDisableVisible(false);
+  };
+
   const renderExportOptions = () => (
     <Modal animationType="slide" transparent visible={exportOptionsVisible} onRequestClose={() => setExportOptionsVisible(false)}>
       <View style={s.modalOverlay}>
@@ -634,14 +673,52 @@ export function SettingsScreen() {
         <SettingsRow icon="lock" label="Lock Paper Box" colors={colors}>
           <Switch
             value={lock}
-            onValueChange={() => toggle("lockEnabled")}
+            onValueChange={async (v) => {
+              if (v) {
+                // enable: prompt to set passcode
+                setNewPass("");
+                setConfirmPass("");
+                setPassError(null);
+                setPasscodeSetupVisible(true);
+              } else {
+                // disabling: require current passcode
+                setDisablePass("");
+                setDisableError(null);
+                setPassDisableVisible(true);
+              }
+            }}
             trackColor={{ false: colors.muted, true: colors.inverse }}
           />
         </SettingsRow>
-        <SettingsRow icon="eye-off" label="Hide sensitive previews" colors={colors}>
+        <SettingsRow icon="key" label="Use device biometrics" colors={colors}>
           <Switch
-            value={hide}
-            onValueChange={() => toggle("hidePreviews")}
+            value={!!biometricEnabled}
+            onValueChange={async (v) => {
+              if (v) {
+                try {
+                  // eslint-disable-next-line @typescript-eslint/no-var-requires
+                  const LocalAuth = require("expo-local-authentication");
+                  if (!LocalAuth) throw new Error("LocalAuth missing");
+                  const has = await LocalAuth.hasHardwareAsync?.();
+                  const enrolled = await LocalAuth.isEnrolledAsync?.();
+                  if (!has || !enrolled) {
+                    Alert.alert("Biometric unavailable", "No biometric hardware or no biometrics enrolled on this device.");
+                    return;
+                  }
+                  const res = await LocalAuth.authenticateAsync({ promptMessage: "Enable biometrics for Paper Box" });
+                  if ((res as any).success) {
+                    await setBiometricEnabled(true);
+                  } else {
+                    Alert.alert("Authentication failed", "Could not enable biometrics.");
+                  }
+                } catch (e) {
+                  console.warn("enable biometric error", e);
+                  Alert.alert("Biometric unavailable", "Biometric authentication is not available on this device or dependency is not installed.");
+                }
+              } else {
+                await setBiometricEnabled(false);
+              }
+            }}
             trackColor={{ false: colors.muted, true: colors.inverse }}
           />
         </SettingsRow>
@@ -659,6 +736,61 @@ export function SettingsScreen() {
         </SettingsRow>
       </View>
       <Text style={s.version}>Paper Box - Version 1.0.0{"\n"}Offline-first personal document vault</Text>
+
+      <Modal animationType="slide" transparent visible={passcodeSetupVisible} onRequestClose={() => setPasscodeSetupVisible(false)}>
+        <View style={s.modalOverlay}>
+          <View style={s.modalContent}>
+            <Text style={s.modalTitle}>Set app passcode</Text>
+            <TextInput
+              value={newPass}
+              onChangeText={setNewPass}
+              secureTextEntry
+              placeholder="Enter passcode"
+              placeholderTextColor={colors.secondary}
+              style={s.inputField}
+            />
+            <TextInput
+              value={confirmPass}
+              onChangeText={setConfirmPass}
+              secureTextEntry
+              placeholder="Confirm passcode"
+              placeholderTextColor={colors.secondary}
+              style={[s.inputField, { marginBottom: 8 }]}
+            />
+            {passError ? <Text style={s.modalSubtitle}>{passError}</Text> : null}
+            <Pressable style={[s.modalButton, s.modalSaveButton]} onPress={handleSetPasscodeConfirm}>
+              <Text style={[s.modalActionText, s.modalSaveText]}>Set passcode and lock</Text>
+            </Pressable>
+            <Pressable style={[s.modalButton, s.modalCancelButton]} onPress={() => setPasscodeSetupVisible(false)}>
+              <Text style={[s.modalButtonText, s.modalCancelText]}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal animationType="slide" transparent visible={passDisableVisible} onRequestClose={() => setPassDisableVisible(false)}>
+        <View style={s.modalOverlay}>
+          <View style={s.modalContent}>
+            <Text style={s.modalTitle}>Disable app lock</Text>
+            <TextInput
+              value={disablePass}
+              onChangeText={setDisablePass}
+              secureTextEntry
+              placeholder="Enter current passcode"
+              placeholderTextColor={colors.secondary}
+              style={s.inputField}
+            />
+            {disableError ? <Text style={s.modalSubtitle}>{disableError}</Text> : null}
+            <Pressable style={[s.modalButton, s.modalSaveButton]} onPress={handleDisablePasscodeConfirm}>
+              <Text style={[s.modalActionText, s.modalSaveText]}>Disable lock</Text>
+            </Pressable>
+            <Pressable style={[s.modalButton, s.modalCancelButton]} onPress={() => setPassDisableVisible(false)}>
+              <Text style={[s.modalButtonText, s.modalCancelText]}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       {renderExportOptions()}
       {renderExportSelection()}
       {renderExportPreview()}
@@ -741,6 +873,14 @@ const styles = (c: {
       fontSize: 14,
       marginBottom: 16,
       lineHeight: 20,
+    },
+    inputField: {
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      backgroundColor: c.background,
+      color: c.text,
+      marginBottom: 12,
     },
     modalActions: {
       marginBottom: 16,
