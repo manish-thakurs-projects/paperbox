@@ -6,7 +6,14 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "android": {
-      "package": "com.paperbox.vault"
+      "package": "com.paperbox.vault",
+      "permissions": ["CAMERA"]
+    },
+    "ios": {
+      "bundleIdentifier": "com.paperbox.vault",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app needs camera access to scan documents and capture images."
+      }
     },
     "androidStatusBarColor": "#000000",
     "androidStatusBarStyle": "light-content",
@@ -14,7 +21,13 @@
     "androidNavigationBarStyle": "dark",
     "plugins": [
       "expo-document-picker",
-      "expo-video"
+      "expo-video",
+      [
+        "react-native-document-scanner-plugin",
+        {
+          "cameraPermission": "This app needs camera access to scan documents."
+        }
+      ]
     ]
   }
 }

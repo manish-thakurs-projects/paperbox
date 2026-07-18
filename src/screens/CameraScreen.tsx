@@ -1,8 +1,21 @@
 ﻿import React, { useMemo, useState } from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Alert,
+  PermissionsAndroid,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
+import DocumentScanner, {
+  ResponseType,
+  ScanDocumentResponseStatus,
+} from "react-native-document-scanner-plugin";
+import * as FileSystem from "expo-file-system/legacy";
 import { Screen } from "../components/Screen";
 import { FileRow } from "../components/FileRow";
 import { FileActionModal } from "../components/FileActionModal";
@@ -12,7 +25,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { usePaperTheme } from "../theme/usePaperTheme";
 import { shareVaultFile } from "../services/shareService";
 import { useVaultStore } from "../store/useVaultStore";
-import { getFolderIdsForFile } from "../utils/files";
+import { getFolderIdsForFile, extensionOf, kindOf } from "../utils/files";
 import { RootStackParams } from "../navigation/types";
 import { VaultFile } from "../types";
 
@@ -22,6 +35,7 @@ export function CameraScreen() {
   const styles = getStyles(colors);
   const files = useVaultStore((state) => state.files);
   const folders = useVaultStore((state) => state.folders);
+  const addFiles = useVaultStore((state) => state.addFiles);
   const toggleFavorite = useVaultStore((state) => state.toggleFavorite);
   const togglePin = useVaultStore((state) => state.togglePin);
   const renameFile = useVaultStore((state) => state.renameFile);
@@ -35,6 +49,7 @@ export function CameraScreen() {
   const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([]);
   const [confirmDeleteFileId, setConfirmDeleteFileId] = useState<string | null>(null);
   const [confirmDeleteSelectionVisible, setConfirmDeleteSelectionVisible] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
 
   const actionFile = useMemo(
     () => (actionFileId ? files.find((file) => file.id === actionFileId) ?? null : null),
@@ -183,6 +198,98 @@ export function CameraScreen() {
     setMoveVisible(true);
   };
 
+  const normalizeUri = (value?: string) => {
+    if (!value) return "";
+    return value.startsWith("file://") ? value : `file://${value}`;
+  };
+
+  const saveImageToVault = async (uri: string) => {
+    const normalizedUri = normalizeUri(uri);
+    const filename = `Scan-${Date.now()}.jpg`;
+    const extension = extensionOf(normalizedUri) || "jpg";
+    const fileInfo = await FileSystem.getInfoAsync(normalizedUri);
+    const file: VaultFile = {
+      id: `${Date.now()}-${Math.random()}`,
+      name: filename,
+      uri: normalizedUri,
+      mimeType: "image/jpeg",
+      size: fileInfo.exists ? fileInfo.size : 0,
+      extension,
+      kind: kindOf(extension),
+      createdAt: new Date().toISOString(),
+      isFavorite: false,
+      isPinned: false,
+      tags: [],
+      source: "camera",
+    };
+    addFiles([file]);
+    return file;
+  };
+
+  const requestCameraPermission = async () => {
+    if (Platform.OS !== "android") {
+      return true;
+    }
+
+    const granted = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.CAMERA,
+      {
+        title: "Camera access required",
+        message: "Paper Box needs camera access to scan documents.",
+        buttonPositive: "Allow",
+        buttonNegative: "Deny",
+      },
+    );
+
+    return granted === PermissionsAndroid.RESULTS.GRANTED;
+  };
+
+  const scanFromCamera = async (mode: "photo" | "pdf") => {
+    if (isScanning) {
+      return;
+    }
+
+    setIsScanning(true);
+    try {
+      const granted = await requestCameraPermission();
+      if (!granted) {
+        Alert.alert(
+          "Camera permission required",
+          "Allow camera access to scan documents.",
+        );
+        return;
+      }
+
+      const result = await DocumentScanner.scanDocument({
+        responseType: ResponseType.ImageFilePath,
+        maxNumDocuments: mode === "pdf" ? 10 : 1,
+      });
+
+      if (result.status === ScanDocumentResponseStatus.Cancel) {
+        return;
+      }
+
+      const scannedImages = result.scannedImages?.map(normalizeUri).filter(Boolean) ?? [];
+      if (!scannedImages.length) {
+        Alert.alert("No scan result", "Try scanning again.");
+        return;
+      }
+
+      if (mode === "photo") {
+        const newFile = await saveImageToVault(scannedImages[0]);
+        navigation.navigate("Preview", { fileId: newFile.id });
+        return;
+      }
+
+      navigation.navigate("PdfReview", { imageUris: scannedImages });
+    } catch (error) {
+      console.warn("scanFromCamera error", error);
+      Alert.alert("Scan failed", "Unable to scan document. Please try again.");
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
   const handleMoveSelection = () => {
     if (!selectedRowIds.length || !selectedFolderIds.length) {
       setMoveVisible(false);
@@ -205,20 +312,22 @@ export function CameraScreen() {
 
       <View style={styles.buttonGroup}>
         <TouchableOpacity
-          style={styles.optionButton}
-          onPress={() => navigation.navigate("CameraCapture", { mode: "photo" })}
+          style={[styles.optionButton, isScanning && styles.disabledButton]}
+          onPress={() => scanFromCamera("photo")}
+          disabled={isScanning}
         >
-          <View style={{flexDirection: 'row', alignItems: 'center'}}>
-            <Feather name="camera" size={18} color={colors.text} style={{marginRight: 10}} />
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Feather name="camera" size={18} color={colors.text} style={{ marginRight: 10 }} />
             <Text style={styles.optionText}>Take picture</Text>
           </View>
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.optionButton}
-          onPress={() => navigation.navigate("CameraCapture", { mode: "pdf" })}
+          style={[styles.optionButton, isScanning && styles.disabledButton]}
+          onPress={() => scanFromCamera("pdf")}
+          disabled={isScanning}
         >
-          <View style={{flexDirection: 'row', alignItems: 'center'}}>
-            <Feather name="file-text" size={18} color={colors.text} style={{marginRight: 10}} />
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Feather name="file-text" size={18} color={colors.text} style={{ marginRight: 10 }} />
             <Text style={styles.optionText}>Create PDF</Text>
           </View>
         </TouchableOpacity>
@@ -373,7 +482,10 @@ const getStyles = (c: {
       paddingVertical: 12,
       paddingHorizontal: 20,
       marginBottom: 16,
-      minWidth: "47%",  
+      minWidth: "47%",
+    },
+    disabledButton: {
+      opacity: 0.5,
     },
     optionText: {
       color: c.text,

@@ -6,6 +6,8 @@ import {
   Image,
   Modal,
   PanResponder,
+  PermissionsAndroid,
+  Platform,
   Pressable,
   ScrollView,
   StatusBar,
@@ -20,6 +22,10 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as Print from "expo-print";
+import DocumentScanner, {
+  ResponseType,
+  ScanDocumentResponseStatus,
+} from "react-native-document-scanner-plugin";
 import { usePaperTheme } from "../theme/usePaperTheme";
 import { Feather } from '@expo/vector-icons';
 import { useVaultStore } from "../store/useVaultStore";
@@ -31,6 +37,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
   const { imageUris } = route.params;
   const { width } = useWindowDimensions();
   const [isSaving, setIsSaving] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
   const [pages, setPages] = useState(imageUris.map((uri, index) => ({ id: `${index}-${uri}`, uri })));
@@ -38,16 +45,13 @@ export function PdfReviewScreen({ navigation, route }: Props) {
   const [deleteAlertVisible, setDeleteAlertVisible] = useState(false);
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [tileLayouts, setTileLayouts] = useState<Record<string, { x: number; y: number; width: number; height: number }>>({});
-  const [dragTargetIndex, setDragTargetIndex] = useState<number | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isReordering, setIsReordering] = useState(false);
   const columnCount = 6;
-  const gap = 0;
-  const totalBorderWidth = columnCount - 1;
-  const itemWidth = (width - totalBorderWidth - gap * (columnCount - 1)) / columnCount;
+  const itemWidth = width / columnCount;
   const itemHeight = width * 0.4;
   const gridRef = useRef<View | null>(null);
-  const itemRefs = useRef<Record<string, View | null>>({});
+  const gridOrigin = useRef({ x: 0, y: 0 });
 
   useFocusEffect(
     React.useCallback(() => {
@@ -56,19 +60,104 @@ export function PdfReviewScreen({ navigation, route }: Props) {
           setIsPreviewVisible(false);
           return true;
         }
+        if (isReordering) {
+          setIsReordering(false);
+          return true;
+        }
         navigation.goBack();
         return true;
       };
 
       const subscription = BackHandler.addEventListener("hardwareBackPress", onBackPress);
       return () => subscription.remove();
-    }, [navigation, isPreviewVisible]),
+    }, [navigation, isPreviewVisible, isReordering]),
   );
   const addFiles = useVaultStore((s) => s.addFiles);
   const { colors } = usePaperTheme();
   const styles = getStyles(colors, itemWidth, itemHeight, width);
   const pageUris = pages.map((page) => page.uri);
   const rowSelectionMode = !isReordering && selectedPageIds.length > 0;
+  const hasPages = pages.length > 0;
+
+  const normalizeUri = (uri: string) => {
+    if (!uri) return uri;
+    return uri.startsWith("file://") ? uri : `file://${uri}`;
+  };
+
+  const requestCameraPermission = async () => {
+    if (Platform.OS !== "android") {
+      return true;
+    }
+
+    const granted = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.CAMERA,
+      {
+        title: "Camera access required",
+        message: "Paper Box needs camera access to scan documents.",
+        buttonPositive: "Allow",
+        buttonNegative: "Deny",
+      },
+    );
+
+    return granted === PermissionsAndroid.RESULTS.GRANTED;
+  };
+
+  const addPages = async () => {
+    if (isScanning) return;
+    setIsScanning(true);
+
+    try {
+      const granted = await requestCameraPermission();
+      if (!granted) {
+        Alert.alert("Camera permission required", "Allow camera access to scan documents.");
+        return;
+      }
+
+      const result = await DocumentScanner.scanDocument({
+        responseType: ResponseType.ImageFilePath,
+        maxNumDocuments: 10,
+      });
+
+      if (result.status === ScanDocumentResponseStatus.Cancel) {
+        return;
+      }
+
+      const scannedImages = result.scannedImages?.filter(Boolean).map(normalizeUri) ?? [];
+      if (!scannedImages.length) {
+        Alert.alert("No scan result", "Try scanning again.");
+        return;
+      }
+
+      setPages((current) => [
+        ...current,
+        ...scannedImages.map((uri, index) => ({ id: `${Date.now()}-${current.length + index}-${uri}`, uri })),
+      ]);
+    } catch (error) {
+      console.warn("addPages error", error);
+      Alert.alert("Scan failed", "Unable to scan documents. Please try again.");
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const deletePreviewPage = () => {
+    if (selectedImageIndex === null) return;
+    const pageToRemove = pages[selectedImageIndex];
+    if (!pageToRemove) return;
+
+    const nextPages = pages.filter((page) => page.id !== pageToRemove.id);
+    setPages(nextPages);
+    setSelectedPageIds((current) => current.filter((id) => id !== pageToRemove.id));
+
+    if (!nextPages.length) {
+      closePreview();
+      return;
+    }
+
+    if (selectedImageIndex >= nextPages.length) {
+      setSelectedImageIndex(nextPages.length - 1);
+    }
+  };
 
   const getFileSize = async (uri: string) => {
     try {
@@ -159,13 +248,14 @@ export function PdfReviewScreen({ navigation, route }: Props) {
     setSelectedImageIndex(index);
     setIsPreviewVisible(true);
   };
- 
+
   const closePreview = () => {
     setIsPreviewVisible(false);
     setSelectedImageIndex(null);
   };
 
   const startReorder = () => {
+    if (!hasPages) return;
     setSelectedPageIds([]);
     setIsReordering(true);
   };
@@ -199,18 +289,12 @@ export function PdfReviewScreen({ navigation, route }: Props) {
     setDeleteAlertVisible(false);
   };
 
-  const updateTileLayout = (id: string, layout: { x: number; y: number; width: number; height: number }) => {
-    setTileLayouts((current) => {
-      if (current[id]?.x === layout.x && current[id]?.y === layout.y && current[id]?.width === layout.width && current[id]?.height === layout.height) {
-        return current;
-      }
-      return { ...current, [id]: layout };
-    });
-  };
-
   const movePage = (fromIndex: number, toIndex: number) => {
     if (fromIndex === toIndex) return;
     setPages((current) => {
+      if (fromIndex < 0 || fromIndex >= current.length || toIndex < 0 || toIndex >= current.length) {
+        return current;
+      }
       const next = [...current];
       const [item] = next.splice(fromIndex, 1);
       next.splice(toIndex, 0, item);
@@ -218,26 +302,15 @@ export function PdfReviewScreen({ navigation, route }: Props) {
     });
   };
 
-  const getTargetIndexFromPoint = (x: number, y: number) => {
-    const entries = Object.entries(tileLayouts).map(([id, layout]) => ({ id, layout }));
-    if (!entries.length) return null;
-
-    let closestIndex: number | null = null;
-    let closestDistance = Number.POSITIVE_INFINITY;
-
-    entries.forEach(({ id }, index) => {
-      const layout = tileLayouts[id];
-      if (!layout) return;
-      const centerX = layout.x + layout.width / 2;
-      const centerY = layout.y + layout.height / 2;
-      const distance = Math.hypot(x - centerX, y - centerY);
-      if (distance < closestDistance) {
-        closestDistance = distance;
-        closestIndex = index;
-      }
-    });
-
-    return closestIndex;
+  // Compute a grid target index directly from the fixed column geometry rather than
+  // relying on per-tile onLayout snapshots (which go stale as soon as items reflow).
+  const getTargetIndexFromWindowPoint = (pageX: number, pageY: number) => {
+    const relativeX = pageX - gridOrigin.current.x;
+    const relativeY = pageY - gridOrigin.current.y;
+    const col = Math.min(columnCount - 1, Math.max(0, Math.floor(relativeX / itemWidth)));
+    const row = Math.max(0, Math.floor(relativeY / itemHeight));
+    const index = row * columnCount + col;
+    return Math.min(pages.length - 1, Math.max(0, index));
   };
 
   const createPanResponder = (pageId: string, index: number) =>
@@ -248,23 +321,24 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         if (!isReordering) return;
         setDraggedItemId(pageId);
         setDraggedIndex(index);
-        setDragTargetIndex(index);
+        setDragOffset({ x: 0, y: 0 });
+        gridRef.current?.measureInWindow((x, y) => {
+          gridOrigin.current = { x, y };
+        });
       },
-      onPanResponderMove: (evt) => {
-        if (!isReordering || !gridRef.current) return;
-        const currentDraggedIndex = draggedIndex;
-        if (currentDraggedIndex === null) return;
+      onPanResponderMove: (evt, gestureState) => {
+        if (!isReordering) return;
+        setDragOffset({ x: gestureState.dx, y: gestureState.dy });
 
-        const targetIndex = getTargetIndexFromPoint(evt.nativeEvent.pageX, evt.nativeEvent.pageY);
-        if (targetIndex === null || targetIndex === currentDraggedIndex) {
-          return;
-        }
-
-        if (targetIndex !== dragTargetIndex) {
-          setDragTargetIndex(targetIndex);
-          movePage(currentDraggedIndex, targetIndex);
-          setDraggedIndex(targetIndex);
-        }
+        setDraggedIndex((currentDraggedIndex) => {
+          if (currentDraggedIndex === null) return currentDraggedIndex;
+          const targetIndex = getTargetIndexFromWindowPoint(evt.nativeEvent.pageX, evt.nativeEvent.pageY);
+          if (targetIndex !== currentDraggedIndex) {
+            movePage(currentDraggedIndex, targetIndex);
+            return targetIndex;
+          }
+          return currentDraggedIndex;
+        });
       },
       onPanResponderRelease: (_evt, gestureState) => {
         if (!isReordering) {
@@ -274,17 +348,71 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         }
         setDraggedItemId(null);
         setDraggedIndex(null);
-        setDragTargetIndex(null);
+        setDragOffset({ x: 0, y: 0 });
       },
       onPanResponderTerminate: () => {
         setDraggedItemId(null);
         setDraggedIndex(null);
-        setDragTargetIndex(null);
+        setDragOffset({ x: 0, y: 0 });
       },
     });
 
   return (
     <View style={styles.screen}>
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+      <View style={styles.reviewHeader}>
+        <View>
+          <Text style={styles.title}>Review pages</Text>
+          <Text style={styles.subtitle}>
+            {pages.length} page{pages.length === 1 ? "" : "s"} ready to export.
+          </Text>
+        </View>
+        <View style={styles.pageCountBadge}>
+          <Text style={styles.pageCountText}>{pages.length}</Text>
+        </View>
+      </View>
+
+      <View style={styles.actionBar}>
+        <TouchableOpacity
+          style={[styles.actionButton, isScanning && styles.actionButtonDisabled]}
+          onPress={addPages}
+          disabled={isScanning}
+        >
+          {isScanning ? (
+            <ActivityIndicator size="small" color={colors.background} />
+          ) : (
+            <>
+              <Feather name="plus" size={16} color={colors.background} style={styles.actionIcon} />
+              <Text style={styles.actionButtonText}>Add page</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.actionButton,
+            isReordering && styles.actionButtonActive,
+            !hasPages && !isReordering && styles.actionButtonDisabled,
+          ]}
+          onPress={isReordering ? finishReorder : startReorder}
+          disabled={!hasPages && !isReordering}
+        >
+          <Feather name={isReordering ? "check" : "move"} size={16} color={isReordering ? colors.background : colors.text} style={styles.actionIcon} />
+          <Text style={[styles.actionButtonText, isReordering && styles.actionButtonTextActive]}>
+            {isReordering ? "Done" : "Reorder"}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionButton, !selectedPageIds.length && styles.actionButtonDisabled]}
+          onPress={deleteSelectedPages}
+          disabled={!selectedPageIds.length}
+        >
+          <Feather name="trash-2" size={16} color={colors.background} style={styles.actionIcon} />
+          <Text style={styles.actionButtonText}>Delete</Text>
+        </TouchableOpacity>
+      </View>
+
       {isReordering ? (
         <View style={styles.reorderBanner}>
           <Text style={styles.reorderBannerText}>Drag and drop pages to reorder them.</Text>
@@ -305,54 +433,88 @@ export function PdfReviewScreen({ navigation, route }: Props) {
           </View>
         </View>
       ) : null}
- 
-      <ScrollView
-        style={styles.scrollArea}
-        contentContainerStyle={styles.pagesGridContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View ref={gridRef} style={[styles.pagesGrid, { width }] }>
-          {pages.map((page, index) => {
-            const panHandlers = createPanResponder(page.id, index).panHandlers;
-            const isSelected = selectedPageIds.includes(page.id);
-            const isFirstColumn = index % columnCount === 0;
-            const isFirstRow = index < columnCount;
-            return (
-              <Pressable
-                key={page.id}
-                ref={(ref) => {
-                  itemRefs.current[page.id] = ref;
-                }}
-                style={[
-                  styles.pageCard,
-                  {
-                    flexBasis: `${100 / columnCount}%`,
-                    maxWidth: `${100 / columnCount}%`,
-                    marginBottom: 0,
-                    borderLeftWidth: isFirstColumn ? 0 : 1,
-                    borderTopWidth: isFirstRow ? 0 : 1,
-                  },
-                  isSelected && styles.pageCardSelected,
-                ]}
-                onLayout={(event) => updateTileLayout(page.id, event.nativeEvent.layout)}
-                onPress={() => (rowSelectionMode ? togglePageSelection(page.id) : openPreview(index))}
-                onLongPress={() => togglePageSelection(page.id)}
-                {...panHandlers}
-              >
-                <Image source={{ uri: page.uri }} style={styles.pageImage} />
-                {isSelected ? <View style={styles.pageSelectionOverlay} /> : null}
-                <Text style={styles.pageNumberBadge}>{index + 1}</Text>
-              </Pressable>
-            );
-          })}
+
+      {hasPages ? (
+        <ScrollView
+          style={styles.scrollArea}
+          contentContainerStyle={styles.pagesGridContent}
+          showsVerticalScrollIndicator={false}
+          scrollEnabled={!isReordering}
+        >
+          <View ref={gridRef} style={[styles.pagesGrid, { width }]}>
+            {pages.map((page, index) => {
+              const panHandlers = createPanResponder(page.id, index).panHandlers;
+              const isSelected = selectedPageIds.includes(page.id);
+              const isDragged = draggedItemId === page.id;
+              const isFirstColumn = index % columnCount === 0;
+              const isFirstRow = index < columnCount;
+              return (
+                <Pressable
+                  key={page.id}
+                  style={[
+                    styles.pageCard,
+                    {
+                      flexBasis: `${100 / columnCount}%`,
+                      maxWidth: `${100 / columnCount}%`,
+                      marginBottom: 0,
+                      borderLeftWidth: isFirstColumn ? 0 : 1,
+                      borderTopWidth: isFirstRow ? 0 : 1,
+                    },
+                    isSelected && styles.pageCardSelected,
+                    isDragged && [
+                      styles.pageCardDragged,
+                      { transform: [{ translateX: dragOffset.x }, { translateY: dragOffset.y }, { scale: 1.08 }] },
+                    ],
+                  ]}
+                  onPress={() => (rowSelectionMode ? togglePageSelection(page.id) : openPreview(index))}
+                  onLongPress={() => !isReordering && togglePageSelection(page.id)}
+                  {...panHandlers}
+                >
+                  <Image source={{ uri: page.uri }} style={styles.pageImage} />
+                  {isSelected ? (
+                    <>
+                      <View style={styles.pageSelectionOverlay} />
+                      <View style={styles.pageSelectionIcon}>
+                        <Feather name="check-circle" size={20} color="#fff" />
+                      </View>
+                    </>
+                  ) : null}
+                  {isReordering ? (
+                    <View style={styles.dragHandle}>
+                      <Feather name="move" size={12} color="#fff" />
+                    </View>
+                  ) : null}
+                  <Text style={styles.pageNumberBadge}>{index + 1}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </ScrollView>
+      ) : (
+        <View style={styles.emptyState}>
+          <View style={styles.emptyIconCircle}>
+            <Feather name="file-text" size={28} color={colors.secondary} />
+          </View>
+          <Text style={styles.emptyTitle}>No pages yet</Text>
+          <Text style={styles.emptySubtitle}>Scan a document to start building your PDF.</Text>
+          <TouchableOpacity style={styles.emptyAddButton} onPress={addPages} disabled={isScanning}>
+            {isScanning ? (
+              <ActivityIndicator size="small" color={colors.background} />
+            ) : (
+              <>
+                <Feather name="plus" size={16} color={colors.background} style={styles.actionIcon} />
+                <Text style={styles.actionButtonText}>Add page</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
-      </ScrollView>
+      )}
 
       <View style={styles.footer}>
         <TouchableOpacity
-          style={[styles.primaryButton, isSaving && styles.primaryButtonDisabled]}
+          style={[styles.primaryButton, (isSaving || !hasPages) && styles.primaryButtonDisabled]}
           onPress={createPdf}
-          disabled={isSaving}
+          disabled={isSaving || !hasPages}
         >
           {isSaving ? (
             <ActivityIndicator size="small" color={colors.background} />
@@ -363,43 +525,37 @@ export function PdfReviewScreen({ navigation, route }: Props) {
             </View>
           )}
         </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryButton} onPress={isReordering ? finishReorder : startReorder}>
-          <Feather name={isReordering ? "check" : "edit-3"} size={16} color={colors.text} />
-        </TouchableOpacity>
       </View>
 
       <Modal visible={isPreviewVisible} transparent={true} animationType="fade" onRequestClose={closePreview}>
         <View style={styles.previewModalContainer}>
           <View style={styles.previewHeader}>
             <TouchableOpacity style={styles.previewHeaderButton} onPress={closePreview}>
-              <Feather name="arrow-left" size={20} color={colors.background} />
+              <Feather name="arrow-left" size={20} color="#FFFFFF" />
             </TouchableOpacity>
-            <Text style={styles.previewTitle}>{selectedImageIndex !== null ? `Image ${selectedImageIndex + 1}` : "Preview"}</Text>
-            <TouchableOpacity style={styles.previewHeaderButton}>
-              <Feather name="more-vertical" size={20} color={colors.background} />
-            </TouchableOpacity>
+            <Text style={styles.previewTitle}>{selectedImageIndex !== null ? `Image ${selectedImageIndex + 1} of ${pages.length}` : "Preview"}</Text>
+            <View style={styles.previewHeaderSpacer} />
           </View>
- 
+
           {selectedImageIndex !== null && pages[selectedImageIndex] ? (
             <Image source={{ uri: pages[selectedImageIndex].uri }} style={styles.previewImage} resizeMode="contain" />
           ) : null}
- 
+
           <View style={styles.previewFooter}>
-            <TouchableOpacity style={styles.previewFooterButton}>
-              <Feather name="trash-2" size={18} color={colors.background} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.previewFooterButton}>
-              <Feather name="edit-3" size={18} color={colors.background} />
+            <TouchableOpacity style={styles.previewFooterButton} onPress={deletePreviewPage}>
+              <Feather name="trash-2" size={18} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
- 
+
       <Modal visible={deleteAlertVisible} transparent animationType="fade" onRequestClose={cancelDeletePages}>
         <View style={styles.alertOverlay}>
           <View style={styles.alertContainer}>
             <Text style={styles.alertTitle}>Delete selected pages?</Text>
-            <Text style={styles.alertMessage}>Selected pages will be removed from this PDF preview.</Text>
+            <Text style={styles.alertMessage}>
+              {selectedPageIds.length} page{selectedPageIds.length === 1 ? "" : "s"} will be removed from this PDF preview.
+            </Text>
             <View style={styles.alertActions}>
               <TouchableOpacity style={[styles.alertButton, styles.alertCancelButton]} onPress={cancelDeletePages}>
                 <Text style={styles.alertCancelText}>Cancel</Text>
@@ -436,24 +592,88 @@ const getStyles = (
       padding: 0,
       backgroundColor: c.background,
     },
-    header: {
+    reviewHeader: {
       paddingHorizontal: 20,
-      paddingTop: 16,
-      paddingBottom: 8,
+      paddingTop: 20,
+      paddingBottom: 16,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
       backgroundColor: c.background,
     },
     title: {
-      fontSize: 20,
-      fontWeight: "800",
+      fontSize: 24,
+      fontWeight: "900",
       color: c.text,
-      textAlign: "center",
+      lineHeight: 32,
     },
     subtitle: {
       color: c.secondary,
       fontSize: 14,
       lineHeight: 20,
+      marginTop: 6,
+      maxWidth: "80%",
+    },
+    pageCountBadge: {
+      minWidth: 56,
+      minHeight: 56,
+      borderRadius: 28,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.08,
+      shadowRadius: 16,
+      elevation: 5,
+    },
+    pageCountText: {
+      color: c.text,
+      fontWeight: "800",
+      fontSize: 18,
+    },
+    actionBar: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
       paddingHorizontal: 20,
-      marginBottom: 12,
+      gap: 12,
+      marginBottom: 10,
+    },
+    actionButton: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      borderRadius: 14,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      minHeight: 48,
+    },
+    actionButtonText: {
+      color: c.text,
+      fontWeight: "700",
+      fontSize: 13,
+      textTransform: "uppercase",
+      letterSpacing: 0.8,
+    },
+    actionButtonTextActive: {
+      color: c.background,
+    },
+    actionButtonActive: {
+      backgroundColor: c.text,
+      borderColor: c.text,
+    },
+    actionButtonDisabled: {
+      opacity: 0.45,
+    },
+    actionIcon: {
+      marginRight: 8,
     },
     scrollArea: {
       flex: 1,
@@ -477,11 +697,31 @@ const getStyles = (
       borderColor: c.border,
       height: itemHeight,
     },
+    pageCardDragged: {
+      zIndex: 10,
+      elevation: 12,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.3,
+      shadowRadius: 10,
+      opacity: 0.95,
+    },
     pageImage: {
       width: "100%",
       height: "100%",
       backgroundColor: c.background,
       resizeMode: "cover",
+    },
+    dragHandle: {
+      position: "absolute",
+      top: 8,
+      right: 8,
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      alignItems: "center",
+      justifyContent: "center",
     },
     pageNumberBadge: {
       position: "absolute",
@@ -498,6 +738,44 @@ const getStyles = (
       textAlign: "center",
       textAlignVertical: "center",
       lineHeight: 24,
+    },
+    emptyState: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 32,
+    },
+    emptyIconCircle: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 16,
+    },
+    emptyTitle: {
+      color: c.text,
+      fontSize: 18,
+      fontWeight: "800",
+      marginBottom: 6,
+    },
+    emptySubtitle: {
+      color: c.secondary,
+      fontSize: 14,
+      textAlign: "center",
+      marginBottom: 20,
+    },
+    emptyAddButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 12,
+      paddingHorizontal: 20,
+      borderRadius: 999,
+      backgroundColor: c.text,
     },
     alertOverlay: {
       flex: 1,
@@ -603,7 +881,18 @@ const getStyles = (
     },
     pageSelectionOverlay: {
       ...StyleSheet.absoluteFillObject,
-      backgroundColor: "rgba(0,0,0,0.24)",
+      backgroundColor: "rgba(0,0,0,0.30)",
+    },
+    pageSelectionIcon: {
+      position: "absolute",
+      top: 10,
+      right: 10,
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      alignItems: "center",
+      justifyContent: "center",
     },
     reorderBanner: {
       flexDirection: "row",
@@ -637,12 +926,11 @@ const getStyles = (
     },
     footer: {
       flexDirection: "row",
-      justifyContent: "space-between",
+      justifyContent: "center",
       alignItems: "center",
       paddingHorizontal: 20,
       paddingTop: 8,
       paddingBottom: 24,
-      gap: 10,
       backgroundColor: c.background,
     },
     primaryButton: {
@@ -654,7 +942,7 @@ const getStyles = (
       justifyContent: "center",
     },
     primaryButtonDisabled: {
-      opacity: 0.65,
+      opacity: 0.5,
     },
     primaryButtonContent: {
       flexDirection: "row",
@@ -665,16 +953,6 @@ const getStyles = (
       color: c.background,
       fontWeight: "700",
       fontSize: 15,
-    },
-    secondaryButton: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      borderWidth: 1,
-      borderColor: c.border,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: c.surface,
     },
     previewModalContainer: {
       flex: 1,
@@ -696,6 +974,10 @@ const getStyles = (
       backgroundColor: "rgba(255,255,255,0.18)",
       alignItems: "center",
       justifyContent: "center",
+    },
+    previewHeaderSpacer: {
+      width: 40,
+      height: 40,
     },
     previewTitle: {
       color: "#FFFFFF",
