@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "Paper Box",
+    "slug": "paper-box",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "android": {
+      "package": "com.paperbox.vault"
+    },
+    "androidStatusBarColor": "#000000",
+    "androidStatusBarStyle": "light-content",
+    "androidNavigationBarColor": "#000000",
+    "androidNavigationBarStyle": "dark",
+    "plugins": [
+      "expo-document-picker",
+      "expo-video"
+    ]
+  }
+}
