@@ -48,7 +48,6 @@ export function SearchScreen() {
 
   return (
     <Screen>
-      <Text style={s.title}>Search</Text>
       <View style={s.box}>
         <Feather name="search" size={19} color={colors.secondary} />
         <TextInput
@@ -107,13 +106,6 @@ export function SearchScreen() {
 }
 const styles = (c: { background: string; surface: string; elevated: string; text: string; secondary: string; border: string; muted: string; inverse: string }) =>
   StyleSheet.create({
-    title: {
-      fontSize: 32,
-      fontWeight: "800",
-      letterSpacing: -1,
-      color: c.text,
-      marginBottom: 24,
-    },
     box: {
       height: 52,
       backgroundColor: c.surface,

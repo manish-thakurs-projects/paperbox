@@ -24,19 +24,18 @@ export function PrivacyPolicyScreen() {
         explicitly use an export or share feature.
       </Text>
 
-      <Text style={s.sectionTitle}>Passcode</Text>
+      <Text style={s.sectionTitle}>Local storage and security</Text>
       <Text style={s.paragraph}>
-        If you choose to set an app passcode, Paper Box stores a cryptographic hash of the passcode. The app uses
-        a SHA-256 hash to verify the passcode locally; the plaintext passcode is never stored. This helps protect
-        your passcode from disclosure, but the stored hash is not kept in secure hardware — for maximum security,
-        consider using a device level secure storage solution.
+        Paper Box stores your files and metadata locally on your device. The app does not share this information
+        with third parties unless you explicitly export or share files. The security of your data depends on the
+        device's local protections and the app permissions you grant.
       </Text>
 
       <Text style={s.sectionTitle}>Biometric authentication</Text>
       <Text style={s.paragraph}>
-        When enabled, biometric authentication uses your device's biometric APIs (fingerprint / face) to unlock the
-        app. Biometrics are performed by the device's system; the app does not receive your biometric data. The
-        biometric setting only controls whether the device prompt is offered as an unlock option.
+        When app lock is enabled, Paper Box uses your device's system biometric prompt to authenticate. If biometrics
+        are unavailable, the prompt can fall back to the device credential method such as passcode or PIN. The app
+        does not receive biometric data directly.
       </Text>
 
       <Text style={s.sectionTitle}>Exports and sharing</Text>
@@ -68,10 +67,9 @@ export function PrivacyPolicyScreen() {
 
       <Text style={s.sectionTitle}>Security</Text>
       <Text style={s.paragraph}>
-        The app uses local encryption primitives where applicable and stores passcode hashes rather than plaintext
-        secrets. However, passcode hashes and files are stored in app storage and are not protected by device
-        hardware by default. For stronger protection, use device level encryption and secure storage provided by the
-        OS.
+        Paper Box keeps your data on the device and avoids sharing files without your consent. Because the app
+        stores information locally, use your operating system's device-level security and encryption features for
+        stronger protection.
       </Text>
 
       <Text style={s.sectionTitle}>Changes to this policy</Text>

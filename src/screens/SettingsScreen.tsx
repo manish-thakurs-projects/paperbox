@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParams } from "../navigation/types";
 import { Feather } from "@expo/vector-icons";
 import { CameraMountError, CameraView, useCameraPermissions } from "expo-camera";
 import * as FileSystem from "expo-file-system/legacy";
@@ -17,9 +19,6 @@ import {
   ActivityIndicator,
   Alert,
   Share,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
   Linking,
 } from "react-native";
 import { Screen } from "../components/Screen";
@@ -28,6 +27,7 @@ import { withAlpha } from "../theme/utils";
 import { radius } from "../theme/tokens";
 import { useSettingsStore } from "../store/useSettingsStore";
 import { useVaultStore } from "../store/useVaultStore";
+import { checkLocalAuthenticationAvailable } from "../utils/localAuthentication";
 import { VaultFile, Folder } from "../types";
 
 type SettingsRowProps = {
@@ -66,13 +66,26 @@ export function SettingsScreen() {
   const s = styles(colors);
   const theme = useSettingsStore((s) => s.theme),
     setTheme = useSettingsStore((s) => s.setTheme),
-    lock = useSettingsStore((s) => s.lockEnabled);
-  const navigation = useNavigation();
+    lockEnabled = useSettingsStore((s) => s.lockEnabled),
+    setLockEnabled = useSettingsStore((s) => s.setLockEnabled);
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParams>>();
 
   const files = useVaultStore((state) => state.files);
   const folders = useVaultStore((state) => state.folders);
   const addFiles = useVaultStore((state) => state.addFiles);
   const addFolders = useVaultStore((state) => state.addFolders);
+
+  const [authAvailable, setAuthAvailable] = useState(false);
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      const available = await checkLocalAuthenticationAvailable();
+      if (isMounted) setAuthAvailable(available);
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const [exportOptionsVisible, setExportOptionsVisible] = useState(false);
   const [exportSelectionVisible, setExportSelectionVisible] = useState(false);
@@ -93,20 +106,6 @@ export function SettingsScreen() {
   const [scanned, setScanned] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
 
-  // Lock/passcode setup
-  const setPasscode = useSettingsStore((s) => s.setPasscode);
-  const setLockEnabled = useSettingsStore((s) => s.setLockEnabled);
-  const verifyPasscode = useSettingsStore((s) => s.verifyPasscode);
-  const [passcodeSetupVisible, setPasscodeSetupVisible] = useState(false);
-  const [newPass, setNewPass] = useState("");
-  const [confirmPass, setConfirmPass] = useState("");
-  const [passError, setPassError] = useState<string | null>(null);
-  const [passDisableVisible, setPassDisableVisible] = useState(false);
-  const [disablePass, setDisablePass] = useState("");
-  const [disableError, setDisableError] = useState<string | null>(null);
-  const [showNewPass, setShowNewPass] = useState(false);
-  const [showConfirmPass, setShowConfirmPass] = useState(false);
-  const [showDisablePass, setShowDisablePass] = useState(false);
 
   const folderSelection = useMemo(
     () => [...folders].sort((a, b) => a.name.localeCompare(b.name)),
@@ -430,31 +429,6 @@ export function SettingsScreen() {
     }
   };
 
-  const handleSetPasscodeConfirm = async () => {
-    setPassError(null);
-    if (!newPass || newPass.length < 4) {
-      setPassError("Passcode must be at least 4 characters");
-      return;
-    }
-    if (newPass !== confirmPass) {
-      setPassError("Passcodes do not match");
-      return;
-    }
-    await setPasscode(newPass);
-    await setLockEnabled(true);
-    setPasscodeSetupVisible(false);
-  };
-
-  const handleDisablePasscodeConfirm = async () => {
-    setDisableError(null);
-    const ok = await verifyPasscode(disablePass);
-    if (!ok) {
-      setDisableError("Incorrect passcode");
-      return;
-    }
-    await setLockEnabled(false);
-    setPassDisableVisible(false);
-  };
 
   const renderExportOptions = () => (
     <Modal animationType="slide" transparent visible={exportOptionsVisible} onRequestClose={() => setExportOptionsVisible(false)}>
@@ -676,26 +650,24 @@ export function SettingsScreen() {
             trackColor={{ false: colors.muted, true: colors.inverse }}
           />
         </SettingsRow>
-        <SettingsRow icon="lock" label="Lock Paper Box" colors={colors}>
-          <Switch
-            value={lock}
-            onValueChange={async (v) => {
-              if (v) {
-                // enable: prompt to set passcode
-                setNewPass("");
-                setConfirmPass("");
-                setPassError(null);
-                setPasscodeSetupVisible(true);
-              } else {
-                // disabling: require current passcode
-                setDisablePass("");
-                setDisableError(null);
-                setPassDisableVisible(true);
-              }
-            }}
-            trackColor={{ false: colors.muted, true: colors.inverse }}
-          />
+        <SettingsRow icon="shield" label="App lock" colors={colors}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Switch
+              value={lockEnabled}
+              disabled={!authAvailable}
+              onValueChange={(v) => setLockEnabled(v)}
+              trackColor={{ false: colors.muted, true: colors.inverse }}
+            />
+            {!authAvailable ? (
+              <Text style={s.unavailableLabel}>Unavailable</Text>
+            ) : null}
+          </View>
         </SettingsRow>
+        {!authAvailable ? (
+          <Text style={s.helpText}>
+            App lock requires a native runtime with secure authentication support. Use a custom build or standalone app.
+          </Text>
+        ) : null}
       </View>
       <Text style={s.label}>VAULT</Text>
       <View style={s.group}>
@@ -723,77 +695,6 @@ export function SettingsScreen() {
         </SettingsRow>
       </View>
       <Text style={s.version}>Paper Box - Version 1.0.0{"\n"}</Text>
-
-      <Modal animationType="slide" transparent visible={passcodeSetupVisible} onRequestClose={() => setPasscodeSetupVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 20} style={s.modalOverlay}>
-          <View style={s.modalContent}>
-            <Text style={s.modalTitle}>Set app passcode</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 8 }}>
-              <TextInput
-                value={newPass}
-                onChangeText={setNewPass}
-                secureTextEntry={!showNewPass}
-                placeholder="Enter passcode"
-                placeholderTextColor={colors.secondary}
-                style={[s.inputField, { flex: 1, marginRight: 8 }]}
-              autoFocus
-              />
-              <Pressable onPress={() => setShowNewPass((p) => !p)} style={{ padding: 8 }}>
-                <Feather name={showNewPass ? 'eye' : 'eye-off'} size={18} color={colors.secondary} />
-              </Pressable>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 8 }}>
-              <TextInput
-                value={confirmPass}
-                onChangeText={setConfirmPass}
-                secureTextEntry={!showConfirmPass}
-                placeholder="Confirm passcode"
-                placeholderTextColor={colors.secondary}
-                style={[s.inputField, { flex: 1 }]}
-              />
-              <Pressable onPress={() => setShowConfirmPass((p) => !p)} style={{ padding: 8, marginLeft: 8 }}>
-                <Feather name={showConfirmPass ? 'eye' : 'eye-off'} size={18} color={colors.secondary} />
-              </Pressable>
-            </View>
-            {passError ? <Text style={s.modalSubtitle}>{passError}</Text> : null}
-            <Pressable style={[s.modalButton, s.modalSaveButton]} onPress={handleSetPasscodeConfirm}>
-              <Text style={[s.modalActionText, s.modalSaveText]}>Set passcode and lock</Text>
-            </Pressable>
-            <Pressable style={[s.modalButton, s.modalCancelButton]} onPress={() => setPasscodeSetupVisible(false)}>
-              <Text style={[s.modalButtonText, s.modalCancelText]}>Cancel</Text>
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      <Modal animationType="slide" transparent visible={passDisableVisible} onRequestClose={() => setPassDisableVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 20} style={s.modalOverlay}>
-          <View style={s.modalContent}>
-            <Text style={s.modalTitle}>Disable app lock</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 8 }}>
-              <TextInput
-                value={disablePass}
-                onChangeText={setDisablePass}
-                secureTextEntry={!showDisablePass}
-                placeholder="Enter current passcode"
-                placeholderTextColor={colors.secondary}
-                style={[s.inputField, { flex: 1, marginRight: 8 }]}
-              autoFocus
-              />
-              <Pressable onPress={() => setShowDisablePass((p) => !p)} style={{ padding: 8 }}>
-                <Feather name={showDisablePass ? 'eye' : 'eye-off'} size={18} color={colors.secondary} />
-              </Pressable>
-            </View>
-            {disableError ? <Text style={s.modalSubtitle}>{disableError}</Text> : null}
-            <Pressable style={[s.modalButton, s.modalSaveButton]} onPress={handleDisablePasscodeConfirm}>
-              <Text style={[s.modalActionText, s.modalSaveText]}>Disable lock</Text>
-            </Pressable>
-            <Pressable style={[s.modalButton, s.modalCancelButton]} onPress={() => setPassDisableVisible(false)}>
-              <Text style={[s.modalButtonText, s.modalCancelText]}>Cancel</Text>
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
 
       {renderExportOptions()}
       {renderExportSelection()}
@@ -854,6 +755,17 @@ const styles = (c: {
       backgroundColor: c.surface,
     },
     name: { fontSize: 15, fontWeight: "600", color: c.text, flex: 1 },
+    unavailableLabel: {
+      color: c.secondary,
+      fontSize: 12,
+    },
+    helpText: {
+      color: c.secondary,
+      fontSize: 12,
+      paddingHorizontal: 16,
+      paddingBottom: 10,
+      lineHeight: 18,
+    },
     modalOverlay: {
       flex: 1,
       justifyContent: "flex-end",

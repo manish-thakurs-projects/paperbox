@@ -12,7 +12,8 @@
     "ios": {
       "bundleIdentifier": "com.paperbox.vault",
       "infoPlist": {
-        "NSCameraUsageDescription": "This app needs camera access to scan documents and capture images."
+        "NSCameraUsageDescription": "This app needs camera access to scan documents and capture images.",
+        "NSFaceIDUsageDescription": "Allow Paper Box to use Face ID to unlock your vault."
       }
     },
     "androidStatusBarColor": "#000000",
@@ -22,6 +23,7 @@
     "plugins": [
       "expo-document-picker",
       "expo-video",
+      "expo-local-authentication",
       [
         "react-native-document-scanner-plugin",
         {
