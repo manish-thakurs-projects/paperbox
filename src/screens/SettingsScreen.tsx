@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Feather } from "@expo/vector-icons";
-import { CameraView, useCameraPermissions } from "expo-camera";
+import { CameraMountError, CameraView, useCameraPermissions } from "expo-camera";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as DocumentPicker from "expo-document-picker";
@@ -329,6 +329,11 @@ export function SettingsScreen() {
     setScanned(false);
   };
 
+  const onScannerMountError = (error: CameraMountError) => {
+    console.warn("Scanner mount error", error);
+    Alert.alert("Scanner unavailable", error.message ?? "Unable to start the camera scanner.");
+  };
+
   const importExportFile = async () => {
     if (!importSession) {
       Alert.alert("No active session", "Scan a transfer handshake before importing a file.");
@@ -564,6 +569,8 @@ export function SettingsScreen() {
            <View style={s.scannerContainer}>
              <CameraView
                style={s.scanner}
+               active={true}
+               onMountError={onScannerMountError}
                onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
                barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
              />

@@ -8,6 +8,7 @@ import { FileRow } from "../components/FileRow";
 import { FileActionModal } from "../components/FileActionModal";
 import { FolderMoveModal } from "../components/FolderMoveModal";
 import { EmptyState } from "../components/EmptyState";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { usePaperTheme } from "../theme/usePaperTheme";
 import { shareVaultFile } from "../services/shareService";
 import { useVaultStore } from "../store/useVaultStore";
@@ -32,6 +33,8 @@ export function CameraScreen() {
   const [moveVisible, setMoveVisible] = useState(false);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([]);
+  const [confirmDeleteFileId, setConfirmDeleteFileId] = useState<string | null>(null);
+  const [confirmDeleteSelectionVisible, setConfirmDeleteSelectionVisible] = useState(false);
 
   const actionFile = useMemo(
     () => (actionFileId ? files.find((file) => file.id === actionFileId) ?? null : null),
@@ -79,17 +82,18 @@ export function CameraScreen() {
 
   const deleteFile = () => {
     if (!actionFile) return;
-    Alert.alert("Delete this file?", "This only removes it from Paper Box.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => {
-          removeFile(actionFile.id);
-          closeActions();
-        },
-      },
-    ]);
+    setConfirmDeleteFileId(actionFile.id);
+  };
+
+  const confirmDeleteFile = () => {
+    if (!confirmDeleteFileId) return;
+    removeFile(confirmDeleteFileId);
+    closeActions();
+    setConfirmDeleteFileId(null);
+  };
+
+  const cancelDeleteFile = () => {
+    setConfirmDeleteFileId(null);
   };
 
   const renameFileAction = (name: string) => {
@@ -152,22 +156,17 @@ export function CameraScreen() {
 
   const deleteSelectedRows = () => {
     if (!selectedRowIds.length) return;
+    setConfirmDeleteSelectionVisible(true);
+  };
 
-    Alert.alert(
-      "Delete selected files?",
-      "This will remove the selected files from Paper Box.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            selectedRowIds.forEach((fileId) => removeFile(fileId));
-            clearRowSelection();
-          },
-        },
-      ],
-    );
+  const confirmDeleteSelectedRows = () => {
+    selectedRowIds.forEach((fileId) => removeFile(fileId));
+    clearRowSelection();
+    setConfirmDeleteSelectionVisible(false);
+  };
+
+  const cancelDeleteSelectedRows = () => {
+    setConfirmDeleteSelectionVisible(false);
   };
 
   const openSelectionMoveModal = () => {
@@ -228,9 +227,6 @@ export function CameraScreen() {
       <View style={styles.recentSection}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recent captures</Text>
-          <Text style={styles.sectionDescription}>
-            Your latest scanned files are available below for quick access.
-          </Text>
         </View>
 
         {recentFiles.length === 0 ? (
@@ -305,6 +301,24 @@ export function CameraScreen() {
           )
         }
         onSave={rowSelectionMode ? handleMoveSelection : saveFolderSelection}
+      />
+      <ConfirmDialog
+        visible={!!confirmDeleteFileId}
+        title="Delete this file?"
+        message="This only removes it from Paper Box."
+        confirmText="Delete"
+        destructive
+        onConfirm={confirmDeleteFile}
+        onCancel={cancelDeleteFile}
+      />
+      <ConfirmDialog
+        visible={confirmDeleteSelectionVisible}
+        title="Delete selected files?"
+        message="This will remove the selected files from Paper Box."
+        confirmText="Delete"
+        destructive
+        onConfirm={confirmDeleteSelectedRows}
+        onCancel={cancelDeleteSelectedRows}
       />
     </Screen>
   );

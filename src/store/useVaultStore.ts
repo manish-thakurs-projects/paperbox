@@ -19,6 +19,10 @@ type State = {
  assignFilesToFolder: (ids: string[], folderId: string) => void;
  addFilesToFolder: (items: VaultFile[], folderId: string) => void;
  removeFile: (id: string) => void;
+ removeFileFromFolder: (id: string, folderId: string) => void;
+ renameFolder: (id: string, name: string) => void;
+ deleteFolder: (id: string) => void;
+ togglePinFolder: (id: string) => void;
 };
 
 const normalizeFolderIds = (folderIds: string[] = []) =>
@@ -153,5 +157,51 @@ export const useVaultStore = create<State>((set, get) => ({
    const files = normalizeFiles(get().files.filter((f) => f.id !== id));
    set({ files });
    persist(files, get().folders);
+ },
+ removeFileFromFolder: (id, folderId) => {
+   const files = normalizeFiles(
+     get().files.map((f) => {
+       if (f.id !== id) return f;
+       const currentFolderIds = normalizeFolderIds(getFolderIdsForFile(f));
+       const nextFolderIds = currentFolderIds.filter((currentId) => currentId !== folderId);
+       return {
+         ...f,
+         folderId: nextFolderIds[0],
+         folderIds: nextFolderIds.length ? nextFolderIds : undefined,
+       };
+     }),
+   );
+   set({ files });
+   persist(files, get().folders);
+ },
+ renameFolder: (id, name) => {
+   const folders = get().folders.map((folder) =>
+     folder.id === id ? { ...folder, name } : folder,
+   );
+   set({ folders });
+   persist(get().files, folders);
+ },
+ deleteFolder: (id) => {
+   const folders = get().folders.filter((folder) => folder.id !== id);
+   const files = normalizeFiles(
+     get().files.map((f) => {
+       const currentFolderIds = normalizeFolderIds(getFolderIdsForFile(f));
+       const nextFolderIds = currentFolderIds.filter((folderId) => folderId !== id);
+       return {
+         ...f,
+         folderId: nextFolderIds[0],
+         folderIds: nextFolderIds.length ? nextFolderIds : undefined,
+       };
+     }),
+   );
+   set({ files, folders });
+   persist(files, folders);
+ },
+ togglePinFolder: (id) => {
+   const folders = get().folders.map((folder) =>
+     folder.id === id ? { ...folder, isPinned: !folder.isPinned } : folder,
+   );
+   set({ folders });
+   persist(get().files, folders);
  },
 }));
