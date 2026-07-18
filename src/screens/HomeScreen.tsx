@@ -44,7 +44,6 @@ export function HomeScreen() {
   const [selectedFolderIds, setSelectedFolderIds] = React.useState<string[]>([]);
   const [selectedRowIds, setSelectedRowIds] = React.useState<string[]>([]);
   const [isSelectionMove, setIsSelectionMove] = React.useState(false);
-  const [showAllFiles, setShowAllFiles] = React.useState(false);
   const [confirmDeleteFileId, setConfirmDeleteFileId] = React.useState<string | null>(null);
   const [confirmDeleteSelectionVisible, setConfirmDeleteSelectionVisible] = React.useState(false);
 
@@ -65,7 +64,7 @@ export function HomeScreen() {
 
   const recent = files.slice(0, 5),
     used = files.reduce((n, f) => n + f.size, 0),
-    visibleFiles = showAllFiles ? files : recent;
+    visibleFiles = recent;
 
   const openFileActions = (file: VaultFile) => {
     setActionFileId(file.id);
@@ -240,7 +239,14 @@ export function HomeScreen() {
         </View>
         <Feather name="hard-drive" size={26} color={colors.text} />
       </View>
-      <Text style={s.label}>RECENTLY ADDED</Text>
+      <View style={s.labelRow}>
+        <Text style={s.label}>RECENTLY ADDED</Text>
+        {files.length > 5 ? (
+                  <Pressable style={s.viewAllLink} onPress={() => navigation.navigate("AllFiles")}>
+                    <Text style={s.viewAllLinkText}>View all ›</Text>
+          </Pressable>
+        ) : null}
+      </View>
       {visibleFiles.length ? (
        <View>
          {rowSelectionMode ? (
@@ -276,11 +282,6 @@ export function HomeScreen() {
              onMore={() => openFileActions(f)}
            />
          ))}
-         {files.length > 5 ? (
-           <Pressable style={s.viewAllButton} onPress={() => setShowAllFiles((value) => !value)}>
-             <Text style={s.viewAllText}>{showAllFiles ? "Show less" : "View all"}</Text>
-           </Pressable>
-         ) : null}
        </View>
       ) : (
        <EmptyState
@@ -438,13 +439,28 @@ const styles = (c: PaperColors) =>
       color: c.text,
       fontWeight: "700",
     },
+    labelRow: {
+      marginTop: 30,
+      marginBottom: 7,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
     label: {
       fontSize: 11,
       fontWeight: "700",
       letterSpacing: 1.1,
       color: c.secondary,
-      marginTop: 30,
-      marginBottom: 7,
+    },
+    viewAllLink: {
+      paddingVertical: 4,
+      paddingHorizontal: 8,
+      borderRadius: 8,
+    },
+    viewAllLinkText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: c.secondary,
     },
     viewAllButton: {
       alignSelf: "center",

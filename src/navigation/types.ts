@@ -5,6 +5,8 @@ export type RootStackParams = {
   FolderDetail: { folderId: string };
   Preview: { fileId: string };
   PdfReview: { imageUris: string[] };
+  AllFiles: undefined;
+  CapturedFiles: undefined;
   Tags: undefined;
 };
 

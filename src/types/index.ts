@@ -37,4 +37,5 @@ export type Settings = {
   theme: "light" | "dark";
   lockEnabled: boolean;
   hidePreviews: boolean;
+  biometricEnabled?: boolean;
 };

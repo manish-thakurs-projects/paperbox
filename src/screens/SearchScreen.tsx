@@ -6,16 +6,18 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Screen } from "../components/Screen";
 import { FileRow } from "../components/FileRow";
 import { EmptyState } from "../components/EmptyState";
-import { palette } from "../theme/tokens";
+import { usePaperTheme } from "../theme/usePaperTheme";
 import { useVaultStore } from "../store/useVaultStore";
 import { RootStackParams } from "../navigation/types";
 
 export function SearchScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParams>>();
+  const { colors } = usePaperTheme();
   const [query, setQuery] = useState("");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const inputRef = useRef<TextInput | null>(null);
   const files = useVaultStore((s) => s.files);
+  const s = styles(colors);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -48,7 +50,7 @@ export function SearchScreen() {
     <Screen>
       <Text style={s.title}>Search</Text>
       <View style={s.box}>
-        <Feather name="search" size={19} color={palette.secondary} />
+        <Feather name="search" size={19} color={colors.secondary} />
         <TextInput
           ref={inputRef}
           value={query}
@@ -56,7 +58,7 @@ export function SearchScreen() {
           autoCorrect={false}
           autoFocus
           placeholder="Search files and tags"
-          placeholderTextColor={palette.secondary}
+          placeholderTextColor={colors.secondary}
           style={s.input}
         />
       </View>
@@ -80,7 +82,7 @@ export function SearchScreen() {
           {recentSearches.length ? (
             recentSearches.map((item) => (
               <Pressable key={item} style={s.recentItem} onPress={() => handleSearch(item)}>
-                <Feather name="clock" size={16} color={palette.secondary} />
+                <Feather name="clock" size={16} color={colors.secondary} />
                 <Text style={s.recentText}>{item}</Text>
               </Pressable>
             ))
@@ -103,56 +105,57 @@ export function SearchScreen() {
     </Screen>
   );
 }
-const s = StyleSheet.create({
-  title: {
-    fontSize: 32,
-    fontWeight: "800",
-    letterSpacing: -1,
-    color: palette.black,
-    marginBottom: 24,
-  },
-  box: {
-    height: 52,
-    backgroundColor: palette.surface,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 10,
-  },
-  input: { fontSize: 15, color: palette.black, flex: 1 },
-  label: {
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 1,
-    color: palette.secondary,
-    marginTop: 26,
-    marginBottom: 8,
-  },
-  recentWrap: {
-    marginTop: 12,
-  },
-  recentHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 6,
-  },
-  recentItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderColor: palette.border,
-  },
-  recentText: {
-    fontSize: 15,
-    color: palette.black,
-  },
-  clearText: {
-    fontSize: 13,
-    color: palette.black,
-    fontWeight: "600",
-  },
-});
+const styles = (c: { background: string; surface: string; elevated: string; text: string; secondary: string; border: string; muted: string; inverse: string }) =>
+  StyleSheet.create({
+    title: {
+      fontSize: 32,
+      fontWeight: "800",
+      letterSpacing: -1,
+      color: c.text,
+      marginBottom: 24,
+    },
+    box: {
+      height: 52,
+      backgroundColor: c.surface,
+      borderRadius: 14,
+      paddingHorizontal: 16,
+      alignItems: "center",
+      flexDirection: "row",
+      gap: 10,
+    },
+    input: { fontSize: 15, color: c.text, flex: 1 },
+    label: {
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 1,
+      color: c.secondary,
+      marginTop: 26,
+      marginBottom: 8,
+    },
+    recentWrap: {
+      marginTop: 12,
+    },
+    recentHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 6,
+    },
+    recentItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderColor: c.border,
+    },
+    recentText: {
+      fontSize: 15,
+      color: c.text,
+    },
+    clearText: {
+      fontSize: 13,
+      color: c.text,
+      fontWeight: "600",
+    },
+  });
