@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useLayoutEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -27,8 +27,9 @@ import DocumentScanner, {
   ScanDocumentResponseStatus,
 } from "react-native-document-scanner-plugin";
 import { usePaperTheme } from "../theme/usePaperTheme";
-import { Feather } from '@expo/vector-icons';
+import { Feather } from "@expo/vector-icons";
 import { useVaultStore } from "../store/useVaultStore";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { RootStackParams } from "../navigation/types";
 
 type Props = NativeStackScreenProps<RootStackParams, "PdfReview">;
@@ -38,18 +39,23 @@ export function PdfReviewScreen({ navigation, route }: Props) {
   const { width } = useWindowDimensions();
   const [isSaving, setIsSaving] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
-  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(
+    null,
+  );
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
-  const [pages, setPages] = useState(imageUris.map((uri, index) => ({ id: `${index}-${uri}`, uri })));
+  const [pages, setPages] = useState(
+    imageUris.map((uri, index) => ({ id: `${index}-${uri}`, uri })),
+  );
   const [selectedPageIds, setSelectedPageIds] = useState<string[]>([]);
   const [deleteAlertVisible, setDeleteAlertVisible] = useState(false);
+  const [successDialogVisible, setSuccessDialogVisible] = useState(false);
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isReordering, setIsReordering] = useState(false);
   const columnCount = 6;
   const itemWidth = width / columnCount;
-  const itemHeight = width * 0.4;
+  const itemHeight = itemWidth;
   const gridRef = useRef<View | null>(null);
   const gridOrigin = useRef({ x: 0, y: 0 });
 
@@ -68,7 +74,10 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         return true;
       };
 
-      const subscription = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress,
+      );
       return () => subscription.remove();
     }, [navigation, isPreviewVisible, isReordering]),
   );
@@ -109,7 +118,10 @@ export function PdfReviewScreen({ navigation, route }: Props) {
     try {
       const granted = await requestCameraPermission();
       if (!granted) {
-        Alert.alert("Camera permission required", "Allow camera access to scan documents.");
+        Alert.alert(
+          "Camera permission required",
+          "Allow camera access to scan documents.",
+        );
         return;
       }
 
@@ -122,7 +134,8 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         return;
       }
 
-      const scannedImages = result.scannedImages?.filter(Boolean).map(normalizeUri) ?? [];
+      const scannedImages =
+        result.scannedImages?.filter(Boolean).map(normalizeUri) ?? [];
       if (!scannedImages.length) {
         Alert.alert("No scan result", "Try scanning again.");
         return;
@@ -130,7 +143,10 @@ export function PdfReviewScreen({ navigation, route }: Props) {
 
       setPages((current) => [
         ...current,
-        ...scannedImages.map((uri, index) => ({ id: `${Date.now()}-${current.length + index}-${uri}`, uri })),
+        ...scannedImages.map((uri, index) => ({
+          id: `${Date.now()}-${current.length + index}-${uri}`,
+          uri,
+        })),
       ]);
     } catch (error) {
       console.warn("addPages error", error);
@@ -140,6 +156,25 @@ export function PdfReviewScreen({ navigation, route }: Props) {
     }
   };
 
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      title: "Review pages",
+      headerRight: () => (
+        <TouchableOpacity
+          style={styles.headerAddButton}
+          onPress={addPages}
+          disabled={isScanning}
+        >
+          {isScanning ? (
+            <ActivityIndicator size="small" color={colors.text} />
+          ) : (
+            <Feather name="plus" size={20} color={colors.text} />
+          )}
+        </TouchableOpacity>
+      ),
+    });
+  }, [addPages, colors.text, isScanning, navigation, styles.headerAddButton]);
+
   const deletePreviewPage = () => {
     if (selectedImageIndex === null) return;
     const pageToRemove = pages[selectedImageIndex];
@@ -147,7 +182,9 @@ export function PdfReviewScreen({ navigation, route }: Props) {
 
     const nextPages = pages.filter((page) => page.id !== pageToRemove.id);
     setPages(nextPages);
-    setSelectedPageIds((current) => current.filter((id) => id !== pageToRemove.id));
+    setSelectedPageIds((current) =>
+      current.filter((id) => id !== pageToRemove.id),
+    );
 
     if (!nextPages.length) {
       closePreview();
@@ -171,7 +208,10 @@ export function PdfReviewScreen({ navigation, route }: Props) {
 
   const createPdf = async () => {
     if (!pageUris.length) {
-      Alert.alert("No pages", "Capture at least one page before creating a PDF.");
+      Alert.alert(
+        "No pages",
+        "Capture at least one page before creating a PDF.",
+      );
       return;
     }
 
@@ -183,7 +223,11 @@ export function PdfReviewScreen({ navigation, route }: Props) {
           const resized = await ImageManipulator.manipulateAsync(
             photoUri,
             [{ resize: { width: 800 } }],
-            { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+            {
+              compress: 0.7,
+              format: ImageManipulator.SaveFormat.JPEG,
+              base64: true,
+            },
           );
 
           if (!resized.base64) {
@@ -194,7 +238,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         }),
       );
 
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><style>@page{size:A4;margin:0;}html,body{margin:0;padding:0;background:#000;width:100%;height:100%;}body{padding:0;} .page{width:100%;height:100vh;display:flex;justify-content:center;align-items:center;overflow:hidden;page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid;} .page:last-child{page-break-after:auto;break-after:auto;} img{width:100%;height:100%;object-fit:cover;display:block;margin:0;padding:0;border:none;}</style></head><body>${imagesHtml.join('')}</body></html>`;
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><style>@page{size:A4;margin:0;}html,body{margin:0;padding:0;background:#000;width:100%;height:100%;}body{padding:0;} .page{width:100%;height:100vh;display:flex;justify-content:center;align-items:center;overflow:hidden;page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid;} .page:last-child{page-break-after:auto;break-after:auto;} img{width:100%;height:100%;object-fit:cover;display:block;margin:0;padding:0;border:none;}</style></head><body>${imagesHtml.join("")}</body></html>`;
       const { uri: generatedPdfUri } = await Print.printToFileAsync({ html });
 
       if (!generatedPdfUri) {
@@ -230,12 +274,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         },
       ]);
 
-      Alert.alert("PDF created", "Your scanned PDF was saved to the vault.", [
-        {
-          text: "OK",
-          onPress: () => navigation.goBack(),
-        },
-      ]);
+      setSuccessDialogVisible(true);
     } catch (error) {
       console.warn("PdfReview createPdf error", error);
       Alert.alert("PDF creation failed", "Please try again.");
@@ -266,7 +305,9 @@ export function PdfReviewScreen({ navigation, route }: Props) {
 
   const togglePageSelection = (pageId: string) => {
     setSelectedPageIds((current) =>
-      current.includes(pageId) ? current.filter((id) => id !== pageId) : [...current, pageId],
+      current.includes(pageId)
+        ? current.filter((id) => id !== pageId)
+        : [...current, pageId],
     );
   };
 
@@ -280,7 +321,9 @@ export function PdfReviewScreen({ navigation, route }: Props) {
   };
 
   const confirmDeletePages = () => {
-    setPages((current) => current.filter((page) => !selectedPageIds.includes(page.id)));
+    setPages((current) =>
+      current.filter((page) => !selectedPageIds.includes(page.id)),
+    );
     setSelectedPageIds([]);
     setDeleteAlertVisible(false);
   };
@@ -289,10 +332,20 @@ export function PdfReviewScreen({ navigation, route }: Props) {
     setDeleteAlertVisible(false);
   };
 
+  const closeSuccessDialog = () => {
+    setSuccessDialogVisible(false);
+    navigation.goBack();
+  };
+
   const movePage = (fromIndex: number, toIndex: number) => {
     if (fromIndex === toIndex) return;
     setPages((current) => {
-      if (fromIndex < 0 || fromIndex >= current.length || toIndex < 0 || toIndex >= current.length) {
+      if (
+        fromIndex < 0 ||
+        fromIndex >= current.length ||
+        toIndex < 0 ||
+        toIndex >= current.length
+      ) {
         return current;
       }
       const next = [...current];
@@ -307,7 +360,10 @@ export function PdfReviewScreen({ navigation, route }: Props) {
   const getTargetIndexFromWindowPoint = (pageX: number, pageY: number) => {
     const relativeX = pageX - gridOrigin.current.x;
     const relativeY = pageY - gridOrigin.current.y;
-    const col = Math.min(columnCount - 1, Math.max(0, Math.floor(relativeX / itemWidth)));
+    const col = Math.min(
+      columnCount - 1,
+      Math.max(0, Math.floor(relativeX / itemWidth)),
+    );
     const row = Math.max(0, Math.floor(relativeY / itemHeight));
     const index = row * columnCount + col;
     return Math.min(pages.length - 1, Math.max(0, index));
@@ -332,7 +388,10 @@ export function PdfReviewScreen({ navigation, route }: Props) {
 
         setDraggedIndex((currentDraggedIndex) => {
           if (currentDraggedIndex === null) return currentDraggedIndex;
-          const targetIndex = getTargetIndexFromWindowPoint(evt.nativeEvent.pageX, evt.nativeEvent.pageY);
+          const targetIndex = getTargetIndexFromWindowPoint(
+            evt.nativeEvent.pageX,
+            evt.nativeEvent.pageY,
+          );
           if (targetIndex !== currentDraggedIndex) {
             movePage(currentDraggedIndex, targetIndex);
             return targetIndex;
@@ -360,74 +419,35 @@ export function PdfReviewScreen({ navigation, route }: Props) {
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
-      <View style={styles.reviewHeader}>
-        <View>
-          <Text style={styles.title}>Review pages</Text>
-          <Text style={styles.subtitle}>
-            {pages.length} page{pages.length === 1 ? "" : "s"} ready to export.
-          </Text>
-        </View>
-        <View style={styles.pageCountBadge}>
-          <Text style={styles.pageCountText}>{pages.length}</Text>
-        </View>
-      </View>
-
-      <View style={styles.actionBar}>
-        <TouchableOpacity
-          style={[styles.actionButton, isScanning && styles.actionButtonDisabled]}
-          onPress={addPages}
-          disabled={isScanning}
-        >
-          {isScanning ? (
-            <ActivityIndicator size="small" color={colors.background} />
-          ) : (
-            <>
-              <Feather name="plus" size={16} color={colors.background} style={styles.actionIcon} />
-              <Text style={styles.actionButtonText}>Add page</Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.actionButton,
-            isReordering && styles.actionButtonActive,
-            !hasPages && !isReordering && styles.actionButtonDisabled,
-          ]}
-          onPress={isReordering ? finishReorder : startReorder}
-          disabled={!hasPages && !isReordering}
-        >
-          <Feather name={isReordering ? "check" : "move"} size={16} color={isReordering ? colors.background : colors.text} style={styles.actionIcon} />
-          <Text style={[styles.actionButtonText, isReordering && styles.actionButtonTextActive]}>
-            {isReordering ? "Done" : "Reorder"}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.actionButton, !selectedPageIds.length && styles.actionButtonDisabled]}
-          onPress={deleteSelectedPages}
-          disabled={!selectedPageIds.length}
-        >
-          <Feather name="trash-2" size={16} color={colors.background} style={styles.actionIcon} />
-          <Text style={styles.actionButtonText}>Delete</Text>
-        </TouchableOpacity>
-      </View>
 
       {isReordering ? (
         <View style={styles.reorderBanner}>
-          <Text style={styles.reorderBannerText}>Drag and drop pages to reorder them.</Text>
-          <TouchableOpacity style={styles.reorderDoneButton} onPress={finishReorder}>
+          <Text style={styles.reorderBannerText}>
+            Drag and drop pages to reorder them.
+          </Text>
+          <TouchableOpacity
+            style={styles.reorderDoneButton}
+            onPress={finishReorder}
+          >
             <Text style={styles.reorderDoneText}>Done</Text>
           </TouchableOpacity>
         </View>
       ) : rowSelectionMode ? (
         <View style={styles.selectionBar}>
-          <Text style={styles.selectionTitle}>{selectedPageIds.length} selected</Text>
+          <Text style={styles.selectionTitle}>
+            {selectedPageIds.length} selected
+          </Text>
           <View style={styles.selectionActions}>
-            <TouchableOpacity style={styles.selectionActionButton} onPress={clearPageSelection}>
+            <TouchableOpacity
+              style={styles.selectionActionButton}
+              onPress={clearPageSelection}
+            >
               <Text style={styles.selectionActionText}>Clear</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.selectionActionButton} onPress={deleteSelectedPages}>
+            <TouchableOpacity
+              style={styles.selectionActionButton}
+              onPress={deleteSelectedPages}
+            >
               <Text style={styles.selectionActionText}>Delete</Text>
             </TouchableOpacity>
           </View>
@@ -443,7 +463,10 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         >
           <View ref={gridRef} style={[styles.pagesGrid, { width }]}>
             {pages.map((page, index) => {
-              const panHandlers = createPanResponder(page.id, index).panHandlers;
+              const panHandlers = createPanResponder(
+                page.id,
+                index,
+              ).panHandlers;
               const isSelected = selectedPageIds.includes(page.id);
               const isDragged = draggedItemId === page.id;
               const isFirstColumn = index % columnCount === 0;
@@ -463,11 +486,23 @@ export function PdfReviewScreen({ navigation, route }: Props) {
                     isSelected && styles.pageCardSelected,
                     isDragged && [
                       styles.pageCardDragged,
-                      { transform: [{ translateX: dragOffset.x }, { translateY: dragOffset.y }, { scale: 1.08 }] },
+                      {
+                        transform: [
+                          { translateX: dragOffset.x },
+                          { translateY: dragOffset.y },
+                          { scale: 1.08 },
+                        ],
+                      },
                     ],
                   ]}
-                  onPress={() => (rowSelectionMode ? togglePageSelection(page.id) : openPreview(index))}
-                  onLongPress={() => !isReordering && togglePageSelection(page.id)}
+                  onPress={() =>
+                    rowSelectionMode
+                      ? togglePageSelection(page.id)
+                      : openPreview(index)
+                  }
+                  onLongPress={() =>
+                    !isReordering && togglePageSelection(page.id)
+                  }
                   {...panHandlers}
                 >
                   <Image source={{ uri: page.uri }} style={styles.pageImage} />
@@ -496,13 +531,24 @@ export function PdfReviewScreen({ navigation, route }: Props) {
             <Feather name="file-text" size={28} color={colors.secondary} />
           </View>
           <Text style={styles.emptyTitle}>No pages yet</Text>
-          <Text style={styles.emptySubtitle}>Scan a document to start building your PDF.</Text>
-          <TouchableOpacity style={styles.emptyAddButton} onPress={addPages} disabled={isScanning}>
+          <Text style={styles.emptySubtitle}>
+            Scan a document to start building your PDF.
+          </Text>
+          <TouchableOpacity
+            style={styles.emptyAddButton}
+            onPress={addPages}
+            disabled={isScanning}
+          >
             {isScanning ? (
               <ActivityIndicator size="small" color={colors.background} />
             ) : (
               <>
-                <Feather name="plus" size={16} color={colors.background} style={styles.actionIcon} />
+                <Feather
+                  name="plus"
+                  size={16}
+                  color={colors.background}
+                  style={styles.actionIcon}
+                />
                 <Text style={styles.actionButtonText}>Add page</Text>
               </>
             )}
@@ -512,7 +558,24 @@ export function PdfReviewScreen({ navigation, route }: Props) {
 
       <View style={styles.footer}>
         <TouchableOpacity
-          style={[styles.primaryButton, (isSaving || !hasPages) && styles.primaryButtonDisabled]}
+          style={[
+            styles.secondaryButton,
+            !hasPages && styles.primaryButtonDisabled,
+          ]}
+          onPress={isReordering ? finishReorder : startReorder}
+          disabled={!hasPages}
+        >
+          <Feather
+            name={isReordering ? "check" : "edit-3"}
+            size={18}
+            color={colors.text}
+          />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.primaryButton,
+            (isSaving || !hasPages) && styles.primaryButtonDisabled,
+          ]}
           onPress={createPdf}
           disabled={isSaving || !hasPages}
         >
@@ -520,53 +583,101 @@ export function PdfReviewScreen({ navigation, route }: Props) {
             <ActivityIndicator size="small" color={colors.background} />
           ) : (
             <View style={styles.primaryButtonContent}>
-              <Feather name="file-text" size={16} color={colors.background} style={{ marginRight: 8 }} />
+              <Feather
+                name="file-text"
+                size={16}
+                color={colors.background}
+                style={{ marginRight: 8 }}
+              />
               <Text style={styles.primaryButtonText}>Create PDF</Text>
             </View>
           )}
         </TouchableOpacity>
       </View>
 
-      <Modal visible={isPreviewVisible} transparent={true} animationType="fade" onRequestClose={closePreview}>
+      <Modal
+        visible={isPreviewVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closePreview}
+      >
         <View style={styles.previewModalContainer}>
           <View style={styles.previewHeader}>
-            <TouchableOpacity style={styles.previewHeaderButton} onPress={closePreview}>
+            <TouchableOpacity
+              style={styles.previewHeaderButton}
+              onPress={closePreview}
+            >
               <Feather name="arrow-left" size={20} color="#FFFFFF" />
             </TouchableOpacity>
-            <Text style={styles.previewTitle}>{selectedImageIndex !== null ? `Image ${selectedImageIndex + 1} of ${pages.length}` : "Preview"}</Text>
+            <Text style={styles.previewTitle}>
+              {selectedImageIndex !== null
+                ? `Image ${selectedImageIndex + 1} of ${pages.length}`
+                : "Preview"}
+            </Text>
             <View style={styles.previewHeaderSpacer} />
           </View>
 
           {selectedImageIndex !== null && pages[selectedImageIndex] ? (
-            <Image source={{ uri: pages[selectedImageIndex].uri }} style={styles.previewImage} resizeMode="contain" />
+            <Image
+              source={{ uri: pages[selectedImageIndex].uri }}
+              style={styles.previewImage}
+              resizeMode="contain"
+            />
           ) : null}
 
           <View style={styles.previewFooter}>
-            <TouchableOpacity style={styles.previewFooterButton} onPress={deletePreviewPage}>
+            <TouchableOpacity
+              style={styles.previewFooterButton}
+              onPress={deletePreviewPage}
+            >
               <Feather name="trash-2" size={18} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      <Modal visible={deleteAlertVisible} transparent animationType="fade" onRequestClose={cancelDeletePages}>
+      <Modal
+        visible={deleteAlertVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelDeletePages}
+      >
         <View style={styles.alertOverlay}>
           <View style={styles.alertContainer}>
             <Text style={styles.alertTitle}>Delete selected pages?</Text>
             <Text style={styles.alertMessage}>
-              {selectedPageIds.length} page{selectedPageIds.length === 1 ? "" : "s"} will be removed from this PDF preview.
+              {selectedPageIds.length} page
+              {selectedPageIds.length === 1 ? "" : "s"} will be removed from
+              this PDF preview.
             </Text>
             <View style={styles.alertActions}>
-              <TouchableOpacity style={[styles.alertButton, styles.alertCancelButton]} onPress={cancelDeletePages}>
+              <TouchableOpacity
+                style={[styles.alertButton, styles.alertCancelButton]}
+                onPress={cancelDeletePages}
+              >
                 <Text style={styles.alertCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.alertButton, styles.alertDeleteButton]} onPress={confirmDeletePages}>
+              <TouchableOpacity
+                style={[styles.alertButton, styles.alertDeleteButton]}
+                onPress={confirmDeletePages}
+              >
                 <Text style={styles.alertDeleteText}>Delete</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
+
+      <ConfirmDialog
+        visible={successDialogVisible}
+        title="PDF created"
+        message="Your scanned PDF was saved to the vault."
+        confirmText="Open vault"
+        cancelText="Close"
+        hideCancelButton
+        onConfirm={closeSuccessDialog}
+        onCancel={closeSuccessDialog}
+      />
     </View>
   );
 }
@@ -633,6 +744,17 @@ const getStyles = (
       color: c.text,
       fontWeight: "800",
       fontSize: 18,
+    },
+    headerAddButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 8,
     },
     actionBar: {
       flexDirection: "row",
@@ -725,14 +847,10 @@ const getStyles = (
     },
     pageNumberBadge: {
       position: "absolute",
-      top: 8,
-      left: 8,
-      minWidth: 26,
-      minHeight: 26,
-      paddingHorizontal: 8,
+      minWidth: 10,
+      minHeight: 10,
       borderRadius: 14,
-      backgroundColor: "rgba(0,0,0,0.55)",
-      color: "#FFFFFF",
+      color: "#000000",
       fontSize: 12,
       fontWeight: "700",
       textAlign: "center",
@@ -932,6 +1050,22 @@ const getStyles = (
       paddingTop: 8,
       paddingBottom: 24,
       backgroundColor: c.background,
+      gap: 12,
+    },
+    secondaryButton: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      borderWidth: 1,
+      borderColor: c.border,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: c.surface,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 3,
     },
     primaryButton: {
       flex: 1,
