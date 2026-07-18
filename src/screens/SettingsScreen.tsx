@@ -649,13 +649,13 @@ export function SettingsScreen() {
       <Text style={s.label}>VAULT</Text>
       <View style={s.group}>
         <SettingsRow icon="download" label="Export" colors={colors} onPress={openExportOptions}>
-          <Feather name="chevron-right" size={18} color={colors.secondary} />
+          <Feather key={theme} name="chevron-right" size={18} color={colors.secondary} />
         </SettingsRow>
         <SettingsRow icon="upload" label="Import" colors={colors} onPress={() => setImportVisible(true)}>
-          <Feather name="chevron-right" size={18} color={colors.secondary} />
+          <Feather key={theme} name="chevron-right" size={18} color={colors.secondary} />
         </SettingsRow>
         <SettingsRow icon="shield" label="Privacy" colors={colors}>
-          <Feather name="chevron-right" size={18} color={colors.secondary} />
+          <Feather key={theme} name="chevron-right" size={18} color={colors.secondary} />
         </SettingsRow>
       </View>
       <Text style={s.version}>Paper Box - Version 1.0.0{"\n"}Offline-first personal document vault</Text>
