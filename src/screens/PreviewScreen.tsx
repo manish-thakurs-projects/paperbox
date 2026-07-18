@@ -21,6 +21,7 @@ import { Screen } from "../components/Screen";
 import { useVaultStore } from "../store/useVaultStore";
 import { palette } from "../theme/tokens";
 import { usePaperTheme } from "../theme/usePaperTheme";
+import { withAlpha } from "../theme/utils";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as IntentLauncher from "expo-intent-launcher";
@@ -548,7 +549,7 @@ const getStyles = (colors: any) =>
       backgroundColor: colors.background,
     },
     video: {
-      backgroundColor: "#a4a4a4",
+      backgroundColor: colors.surface,
     },
     imageWrapper: {
       flex: 1,
@@ -583,13 +584,13 @@ const getStyles = (colors: any) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: palette.white,
+      backgroundColor: colors.surface,
       paddingVertical: 10,
       paddingHorizontal: 20,
       borderRadius: 8,
     },
     primaryButtonText: {
-      color: palette.black,
+      color: colors.text,
       fontSize: 15,
       fontWeight: "600",
     },
@@ -600,11 +601,11 @@ const getStyles = (colors: any) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: palette.white,
+      backgroundColor: colors.surface,
       paddingVertical: 10,
       paddingHorizontal: 16,
       borderRadius: 24,
-      shadowColor: "#000",
+      shadowColor: withAlpha(colors.text, 0.12),
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.3,
       shadowRadius: 4,

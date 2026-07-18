@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from "react";
+import React, { useLayoutEffect, useRef, useState, useEffect } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -27,6 +27,7 @@ import DocumentScanner, {
   ScanDocumentResponseStatus,
 } from "react-native-document-scanner-plugin";
 import { usePaperTheme } from "../theme/usePaperTheme";
+import { withAlpha } from "../theme/utils";
 import { Feather } from "@expo/vector-icons";
 import { useVaultStore } from "../store/useVaultStore";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -53,9 +54,85 @@ export function PdfReviewScreen({ navigation, route }: Props) {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isReordering, setIsReordering] = useState(false);
+
+  // menu and modal state
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [infoModalVisible, setInfoModalVisible] = useState(false);
+  const [deleteSelectModalVisible, setDeleteSelectModalVisible] = useState(false);
+  const [selectedForDeletion, setSelectedForDeletion] = useState<string[]>([]);
+  const [infoLoading, setInfoLoading] = useState(false);
+  const [infoTotalSize, setInfoTotalSize] = useState<number | null>(null);
+  const [infoEstimatedPdfSize, setInfoEstimatedPdfSize] = useState<number | null>(null);
+
+  const formatBytes = (bytes: number) => {
+    if (!bytes) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB", "TB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
+  const openMenu = () => setMenuVisible(true);
+  const closeMenu = () => setMenuVisible(false);
+
+  const openInfo = async () => {
+    closeMenu();
+    setInfoLoading(true);
+    setInfoModalVisible(true);
+    try {
+      const ids = selectedPageIds.length ? selectedPageIds : pages.map((p) => p.id);
+      const uris = pages.filter((p) => ids.includes(p.id)).map((p) => p.uri);
+      const sizes = await Promise.all(uris.map((u) => getFileSize(u)));
+      const total = sizes.reduce((s, v) => s + v, 0);
+      const estimated = Math.round(total * 0.7) + 1024;
+      setInfoTotalSize(total);
+      setInfoEstimatedPdfSize(estimated);
+    } catch (e) {
+      console.warn("info calc error", e);
+      setInfoTotalSize(null);
+      setInfoEstimatedPdfSize(null);
+    } finally {
+      setInfoLoading(false);
+    }
+  };
+
+  const openDeleteSelect = () => {
+    closeMenu();
+    setSelectedForDeletion(selectedPageIds.length ? selectedPageIds.slice() : []);
+    setDeleteSelectModalVisible(true);
+  };
+
+  const confirmDeleteSelectedFromModal = () => {
+    setSelectedPageIds(selectedForDeletion);
+    setDeleteSelectModalVisible(false);
+    if (selectedForDeletion.length) setDeleteAlertVisible(true);
+  };
+
+  // refs for responders to read latest state without stale closures
+  const pagesRef = useRef(pages);
+  const isReorderingRef = useRef(isReordering);
+  const draggedItemIdRef = useRef(draggedItemId);
+  const draggedIndexRef = useRef(draggedIndex);
+  useEffect(() => {
+    pagesRef.current = pages;
+  }, [pages]);
+  useEffect(() => {
+    isReorderingRef.current = isReordering;
+  }, [isReordering]);
+  useEffect(() => {
+    draggedItemIdRef.current = draggedItemId;
+  }, [draggedItemId]);
+  useEffect(() => {
+    draggedIndexRef.current = draggedIndex;
+  }, [draggedIndex]);
+
+  // PanResponder cache per page id
+  const panResponderMapRef = useRef(new Map<string, ReturnType<typeof PanResponder.create>>());
   const columnCount = 6;
   const itemWidth = width / columnCount;
   const itemHeight = itemWidth;
+  // Insertion threshold: fraction of a tile's dimension the pointer must cross to switch target.
+  const insertionThreshold = 0.4;
   const gridRef = useRef<View | null>(null);
   const gridOrigin = useRef({ x: 0, y: 0 });
 
@@ -81,6 +158,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
       return () => subscription.remove();
     }, [navigation, isPreviewVisible, isReordering]),
   );
+
   const addFiles = useVaultStore((s) => s.addFiles);
   const { colors } = usePaperTheme();
   const styles = getStyles(colors, itemWidth, itemHeight, width);
@@ -160,20 +238,13 @@ export function PdfReviewScreen({ navigation, route }: Props) {
     navigation.setOptions({
       title: "Review pages",
       headerRight: () => (
-        <TouchableOpacity
-          style={styles.headerAddButton}
-          onPress={addPages}
-          disabled={isScanning}
-        >
-          {isScanning ? (
-            <ActivityIndicator size="small" color={colors.text} />
-          ) : (
-            <Feather name="plus" size={20} color={colors.text} />
-          )}
+        <TouchableOpacity style={styles.headerAddButton} onPress={openMenu} disabled={isScanning}>
+          <Feather name="more-vertical" size={20} color={colors.text} />
         </TouchableOpacity>
       ),
     });
-  }, [addPages, colors.text, isScanning, navigation, styles.headerAddButton]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openMenu, colors.text, isScanning, navigation, styles.headerAddButton]);
 
   const deletePreviewPage = () => {
     if (selectedImageIndex === null) return;
@@ -238,7 +309,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         }),
       );
 
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><style>@page{size:A4;margin:0;}html,body{margin:0;padding:0;background:#000;width:100%;height:100%;}body{padding:0;} .page{width:100%;height:100vh;display:flex;justify-content:center;align-items:center;overflow:hidden;page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid;} .page:last-child{page-break-after:auto;break-after:auto;} img{width:100%;height:100%;object-fit:cover;display:block;margin:0;padding:0;border:none;}</style></head><body>${imagesHtml.join("")}</body></html>`;
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=210mm, height=297mm, initial-scale=1.0" /><style>@page{size:210mm 297mm;margin:0;}html,body{margin:0;padding:0;background:#000;width:210mm;height:297mm;}body{padding:0;} .page{width:210mm;height:297mm;display:flex;justify-content:center;align-items:center;overflow:hidden;page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid;} .page:last-child{page-break-after:auto;break-after:auto;} img{width:210mm;height:297mm;object-fit:cover;display:block;margin:0;padding:0;border:none;}</style></head><body>${imagesHtml.join("")}</body></html>`;
       const { uri: generatedPdfUri } = await Print.printToFileAsync({ html });
 
       if (!generatedPdfUri) {
@@ -293,14 +364,29 @@ export function PdfReviewScreen({ navigation, route }: Props) {
     setSelectedImageIndex(null);
   };
 
+  const updateGridOrigin = () => {
+    try {
+      gridRef.current?.measureInWindow((x, y) => {
+        gridOrigin.current = { x, y };
+      });
+    } catch (e) {
+      // ignore measurement errors
+    }
+  };
+
   const startReorder = () => {
     if (!hasPages) return;
     setSelectedPageIds([]);
     setIsReordering(true);
+    // measure grid origin after layout stabilizes so target calculations are accurate
+    requestAnimationFrame(() => updateGridOrigin());
   };
 
   const finishReorder = () => {
     setIsReordering(false);
+    setDraggedItemId(null);
+    setDraggedIndex(null);
+    setDragOffset({ x: 0, y: 0 });
   };
 
   const togglePageSelection = (pageId: string) => {
@@ -328,8 +414,11 @@ export function PdfReviewScreen({ navigation, route }: Props) {
     setDeleteAlertVisible(false);
   };
 
+  // Cancelling a delete should not leave a stray selection behind, since the
+  // selection in the long-press-to-delete flow exists only to drive this dialog.
   const cancelDeletePages = () => {
     setDeleteAlertVisible(false);
+    setSelectedPageIds([]);
   };
 
   const closeSuccessDialog = () => {
@@ -360,61 +449,81 @@ export function PdfReviewScreen({ navigation, route }: Props) {
   const getTargetIndexFromWindowPoint = (pageX: number, pageY: number) => {
     const relativeX = pageX - gridOrigin.current.x;
     const relativeY = pageY - gridOrigin.current.y;
+    // shift = 1 - threshold: pointer must cross `insertionThreshold` fraction of a
+    // tile before the target index switches, which avoids jittery re-ordering.
+    const shift = 1 - insertionThreshold;
     const col = Math.min(
       columnCount - 1,
-      Math.max(0, Math.floor(relativeX / itemWidth)),
+      Math.max(0, Math.floor(relativeX / itemWidth + shift)),
     );
-    const row = Math.max(0, Math.floor(relativeY / itemHeight));
+    const row = Math.max(0, Math.floor(relativeY / itemHeight + shift));
     const index = row * columnCount + col;
     return Math.min(pages.length - 1, Math.max(0, index));
   };
 
-  const createPanResponder = (pageId: string, index: number) =>
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => isReordering,
-      onMoveShouldSetPanResponder: () => isReordering,
+  const createPanResponder = (pageId: string) => {
+    // memoize per page id so we don't recreate responders on every render
+    const cached = panResponderMapRef.current.get(pageId);
+    if (cached) return cached;
+
+    const responder = PanResponder.create({
+      onStartShouldSetPanResponder: () => isReorderingRef.current,
+      onMoveShouldSetPanResponder: () => isReorderingRef.current,
       onPanResponderGrant: () => {
-        if (!isReordering) return;
+        if (!isReorderingRef.current) return;
+        draggedItemIdRef.current = pageId;
         setDraggedItemId(pageId);
-        setDraggedIndex(index);
+        const startIndex = pagesRef.current.findIndex((p) => p.id === pageId);
+        draggedIndexRef.current = startIndex === -1 ? null : startIndex;
+        setDraggedIndex(draggedIndexRef.current);
         setDragOffset({ x: 0, y: 0 });
-        gridRef.current?.measureInWindow((x, y) => {
-          gridOrigin.current = { x, y };
-        });
       },
       onPanResponderMove: (evt, gestureState) => {
-        if (!isReordering) return;
+        if (!isReorderingRef.current) return;
         setDragOffset({ x: gestureState.dx, y: gestureState.dy });
-
-        setDraggedIndex((currentDraggedIndex) => {
-          if (currentDraggedIndex === null) return currentDraggedIndex;
-          const targetIndex = getTargetIndexFromWindowPoint(
-            evt.nativeEvent.pageX,
-            evt.nativeEvent.pageY,
-          );
-          if (targetIndex !== currentDraggedIndex) {
-            movePage(currentDraggedIndex, targetIndex);
-            return targetIndex;
-          }
-          return currentDraggedIndex;
-        });
-      },
-      onPanResponderRelease: (_evt, gestureState) => {
-        if (!isReordering) {
-          if (Math.abs(gestureState.dx) < 8 && Math.abs(gestureState.dy) < 8) {
-            openPreview(index);
-          }
+        const resolvedIndex =
+          draggedIndexRef.current === null
+            ? pagesRef.current.findIndex((p) => p.id === pageId)
+            : draggedIndexRef.current;
+        if (resolvedIndex === -1 || resolvedIndex === null) return;
+        const targetIndex = getTargetIndexFromWindowPoint(
+          evt.nativeEvent.pageX,
+          evt.nativeEvent.pageY,
+        );
+        if (targetIndex !== resolvedIndex) {
+          movePage(resolvedIndex, targetIndex);
+          draggedIndexRef.current = targetIndex;
+          setDraggedIndex(targetIndex);
         }
+      },
+      onPanResponderRelease: () => {
         setDraggedItemId(null);
+        draggedItemIdRef.current = null;
         setDraggedIndex(null);
+        draggedIndexRef.current = null;
         setDragOffset({ x: 0, y: 0 });
       },
       onPanResponderTerminate: () => {
         setDraggedItemId(null);
+        draggedItemIdRef.current = null;
         setDraggedIndex(null);
+        draggedIndexRef.current = null;
         setDragOffset({ x: 0, y: 0 });
       },
     });
+    panResponderMapRef.current.set(pageId, responder);
+    return responder;
+  };
+
+  // Always select the long-pressed tile (regardless of prior selection state) and
+  // surface the delete confirmation. This makes long-press unambiguous: it always
+  // means "ask to delete this," never a silent toggle.
+  const handleLongPressDelete = (pageId: string) => {
+    setSelectedPageIds((current) =>
+      current.includes(pageId) ? current : [...current, pageId],
+    );
+    setDeleteAlertVisible(true);
+  };
 
   return (
     <View style={styles.screen}>
@@ -461,18 +570,20 @@ export function PdfReviewScreen({ navigation, route }: Props) {
           showsVerticalScrollIndicator={false}
           scrollEnabled={!isReordering}
         >
-          <View ref={gridRef} style={[styles.pagesGrid, { width }]}>
+          <View ref={gridRef} onLayout={updateGridOrigin} style={[styles.pagesGrid, { width }]}>
             {pages.map((page, index) => {
-              const panHandlers = createPanResponder(
-                page.id,
-                index,
-              ).panHandlers;
+              const responder = createPanResponder(page.id);
+              // Only attach the PanResponder's raw responder props while actually
+              // reordering. Leaving them attached at all times makes the parent View
+              // participate in touch negotiation on every tap, which can delay or
+              // drop the child Pressable's long-press gesture (esp. on Android).
+              const panHandlers = isReordering ? responder.panHandlers : {};
               const isSelected = selectedPageIds.includes(page.id);
               const isDragged = draggedItemId === page.id;
               const isFirstColumn = index % columnCount === 0;
               const isFirstRow = index < columnCount;
               return (
-                <Pressable
+                <View
                   key={page.id}
                   style={[
                     styles.pageCard,
@@ -490,37 +601,43 @@ export function PdfReviewScreen({ navigation, route }: Props) {
                         transform: [
                           { translateX: dragOffset.x },
                           { translateY: dragOffset.y },
-                          { scale: 1.08 },
+                          { scale: 1.15 },
                         ],
                       },
                     ],
                   ]}
-                  onPress={() =>
-                    rowSelectionMode
-                      ? togglePageSelection(page.id)
-                      : openPreview(index)
-                  }
-                  onLongPress={() =>
-                    !isReordering && togglePageSelection(page.id)
-                  }
                   {...panHandlers}
                 >
+                  {/* When not reordering, a full-area Pressable owns tap / long-press.
+                      When reordering, it's unmounted so the PanResponder owns the gesture. */}
+                  {!isReordering && (
+                    <Pressable
+                      style={StyleSheet.absoluteFill}
+                      onPress={() =>
+                        rowSelectionMode
+                          ? togglePageSelection(page.id)
+                          : openPreview(index)
+                      }
+                      onLongPress={() => handleLongPressDelete(page.id)}
+                    />
+                  )}
+
                   <Image source={{ uri: page.uri }} style={styles.pageImage} />
                   {isSelected ? (
                     <>
                       <View style={styles.pageSelectionOverlay} />
                       <View style={styles.pageSelectionIcon}>
-                        <Feather name="check-circle" size={20} color="#fff" />
+                        <Feather name="check-circle" size={20} color={colors.background} />
                       </View>
                     </>
                   ) : null}
                   {isReordering ? (
                     <View style={styles.dragHandle}>
-                      <Feather name="move" size={12} color="#fff" />
+                      <Feather name="move" size={12} color={colors.background} />
                     </View>
                   ) : null}
                   <Text style={styles.pageNumberBadge}>{index + 1}</Text>
-                </Pressable>
+                </View>
               );
             })}
           </View>
@@ -559,20 +676,6 @@ export function PdfReviewScreen({ navigation, route }: Props) {
       <View style={styles.footer}>
         <TouchableOpacity
           style={[
-            styles.secondaryButton,
-            !hasPages && styles.primaryButtonDisabled,
-          ]}
-          onPress={isReordering ? finishReorder : startReorder}
-          disabled={!hasPages}
-        >
-          <Feather
-            name={isReordering ? "check" : "edit-3"}
-            size={18}
-            color={colors.text}
-          />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
             styles.primaryButton,
             (isSaving || !hasPages) && styles.primaryButtonDisabled,
           ]}
@@ -593,7 +696,94 @@ export function PdfReviewScreen({ navigation, route }: Props) {
             </View>
           )}
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.secondaryButton,
+            !hasPages && styles.primaryButtonDisabled,
+          ]}
+          onPress={isReordering ? finishReorder : startReorder}
+          disabled={!hasPages}
+        >
+          <Feather
+            name={isReordering ? "check" : "edit-3"}
+            size={16}
+            color={colors.text}
+          />
+        </TouchableOpacity>
+        
       </View>
+
+      {/* Menu modal */}
+      <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={closeMenu}>
+        <Pressable style={styles.menuOverlay} onPress={closeMenu}>
+          <View style={[styles.menuContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { closeMenu(); addPages(); }} disabled={isScanning}>
+              <Text style={[styles.menuItemText, { color: colors.text }]}>Add</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={openInfo}>
+              <Text style={[styles.menuItemText, { color: colors.text }]}>Info</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={openDeleteSelect}>
+              <Text style={[styles.menuItemText, { color: colors.text }]}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Info modal */}
+      <Modal visible={infoModalVisible} transparent animationType="fade" onRequestClose={() => setInfoModalVisible(false)}>
+        <View style={styles.alertOverlay}>
+          <View style={[styles.alertContainer, { maxWidth: 420 }]}>
+            <Text style={styles.alertTitle}>Images info</Text>
+            {infoLoading ? (
+              <ActivityIndicator size="small" color={colors.text} />
+            ) : (
+              <>
+                <Text style={styles.alertMessage}>Total images: {selectedPageIds.length ? selectedPageIds.length : pages.length}</Text>
+                <Text style={styles.alertMessage}>Total size: {infoTotalSize !== null ? formatBytes(infoTotalSize) : "—"}</Text>
+                <Text style={styles.alertMessage}>Estimated PDF size: {infoEstimatedPdfSize !== null ? formatBytes(infoEstimatedPdfSize) : "—"}</Text>
+              </>
+            )}
+            <View style={styles.alertActions}>
+              <TouchableOpacity style={[styles.alertButton, styles.alertCancelButton]} onPress={() => setInfoModalVisible(false)}>
+                <Text style={styles.alertCancelText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete select modal */}
+      <Modal visible={deleteSelectModalVisible} transparent animationType="fade" onRequestClose={() => setDeleteSelectModalVisible(false)}>
+        <View style={styles.alertOverlay}>
+          <View style={[styles.alertContainer, { maxWidth: 640 }]}>
+            <Text style={styles.alertTitle}>Select images to delete</Text>
+            <ScrollView contentContainerStyle={{ paddingVertical: 12 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                {pages.map((p, i) => {
+                  const sel = selectedForDeletion.includes(p.id);
+                  return (
+                    <Pressable key={p.id} onPress={() => {
+                      setSelectedForDeletion((cur) => cur.includes(p.id) ? cur.filter(id=>id!==p.id) : [...cur, p.id]);
+                    }} style={{ width: itemWidth, height: itemHeight, padding: 6 }}>
+                      <Image source={{ uri: p.uri }} style={{ width: '100%', height: '100%', opacity: sel ? 0.5 : 1 }} />
+                      {sel &&                       <View style={{ position: 'absolute', right: 8, top: 8, backgroundColor: withAlpha(colors.text, 0.6), padding: 4, borderRadius: 12 }}><Feather name="check" size={14} color={colors.background}/></View>}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </ScrollView>
+            <View style={styles.alertActions}>
+              <TouchableOpacity style={[styles.alertButton, styles.alertCancelButton]} onPress={() => setDeleteSelectModalVisible(false)}>
+                <Text style={styles.alertCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.alertButton, styles.alertDeleteButton]} onPress={confirmDeleteSelectedFromModal}>
+                <Text style={styles.alertDeleteText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={isPreviewVisible}
@@ -607,7 +797,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
               style={styles.previewHeaderButton}
               onPress={closePreview}
             >
-              <Feather name="arrow-left" size={20} color="#FFFFFF" />
+              <Feather name="arrow-left" size={20} color={colors.background} />
             </TouchableOpacity>
             <Text style={styles.previewTitle}>
               {selectedImageIndex !== null
@@ -630,7 +820,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
               style={styles.previewFooterButton}
               onPress={deletePreviewPage}
             >
-              <Feather name="trash-2" size={18} color="#FFFFFF" />
+              <Feather name="trash-2" size={18} color={colors.background} />
             </TouchableOpacity>
           </View>
         </View>
@@ -734,12 +924,13 @@ const getStyles = (
       borderColor: c.border,
       alignItems: "center",
       justifyContent: "center",
-      shadowColor: "#000",
+      shadowColor: withAlpha(c.text, 1),
       shadowOffset: { width: 0, height: 8 },
       shadowOpacity: 0.08,
       shadowRadius: 16,
       elevation: 5,
     },
+
     pageCountText: {
       color: c.text,
       fontWeight: "800",
@@ -822,7 +1013,7 @@ const getStyles = (
     pageCardDragged: {
       zIndex: 10,
       elevation: 12,
-      shadowColor: "#000",
+    shadowColor: withAlpha(c.text, 1),
       shadowOffset: { width: 0, height: 6 },
       shadowOpacity: 0.3,
       shadowRadius: 10,
@@ -841,7 +1032,7 @@ const getStyles = (
       width: 20,
       height: 20,
       borderRadius: 10,
-      backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: withAlpha(c.text, 0.55),
       alignItems: "center",
       justifyContent: "center",
     },
@@ -850,7 +1041,7 @@ const getStyles = (
       minWidth: 10,
       minHeight: 10,
       borderRadius: 14,
-      color: "#000000",
+    color: c.text,
       fontSize: 12,
       fontWeight: "700",
       textAlign: "center",
@@ -897,7 +1088,7 @@ const getStyles = (
     },
     alertOverlay: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.45)",
+      backgroundColor: withAlpha(c.text, 0.45),
       justifyContent: "center",
       alignItems: "center",
       paddingHorizontal: 24,
@@ -910,7 +1101,7 @@ const getStyles = (
       backgroundColor: c.surface,
       borderWidth: 1,
       borderColor: c.border,
-      shadowColor: "#000",
+      shadowColor: withAlpha(c.text, 1),
       shadowOffset: { width: 0, height: 12 },
       shadowOpacity: 0.12,
       shadowRadius: 24,
@@ -959,6 +1150,35 @@ const getStyles = (
       fontWeight: "700",
       fontSize: 14,
     },
+    menuOverlay: {
+      flex: 1,
+      backgroundColor: withAlpha(c.text, 0.3),
+      justifyContent: "flex-start",
+      alignItems: "flex-end",
+      paddingTop: 56,
+      paddingRight: 8,
+    },
+    menuContainer: {
+      width: 160,
+      borderRadius: 12,
+      borderWidth: 1,
+      overflow: "hidden",
+    },
+    menuItem: {
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+    },
+    menuItemText: {
+      fontWeight: "700",
+      fontSize: 14,
+    },
+    deleteThumb: {
+      width: itemWidth - 12,
+      height: itemHeight - 12,
+      margin: 6,
+      borderRadius: 6,
+      overflow: "hidden",
+    },
     selectionBar: {
       flexDirection: "row",
       alignItems: "center",
@@ -999,7 +1219,7 @@ const getStyles = (
     },
     pageSelectionOverlay: {
       ...StyleSheet.absoluteFillObject,
-      backgroundColor: "rgba(0,0,0,0.30)",
+      backgroundColor: withAlpha(c.text, 0.30),
     },
     pageSelectionIcon: {
       position: "absolute",
@@ -1008,7 +1228,7 @@ const getStyles = (
       width: 28,
       height: 28,
       borderRadius: 14,
-      backgroundColor: "rgba(0,0,0,0.5)",
+      backgroundColor: withAlpha(c.text, 0.5),
       alignItems: "center",
       justifyContent: "center",
     },
@@ -1054,14 +1274,14 @@ const getStyles = (
     },
     secondaryButton: {
       width: 52,
-      height: 52,
+      height: 44,
       borderRadius: 26,
       borderWidth: 1,
       borderColor: c.border,
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: c.surface,
-      shadowColor: "#000",
+      shadowColor: withAlpha(c.text, 1),
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.08,
       shadowRadius: 8,
@@ -1090,7 +1310,7 @@ const getStyles = (
     },
     previewModalContainer: {
       flex: 1,
-      backgroundColor: "#000000",
+      backgroundColor: c.inverse,
     },
     previewHeader: {
       flexDirection: "row",
@@ -1099,13 +1319,13 @@ const getStyles = (
       paddingHorizontal: 20,
       paddingTop: 16,
       paddingBottom: 12,
-      backgroundColor: "rgba(0,0,0,0.45)",
+      backgroundColor: withAlpha(c.text, 0.45),
     },
     previewHeaderButton: {
       width: 40,
       height: 40,
       borderRadius: 20,
-      backgroundColor: "rgba(255,255,255,0.18)",
+      backgroundColor: withAlpha(c.background, 0.18),
       alignItems: "center",
       justifyContent: "center",
     },
@@ -1114,7 +1334,7 @@ const getStyles = (
       height: 40,
     },
     previewTitle: {
-      color: "#FFFFFF",
+      color: c.background,
       fontSize: 16,
       fontWeight: "700",
       flex: 1,
@@ -1123,7 +1343,7 @@ const getStyles = (
     previewImage: {
       flex: 1,
       width: "100%",
-      backgroundColor: "#000000",
+      backgroundColor: c.inverse,
     },
     previewFooter: {
       flexDirection: "row",
@@ -1131,16 +1351,17 @@ const getStyles = (
       justifyContent: "center",
       gap: 16,
       paddingVertical: 20,
-      backgroundColor: "rgba(0,0,0,0.5)",
+      backgroundColor: withAlpha(c.text, 0.5),
     },
     previewFooterButton: {
       width: 54,
       height: 54,
       borderRadius: 27,
-      backgroundColor: "rgba(255,255,255,0.15)",
+      backgroundColor: withAlpha(c.background, 0.15),
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 1,
-      borderColor: "rgba(255,255,255,0.2)",
+      borderColor: withAlpha(c.background, 0.2),
     },
+
   });
