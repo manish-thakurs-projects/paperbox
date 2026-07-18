@@ -2,7 +2,7 @@
   "name": "paper-box",
   "version": "1.0.0",
   "private": true,
-  "main": "index.js",
+  "main": "index.tsx",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",

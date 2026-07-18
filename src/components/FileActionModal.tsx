@@ -14,6 +14,7 @@ interface FileActionModalProps {
   onDelete: () => void;
   onInfo: () => void;
   onRename: (name: string) => void;
+  onRemoveFromFolder?: () => void;
 }
 
 export function FileActionModal({
@@ -27,6 +28,7 @@ export function FileActionModal({
   onDelete,
   onInfo,
   onRename,
+  onRemoveFromFolder,
 }: FileActionModalProps) {
   const { colors } = usePaperTheme();
   const s = styles(colors);
@@ -61,8 +63,8 @@ export function FileActionModal({
   return (
     <>
       <Modal animationType="slide" transparent visible={visible && !renameVisible} onRequestClose={onRequestClose}>
-        <View style={s.modalOverlay}>
-          <View style={s.modalContent}>
+        <Pressable style={s.modalOverlay} onPress={onRequestClose}>
+          <Pressable style={s.modalContent} onPress={() => {}}>
             <Text style={s.modalTitle}>File actions</Text>
             {file ? (
               <>
@@ -87,6 +89,11 @@ export function FileActionModal({
                   <Pressable style={s.actionItem} onPress={onOpenMoveModal}>
                     <Text style={s.actionLabel}>Move to folders</Text>
                   </Pressable>
+                  {onRemoveFromFolder ? (
+                    <Pressable style={s.actionItem} onPress={onRemoveFromFolder}>
+                      <Text style={s.actionLabel}>Remove from folder</Text>
+                    </Pressable>
+                  ) : null}
                   <Pressable style={s.actionItem} onPress={onShare}>
                     <Text style={s.actionLabel}>Share</Text>
                   </Pressable>
@@ -101,12 +108,12 @@ export function FileActionModal({
             ) : (
               <Text style={s.modalEmpty}>Unable to load file actions.</Text>
             )}
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
       <Modal animationType="slide" transparent visible={renameVisible} onRequestClose={() => setRenameVisible(false)}>
-        <View style={s.modalOverlay}>
-          <View style={s.renameModalCard}>
+        <Pressable style={s.modalOverlay} onPress={() => setRenameVisible(false)}>
+          <Pressable style={s.renameModalCard} onPress={() => {}}>
             <Text style={s.modalTitle}>Rename file</Text>
             <TextInput
               value={renameText}
@@ -116,8 +123,7 @@ export function FileActionModal({
               style={s.modalInput}
               autoFocus
             />
-            <View style={s.modalFooter}
-            >
+            <View style={s.modalFooter}>
               <Pressable style={[s.modalActionButton, s.modalCancelButton]} onPress={() => setRenameVisible(false)}>
                 <Text style={s.modalActionText}>Cancel</Text>
               </Pressable>
@@ -125,8 +131,8 @@ export function FileActionModal({
                 <Text style={[s.modalActionText, s.modalSaveText]}>Save</Text>
               </Pressable>
             </View>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </>
   );

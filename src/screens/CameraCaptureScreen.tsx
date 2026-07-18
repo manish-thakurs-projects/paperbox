@@ -12,7 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
-import { CameraView, useCameraPermissions } from "expo-camera";
+import { CameraView, CameraMountError, useCameraPermissions } from "expo-camera";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImageManipulator from "expo-image-manipulator";
 import { Screen } from "../components/Screen";
@@ -21,7 +21,6 @@ import { useVaultStore } from "../store/useVaultStore";
 import { extensionOf, kindOf } from "../utils/files";
 import { RootStackParams } from "../navigation/types";
 import { VaultFile } from "../types";
-import Svg, { Rect } from "react-native-svg";
 
 type Props = NativeStackScreenProps<RootStackParams, "CameraCapture">;
 
@@ -31,8 +30,9 @@ export function CameraCaptureScreen({ navigation, route }: Props) {
   const [cameraType, setCameraType] = useState<"back" | "front">("back");
   const [capturedPdfUris, setCapturedPdfUris] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [dashOffset, setDashOffset] = useState(0);
   const [cameraReady, setCameraReady] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
+  const notificationTimeoutRef = useRef<number | null>(null);
   const cameraRef = useRef<CameraView | null>(null);
   const { colors } = usePaperTheme();
   const insets = useSafeAreaInsets();
@@ -104,26 +104,41 @@ export function CameraCaptureScreen({ navigation, route }: Props) {
 
   const getImageSize = (uri: string) =>
     new Promise<[number, number]>((resolve, reject) => {
-      Image.getSize(uri, (width, height) => resolve([width, height]), reject);
+      Image.getSize(
+        uri,
+        (width: number, height: number) => resolve([width, height]),
+        reject,
+      );
     });
 
-  const getGuidePoints = () => "4,4 96,4 96,96 4,96";
-
-  const getGuideText = () =>
-    mode === "photo"
-      ? "Align your page inside the guide and tap capture."
-      : "Capture each page for your PDF. Use the border as a guide.";
 
   const onCameraReady = () => {
     setCameraReady(true);
   };
+  const onCameraMountError = (error: CameraMountError) => {
+    console.warn("Camera mount error", error);
+    Alert.alert("Camera unavailable", error.message ?? "Unable to start the camera.");
+  };
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setDashOffset((current) => (current === 0 ? 16 : 0));
-    }, 500);
-    return () => clearInterval(interval);
+    return () => {
+      if (notificationTimeoutRef.current) {
+        clearTimeout(notificationTimeoutRef.current);
+      }
+    };
   }, []);
+
+  const showNotification = (message: string) => {
+    setNotificationMessage(message);
+    if (notificationTimeoutRef.current) {
+      clearTimeout(notificationTimeoutRef.current);
+    }
+    notificationTimeoutRef.current = setTimeout(() => {
+      setNotificationMessage(null);
+      notificationTimeoutRef.current = null;
+    }, 2200) as unknown as number;
+  };
+
 
   const goToPdfReview = () => {
     if (!capturedPdfUris.length) return;
@@ -140,11 +155,7 @@ export function CameraCaptureScreen({ navigation, route }: Props) {
     try {
       setIsSaving(true);
       const filename = `Scan-${Date.now()}.jpg`;
-      const result = await cameraRef.current.takePictureAsync({
-        quality: 1,
-        skipProcessing: true,
-        shutterSound: false,
-      });
+      const result = await cameraRef.current.takePictureAsync();
       const uri = normalizeUri(result);
       const [width, height] = await getImageSize(uri);
       const croppedUri = await cropDocument({ uri, width, height });
@@ -162,10 +173,11 @@ export function CameraCaptureScreen({ navigation, route }: Props) {
         isFavorite: false,
         isPinned: false,
         tags: [],
+        source: "camera",
       };
 
       addFiles([file]);
-      Alert.alert("Saved", "Scanned photo added to your vault.");
+      showNotification("Scanned photo added to your vault.");
     } catch (error) {
       console.warn("takePhoto error", error);
       Alert.alert("Capture failed", "Try again.");
@@ -179,15 +191,12 @@ export function CameraCaptureScreen({ navigation, route }: Props) {
 
     try {
       setIsSaving(true);
-      const result = await cameraRef.current.takePictureAsync({
-        quality: 1,
-        skipProcessing: true,
-        shutterSound: false,
-      });
+      const result = await cameraRef.current.takePictureAsync();
       const uri = normalizeUri(result);
       const [width, height] = await getImageSize(uri);
       const croppedUri = await cropDocument({ uri, width, height });
       setCapturedPdfUris((current) => [...current, croppedUri]);
+      showNotification("Saved page to PDF preview.");
     } catch (error) {
       console.warn("captureForPdf error", error);
       Alert.alert("Capture failed", "Try again.");
@@ -202,10 +211,12 @@ export function CameraCaptureScreen({ navigation, route }: Props) {
         <CameraView
           ref={cameraRef}
           style={styles.camera}
+          active={true}
           facing={cameraType}
           flash="off"
           mode="picture"
           onCameraReady={onCameraReady}
+          onMountError={onCameraMountError}
         />
 
         <View style={styles.overlay} pointerEvents="box-none">
@@ -217,56 +228,26 @@ export function CameraCaptureScreen({ navigation, route }: Props) {
               <Text style={styles.modeIndicatorText}>{mode === "photo" ? "PHOTO" : "PDF"}</Text>
             </View>
           </View>
-
-          <View style={styles.cameraHeader}>
-            <Text style={styles.cameraTitle}>
-              {mode === "photo" ? "Scan a document" : `PDF page ${capturedPdfUris.length + 1}`}
-            </Text>
-            <Text style={styles.cameraSubtitle}>{getGuideText()}</Text>
-          </View>
-
-          <View style={styles.scanGuideContainer}>
-            <View style={styles.scanGuideFrame}>
-              <Svg width="100%" height="100%" viewBox="0 0 100 100" style={styles.guideSvg}>
-                <Rect
-                  x="4"
-                  y="4"
-                  width="92"
-                  height="92"
-                  rx="16"
-                  ry="16"
-                  fill="transparent"
-                  stroke="rgba(255,255,255,0.35)"
-                  strokeWidth="2"
-                />
-                <Rect
-                  x="10"
-                  y="10"
-                  width="80"
-                  height="80"
-                  rx="12"
-                  ry="12"
-                  fill="none"
-                  stroke="rgba(255,255,255,0.75)"
-                  strokeWidth="1"
-                  strokeDasharray="6 6"
-                  strokeDashoffset={dashOffset}
-                />
-              </Svg>
+          {notificationMessage ? (
+            <View style={styles.notificationContainer}>
+              <Text style={styles.notificationText}>{notificationMessage}</Text>
             </View>
-            <Text style={styles.scanGuideText}>{getGuideText()}</Text>
-          </View>
-
+          ) : null}
+ 
           {mode === "pdf" && capturedPdfUris.length > 0 ? (
             <TouchableOpacity style={styles.pdfGalleryButton} onPress={goToPdfReview}>
-              <Image source={{ uri: capturedPdfUris[capturedPdfUris.length - 1] }} style={styles.pdfGalleryThumbnail} />
+              <Image
+                source={{ uri: capturedPdfUris[capturedPdfUris.length - 1] }}
+                style={styles.pdfGalleryThumbnail}
+                resizeMode="cover"
+              />
               <View style={styles.pdfGalleryBadge}>
                 <Text style={styles.pdfGalleryBadgeText}>{capturedPdfUris.length}</Text>
               </View>
             </TouchableOpacity>
           ) : null}
 
-          <View style={styles.bottomActions}>
+          <View style={[styles.cameraBottomActions, { bottom: insets.bottom + 16 }]}> 
             <TouchableOpacity style={styles.iconButton} onPress={switchCamera}>
               <Feather name="rotate-ccw" size={22} color="#000" />
             </TouchableOpacity>
@@ -361,12 +342,61 @@ const getStyles = (c: {
     },
     cameraTopActions: {
       position: "absolute",
+      top: 0,
       left: 20,
       right: 20,
       zIndex: 10,
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
+    },
+    cameraBottomActions: {
+      position: "absolute",
+      left: 20,
+      right: 20,
+      zIndex: 10,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    pdfGalleryButton: {
+      position: "absolute",
+      right: 20,
+      bottom: 120,
+      width: 80,
+      height: 108,
+      borderRadius: 20,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.2)",
+      backgroundColor: "rgba(0,0,0,0.6)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    pdfGalleryThumbnail: {
+      width: "100%",
+      height: "100%",
+      borderRadius: 14,
+      backgroundColor: "#222",
+    },
+    pdfGalleryBadge: {
+      position: "absolute",
+      right: 6,
+      bottom: 8,
+      minWidth: 24,
+      paddingHorizontal: 6,
+      height: 24,
+      borderRadius: 12,
+      backgroundColor: "#000",
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.3)",
+    },
+    pdfGalleryBadgeText: {
+      color: "#fff",
+      fontWeight: "700",
+      fontSize: 12,
     },
     iconButton: {
       width: 46,
@@ -393,24 +423,6 @@ const getStyles = (c: {
       fontWeight: "700",
       letterSpacing: 1.2,
     },
-    cameraHeader: {
-      marginTop: 72,
-      marginBottom: 12,
-      paddingHorizontal: 4,
-    },
-    cameraTitle: {
-      color: "#fff",
-      fontSize: 26,
-      fontWeight: "800",
-      marginBottom: 6,
-      letterSpacing: 0.5,
-    },
-    cameraSubtitle: {
-      color: "rgba(255,255,255,0.8)",
-      fontSize: 14,
-      lineHeight: 20,
-      maxWidth: "85%",
-    },
     cameraViewport: {
       flex: 1,
       backgroundColor: "#000",
@@ -425,78 +437,32 @@ const getStyles = (c: {
       left: 0,
       right: 0,
       bottom: 0,
-      justifyContent: "space-between",
       paddingHorizontal: 20,
       paddingVertical: 24,
       backgroundColor: "rgba(0,0,0,0.32)",
     },
-    scanGuideContainer: {
+    notificationContainer: {
+      position: "absolute",
+      top: 90,
+      left: 40,
+      right: 40,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 16,
+      backgroundColor: "rgba(255,255,255,0.95)",
       alignItems: "center",
       justifyContent: "center",
-      marginTop: 10,
-      marginBottom: 20,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.18,
+      shadowRadius: 16,
+      elevation: 10,
     },
-    scanGuideFrame: {
-      width: "86%",
-      aspectRatio: 0.72,
-      borderRadius: 24,
-      backgroundColor: "rgba(255,255,255,0.08)",
-      overflow: "hidden",
-    },
-    guideSvg: {
-      position: "absolute",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      opacity: 0.95,
-    },
-    scanGuideText: {
-      color: "rgba(255,255,255,0.85)",
-      fontSize: 13,
-      textAlign: "center",
-      maxWidth: "90%",
-      lineHeight: 18,
-      marginTop: 14,
-    },
-    pdfGalleryButton: {
-      position: "absolute",
-      right: 20,
-      top: 160,
-      width: 80,
-      height: 108,
-      borderRadius: 20,
-      overflow: "hidden",
-      borderWidth: 1,
-      borderColor: "rgba(255,255,255,0.2)",
-      backgroundColor: "rgba(0,0,0,0.6)",
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    pdfGalleryThumbnail: {
-      width: 76,
-      height: 76,
-      borderRadius: 14,
-      backgroundColor: "#222",
-    },
-    pdfGalleryBadge: {
-      position: "absolute",
-      right: 6,
-      bottom: 8,
-      minWidth: 24,
-      paddingHorizontal: 6,
-      height: 24,
-      borderRadius: 12,
-      backgroundColor: "#000",
-      justifyContent: "center",
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: "rgba(255,255,255,0.3)",
-    },
-    pdfGalleryBadgeText: {
-      color: "#fff",
+    notificationText: {
+      color: "#000",
+      fontSize: 14,
       fontWeight: "700",
-      fontSize: 12,
+      textAlign: "center",
     },
     bottomActions: {
       flexDirection: "row",

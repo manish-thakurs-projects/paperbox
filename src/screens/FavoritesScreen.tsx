@@ -14,6 +14,8 @@ import { FileRow } from "../components/FileRow";
 import { EmptyState } from "../components/EmptyState";
 import { FileActionModal } from "../components/FileActionModal";
 import { FolderMoveModal } from "../components/FolderMoveModal";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { radius } from "../theme/tokens";
 import { usePaperTheme, PaperColors } from "../theme/usePaperTheme";
 import { useVaultStore } from "../store/useVaultStore";
 import { getFolderIdsForFile } from "../utils/files";
@@ -105,6 +107,35 @@ const styles = (c: PaperColors) =>
       justifyContent: "space-between",
       gap: 12,
     },
+    selectionBar: {
+      marginBottom: 20,
+      padding: 16,
+      borderRadius: radius.md,
+      backgroundColor: c.elevated,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    selectionTitle: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: c.text,
+      marginBottom: 10,
+    },
+    selectionActions: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+    },
+    selectionActionButton: {
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: 14,
+      backgroundColor: c.surface,
+    },
+    selectionActionText: {
+      color: c.text,
+      fontWeight: "700",
+    },
     modalActionButton: {
       flex: 1,
       paddingVertical: 14,
@@ -153,8 +184,13 @@ export function FavoritesScreen() {
   const [actionsVisible, setActionsVisible] = useState(false);
   const [moveVisible, setMoveVisible] = useState(false);
   const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([]);
+  const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
+  const [selectionMoveMode, setSelectionMoveMode] = useState(false);
+  const [confirmDeleteFileId, setConfirmDeleteFileId] = useState<string | null>(null);
+  const [confirmDeleteSelectionVisible, setConfirmDeleteSelectionVisible] = useState(false);
 
   const favorites = useMemo(() => files.filter((f) => f.isFavorite), [files]);
+  const rowSelectionMode = selectedRowIds.length > 0;
   const actionFile = useMemo(
     () =>
       actionFileId
@@ -166,6 +202,63 @@ export function FavoritesScreen() {
   const closeActions = () => {
     setActionsVisible(false);
     setActionFileId(null);
+  };
+
+  const toggleRowSelection = (fileId: string) => {
+    setSelectedRowIds((current) =>
+      current.includes(fileId)
+        ? current.filter((id) => id !== fileId)
+        : [...current, fileId],
+    );
+  };
+
+  const clearRowSelection = () => setSelectedRowIds([]);
+
+  const selectAllRows = () => setSelectedRowIds(favorites.map((file) => file.id));
+
+  const deleteSelectedRows = () => {
+    if (!selectedRowIds.length) return;
+    setConfirmDeleteSelectionVisible(true);
+  };
+
+  const confirmDeleteSelectedRows = () => {
+    selectedRowIds.forEach((fileId) => removeFile(fileId));
+    clearRowSelection();
+    setConfirmDeleteSelectionVisible(false);
+  };
+
+  const cancelDeleteSelectedRows = () => {
+    setConfirmDeleteSelectionVisible(false);
+  };
+
+  const openSelectionMoveModal = () => {
+    if (!selectedRowIds.length) return;
+    if (!folders.length) {
+      Alert.alert(
+        "No folders available",
+        "Create a folder first in the Folders tab, then move files into it.",
+      );
+      return;
+    }
+
+    setSelectedFolderIds([]);
+    setSelectionMoveMode(true);
+    setMoveVisible(true);
+  };
+
+  const handleMoveSelection = () => {
+    if (!selectedRowIds.length || !selectedFolderIds.length) {
+      setSelectionMoveMode(false);
+      setMoveVisible(false);
+      return;
+    }
+
+    selectedRowIds.forEach((fileId) => {
+      setFileFolderMembership(fileId, selectedFolderIds);
+    });
+    clearRowSelection();
+    setSelectionMoveMode(false);
+    setMoveVisible(false);
   };
 
   const toggleFavoriteState = () => {
@@ -213,6 +306,7 @@ export function FavoritesScreen() {
     }
     if (!actionFile) return;
     setSelectedFolderIds(getFolderIdsForFile(actionFile));
+    setSelectionMoveMode(false);
     setMoveVisible(true);
     setActionsVisible(false);
   };
@@ -220,22 +314,24 @@ export function FavoritesScreen() {
   const saveFolderSelection = () => {
     if (!actionFile) return;
     setFileFolderMembership(actionFile.id, selectedFolderIds);
+    setSelectionMoveMode(false);
     setMoveVisible(false);
   };
 
   const deleteFile = () => {
     if (!actionFile) return;
-    Alert.alert("Delete this file?", "This only removes it from Paper Box.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => {
-          removeFile(actionFile.id);
-          closeActions();
-        },
-      },
-    ]);
+    setConfirmDeleteFileId(actionFile.id);
+  };
+
+  const confirmDeleteFile = () => {
+    if (!confirmDeleteFileId) return;
+    removeFile(confirmDeleteFileId);
+    closeActions();
+    setConfirmDeleteFileId(null);
+  };
+
+  const cancelDeleteFile = () => {
+    setConfirmDeleteFileId(null);
   };
 
   const openFileActions = (file: VaultFile) => {
@@ -262,12 +358,35 @@ export function FavoritesScreen() {
   return (
     <Screen>
       <Text style={s.title}>Favorites</Text>
+      {rowSelectionMode ? (
+        <View style={s.selectionBar}>
+          <Text style={s.selectionTitle}>{selectedRowIds.length} selected</Text>
+          <View style={s.selectionActions}>
+            <Pressable style={s.selectionActionButton} onPress={selectAllRows}>
+              <Text style={s.selectionActionText}>Select all</Text>
+            </Pressable>
+            <Pressable style={s.selectionActionButton} onPress={clearRowSelection}>
+              <Text style={s.selectionActionText}>Clear</Text>
+            </Pressable>
+            <Pressable style={s.selectionActionButton} onPress={openSelectionMoveModal}>
+              <Text style={s.selectionActionText}>Move</Text>
+            </Pressable>
+            <Pressable style={s.selectionActionButton} onPress={deleteSelectedRows}>
+              <Text style={s.selectionActionText}>Delete</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
       {favorites.length > 0 ? (
         favorites.map((f) => (
           <FileRow
             key={f.id}
             file={f}
-            onPress={() => goToPreview(f)}
+            selected={selectedRowIds.includes(f.id)}
+            onPress={() =>
+              rowSelectionMode ? toggleRowSelection(f.id) : goToPreview(f)
+            }
+            onLongPress={() => toggleRowSelection(f.id)}
             onMore={() => openFileActions(f)}
           />
         ))
@@ -294,7 +413,10 @@ export function FavoritesScreen() {
         visible={moveVisible}
         folders={folders}
         selectedFolderIds={selectedFolderIds}
-        onRequestClose={() => setMoveVisible(false)}
+        onRequestClose={() => {
+          setMoveVisible(false);
+          setSelectionMoveMode(false);
+        }}
         onToggleFolder={(folderId) =>
           setSelectedFolderIds((current) =>
             current.includes(folderId)
@@ -302,7 +424,25 @@ export function FavoritesScreen() {
               : [...current, folderId],
           )
         }
-        onSave={saveFolderSelection}
+        onSave={selectionMoveMode ? handleMoveSelection : saveFolderSelection}
+      />
+      <ConfirmDialog
+        visible={!!confirmDeleteFileId}
+        title="Delete this file?"
+        message="This only removes it from Paper Box."
+        confirmText="Delete"
+        destructive
+        onConfirm={confirmDeleteFile}
+        onCancel={cancelDeleteFile}
+      />
+      <ConfirmDialog
+        visible={confirmDeleteSelectionVisible}
+        title="Delete selected files?"
+        message="This will remove the selected files from Paper Box."
+        confirmText="Delete"
+        destructive
+        onConfirm={confirmDeleteSelectedRows}
+        onCancel={cancelDeleteSelectedRows}
       />
     </Screen>
   );
