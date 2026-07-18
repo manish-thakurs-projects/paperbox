@@ -17,6 +17,8 @@ import {
   Alert,
   Share,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { Screen } from "../components/Screen";
 import { usePaperTheme } from "../theme/usePaperTheme";
@@ -62,9 +64,7 @@ export function SettingsScreen() {
   const s = styles(colors);
   const theme = useSettingsStore((s) => s.theme),
     setTheme = useSettingsStore((s) => s.setTheme),
-    lock = useSettingsStore((s) => s.lockEnabled),
-    biometricEnabled = useSettingsStore((s) => (s as any).biometricEnabled),
-    setBiometricEnabled = useSettingsStore((s) => (s as any).setBiometricEnabled);
+    lock = useSettingsStore((s) => s.lockEnabled);
 
   const files = useVaultStore((state) => state.files);
   const folders = useVaultStore((state) => state.folders);
@@ -101,6 +101,9 @@ export function SettingsScreen() {
   const [passDisableVisible, setPassDisableVisible] = useState(false);
   const [disablePass, setDisablePass] = useState("");
   const [disableError, setDisableError] = useState<string | null>(null);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
+  const [showDisablePass, setShowDisablePass] = useState(false);
 
   const folderSelection = useMemo(
     () => [...folders].sort((a, b) => a.name.localeCompare(b.name)),
@@ -690,38 +693,6 @@ export function SettingsScreen() {
             trackColor={{ false: colors.muted, true: colors.inverse }}
           />
         </SettingsRow>
-        <SettingsRow icon="key" label="Use device biometrics" colors={colors}>
-          <Switch
-            value={!!biometricEnabled}
-            onValueChange={async (v) => {
-              if (v) {
-                try {
-                  // eslint-disable-next-line @typescript-eslint/no-var-requires
-                  const LocalAuth = require("expo-local-authentication");
-                  if (!LocalAuth) throw new Error("LocalAuth missing");
-                  const has = await LocalAuth.hasHardwareAsync?.();
-                  const enrolled = await LocalAuth.isEnrolledAsync?.();
-                  if (!has || !enrolled) {
-                    Alert.alert("Biometric unavailable", "No biometric hardware or no biometrics enrolled on this device.");
-                    return;
-                  }
-                  const res = await LocalAuth.authenticateAsync({ promptMessage: "Enable biometrics for Paper Box" });
-                  if ((res as any).success) {
-                    await setBiometricEnabled(true);
-                  } else {
-                    Alert.alert("Authentication failed", "Could not enable biometrics.");
-                  }
-                } catch (e) {
-                  console.warn("enable biometric error", e);
-                  Alert.alert("Biometric unavailable", "Biometric authentication is not available on this device or dependency is not installed.");
-                }
-              } else {
-                await setBiometricEnabled(false);
-              }
-            }}
-            trackColor={{ false: colors.muted, true: colors.inverse }}
-          />
-        </SettingsRow>
       </View>
       <Text style={s.label}>VAULT</Text>
       <View style={s.group}>
@@ -738,25 +709,36 @@ export function SettingsScreen() {
       <Text style={s.version}>Paper Box - Version 1.0.0{"\n"}Offline-first personal document vault</Text>
 
       <Modal animationType="slide" transparent visible={passcodeSetupVisible} onRequestClose={() => setPasscodeSetupVisible(false)}>
-        <View style={s.modalOverlay}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 20} style={s.modalOverlay}>
           <View style={s.modalContent}>
             <Text style={s.modalTitle}>Set app passcode</Text>
-            <TextInput
-              value={newPass}
-              onChangeText={setNewPass}
-              secureTextEntry
-              placeholder="Enter passcode"
-              placeholderTextColor={colors.secondary}
-              style={s.inputField}
-            />
-            <TextInput
-              value={confirmPass}
-              onChangeText={setConfirmPass}
-              secureTextEntry
-              placeholder="Confirm passcode"
-              placeholderTextColor={colors.secondary}
-              style={[s.inputField, { marginBottom: 8 }]}
-            />
+            <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 8 }}>
+              <TextInput
+                value={newPass}
+                onChangeText={setNewPass}
+                secureTextEntry={!showNewPass}
+                placeholder="Enter passcode"
+                placeholderTextColor={colors.secondary}
+                style={[s.inputField, { flex: 1, marginRight: 8 }]}
+              autoFocus
+              />
+              <Pressable onPress={() => setShowNewPass((p) => !p)} style={{ padding: 8 }}>
+                <Feather name={showNewPass ? 'eye' : 'eye-off'} size={18} color={colors.secondary} />
+              </Pressable>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 8 }}>
+              <TextInput
+                value={confirmPass}
+                onChangeText={setConfirmPass}
+                secureTextEntry={!showConfirmPass}
+                placeholder="Confirm passcode"
+                placeholderTextColor={colors.secondary}
+                style={[s.inputField, { flex: 1 }]}
+              />
+              <Pressable onPress={() => setShowConfirmPass((p) => !p)} style={{ padding: 8, marginLeft: 8 }}>
+                <Feather name={showConfirmPass ? 'eye' : 'eye-off'} size={18} color={colors.secondary} />
+              </Pressable>
+            </View>
             {passError ? <Text style={s.modalSubtitle}>{passError}</Text> : null}
             <Pressable style={[s.modalButton, s.modalSaveButton]} onPress={handleSetPasscodeConfirm}>
               <Text style={[s.modalActionText, s.modalSaveText]}>Set passcode and lock</Text>
@@ -765,21 +747,27 @@ export function SettingsScreen() {
               <Text style={[s.modalButtonText, s.modalCancelText]}>Cancel</Text>
             </Pressable>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal animationType="slide" transparent visible={passDisableVisible} onRequestClose={() => setPassDisableVisible(false)}>
-        <View style={s.modalOverlay}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 20} style={s.modalOverlay}>
           <View style={s.modalContent}>
             <Text style={s.modalTitle}>Disable app lock</Text>
-            <TextInput
-              value={disablePass}
-              onChangeText={setDisablePass}
-              secureTextEntry
-              placeholder="Enter current passcode"
-              placeholderTextColor={colors.secondary}
-              style={s.inputField}
-            />
+            <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 8 }}>
+              <TextInput
+                value={disablePass}
+                onChangeText={setDisablePass}
+                secureTextEntry={!showDisablePass}
+                placeholder="Enter current passcode"
+                placeholderTextColor={colors.secondary}
+                style={[s.inputField, { flex: 1, marginRight: 8 }]}
+              autoFocus
+              />
+              <Pressable onPress={() => setShowDisablePass((p) => !p)} style={{ padding: 8 }}>
+                <Feather name={showDisablePass ? 'eye' : 'eye-off'} size={18} color={colors.secondary} />
+              </Pressable>
+            </View>
             {disableError ? <Text style={s.modalSubtitle}>{disableError}</Text> : null}
             <Pressable style={[s.modalButton, s.modalSaveButton]} onPress={handleDisablePasscodeConfirm}>
               <Text style={[s.modalActionText, s.modalSaveText]}>Disable lock</Text>
@@ -788,7 +776,7 @@ export function SettingsScreen() {
               <Text style={[s.modalButtonText, s.modalCancelText]}>Cancel</Text>
             </Pressable>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {renderExportOptions()}
