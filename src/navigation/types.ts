@@ -7,6 +7,7 @@ export type RootStackParams = {
   PdfReview: { imageUris: string[] };
   AllFiles: undefined;
   CapturedFiles: undefined;
+  Privacy: undefined;
   Tags: undefined;
 };
 
