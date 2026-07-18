@@ -29,6 +29,7 @@ import DocumentScanner, {
 import { usePaperTheme } from "../theme/usePaperTheme";
 import { withAlpha } from "../theme/utils";
 import { Feather } from "@expo/vector-icons";
+import { useSettingsStore } from "../store/useSettingsStore";
 import { useVaultStore } from "../store/useVaultStore";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { RootStackParams } from "../navigation/types";
@@ -160,6 +161,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
   );
 
   const addFiles = useVaultStore((s) => s.addFiles);
+  const setLockSuppressed = useSettingsStore((s) => s.setLockSuppressed);
   const { colors } = usePaperTheme();
   const styles = getStyles(colors, itemWidth, itemHeight, width);
   const pageUris = pages.map((page) => page.uri);
@@ -191,6 +193,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
 
   const addPages = async () => {
     if (isScanning) return;
+    setLockSuppressed(true);
     setIsScanning(true);
 
     try {
@@ -231,6 +234,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
       Alert.alert("Scan failed", "Unable to scan documents. Please try again.");
     } finally {
       setIsScanning(false);
+      setLockSuppressed(false);
     }
   };
 

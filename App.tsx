@@ -12,6 +12,7 @@ import { checkLocalAuthenticationAvailable } from "@/utils/localAuthentication";
 export default function App() {
   const theme = useSettingsStore((s) => s.theme);
   const lockEnabled = useSettingsStore((s) => s.lockEnabled);
+  const lockSuppressed = useSettingsStore((s) => s.lockSuppressed);
   const setLockEnabled = useSettingsStore((s) => s.setLockEnabled);
   const hydrate = useVaultStore((s) => s.hydrate);
   const [authenticated, setAuthenticated] = useState(!lockEnabled);
@@ -42,19 +43,8 @@ export default function App() {
   }, [lockEnabled, setLockEnabled]);
 
   useEffect(() => {
-    const subscription = AppState.addEventListener("change", (nextState) => {
-      if (
-        lockEnabled &&
-        appState.current.match(/inactive|background/) &&
-        nextState === "active"
-      ) {
-        setAuthenticated(false);
-      }
-      appState.current = nextState;
-    });
-
-    return () => subscription.remove();
-  }, [lockEnabled]);
+    appState.current = AppState.currentState;
+  }, []);
 
   return (
     <SafeAreaProvider>

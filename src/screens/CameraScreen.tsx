@@ -26,6 +26,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { usePaperTheme } from "../theme/usePaperTheme";
 import { shareVaultFile } from "../services/shareService";
 import { useVaultStore } from "../store/useVaultStore";
+import { useSettingsStore } from "../store/useSettingsStore";
 import { getFolderIdsForFile, extensionOf, kindOf } from "../utils/files";
 import { RootStackParams } from "../navigation/types";
 import { VaultFile } from "../types";
@@ -42,6 +43,7 @@ export function CameraScreen() {
   const renameFile = useVaultStore((state) => state.renameFile);
   const setFileFolderMembership = useVaultStore((state) => state.setFileFolderMembership);
   const removeFile = useVaultStore((state) => state.removeFile);
+  const setLockSuppressed = useSettingsStore((state) => state.setLockSuppressed);
 
   const [actionFileId, setActionFileId] = useState<string | null>(null);
   const [actionsVisible, setActionsVisible] = useState(false);
@@ -250,6 +252,7 @@ export function CameraScreen() {
       return;
     }
 
+    setLockSuppressed(true);
     setIsScanning(true);
     try {
       const granted = await requestCameraPermission();
@@ -288,6 +291,7 @@ export function CameraScreen() {
       Alert.alert("Scan failed", "Unable to scan document. Please try again.");
     } finally {
       setIsScanning(false);
+      setLockSuppressed(false);
     }
   };
 
