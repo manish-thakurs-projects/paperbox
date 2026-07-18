@@ -7,14 +7,16 @@ import { PreviewScreen } from "../screens/PreviewScreen";
 import { PdfReviewScreen } from "../screens/PdfReviewScreen";
 import { SearchScreen } from "../screens/SearchScreen";
 import { RootStackParams } from "../navigation/types";
-import { palette } from "../theme/tokens";
+import { usePaperTheme } from "../theme/usePaperTheme";
 const Stack = createNativeStackNavigator<RootStackParams>();
 export function AppNavigator() {
+  const { colors } = usePaperTheme();
+
   return (
     <Stack.Navigator
       screenOptions={{
         headerShadowVisible: false,
-        headerTintColor: palette.black,
+        headerTintColor: colors.text,
         headerTitleStyle: { fontWeight: "200" },
       }}
     >
