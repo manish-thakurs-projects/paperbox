@@ -17,6 +17,7 @@ import { FolderMoveModal } from "../components/FolderMoveModal";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { radius } from "../theme/tokens";
 import { usePaperTheme, PaperColors } from "../theme/usePaperTheme";
+import { withAlpha } from "../theme/utils";
 import { useVaultStore } from "../store/useVaultStore";
 import { getFolderIdsForFile } from "../utils/files";
 import { shareVaultFile } from "../services/shareService";
@@ -36,7 +37,7 @@ const styles = (c: PaperColors) =>
     modalOverlay: {
       flex: 1,
       justifyContent: "flex-end",
-      backgroundColor: "rgba(0,0,0,0.38)",
+      backgroundColor: withAlpha(c.text, 0.38),
     },
     modalContent: {
       backgroundColor: c.surface,

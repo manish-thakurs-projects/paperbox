@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import { Screen } from "../components/Screen";
 import { usePaperTheme } from "../theme/usePaperTheme";
+import { withAlpha } from "../theme/utils";
 import { radius } from "../theme/tokens";
 import { useSettingsStore } from "../store/useSettingsStore";
 import { useVaultStore } from "../store/useVaultStore";
@@ -720,7 +721,7 @@ const styles = (c: {
     modalOverlay: {
       flex: 1,
       justifyContent: "flex-end",
-      backgroundColor: "rgba(0,0,0,0.38)",
+      backgroundColor: withAlpha(c.text, 0.38),
     },
     modalContent: {
       backgroundColor: c.surface,

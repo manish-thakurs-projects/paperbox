@@ -6,6 +6,7 @@ import { RootStackParams } from "../navigation/types";
 import { Screen } from "../components/Screen";
 import { radius } from "../theme/tokens";
 import { PaperColors, usePaperTheme } from "../theme/usePaperTheme";
+import { withAlpha } from "../theme/utils";
 import { useVaultStore } from "../store/useVaultStore";
 import { fileSize, getFolderIdsForFile, relativeDate } from "../utils/files";
 import { shareVaultFile } from "../services/shareService";
@@ -290,7 +291,7 @@ const styles = (c: PaperColors) =>
     folderLabel: { fontSize: 13, color: c.secondary, marginTop: 8 },
     modalOverlay: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.35)",
+      backgroundColor: withAlpha(c.text, 0.35),
       justifyContent: "center",
       alignItems: "center",
       padding: 20,
