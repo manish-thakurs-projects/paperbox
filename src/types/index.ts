@@ -35,7 +35,6 @@ export type Folder = {
 };
 export type Settings = {
   theme: "light" | "dark";
-  lockEnabled: boolean;
   hidePreviews: boolean;
-  biometricEnabled?: boolean;
+  lockEnabled: boolean;
 };

@@ -30,6 +30,7 @@
     "expo-sharing": "~14.0.8",
     "expo-status-bar": "~3.0.9",
     "expo-video": "~3.0.16",
+    "expo-local-authentication": "~14.0.0",
     "jszip": "^3.10.1",
     "prop-types": "^15.8.1",
     "react": "19.1.0",
