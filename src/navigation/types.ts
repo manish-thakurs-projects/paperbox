@@ -4,7 +4,6 @@ export type RootStackParams = {
   FileDetail: { fileId: string };
   FolderDetail: { folderId: string };
   Preview: { fileId: string };
-  CameraCapture: { mode: "photo" | "pdf" };
   PdfReview: { imageUris: string[] };
   Tags: undefined;
 };

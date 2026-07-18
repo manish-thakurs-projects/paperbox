@@ -35,6 +35,7 @@
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-blob-util": "^0.24.10",
+    "react-native-document-scanner-plugin": "^2.0.4",
     "react-native-fast-opencv": "^0.4.8",
     "react-native-fs": "^2.20.0",
     "react-native-image-zoom-viewer": "^3.0.1",

@@ -5,7 +5,6 @@ import { FileDetailScreen } from "../screens/FileDetailScreen";
 import { FolderDetailScreen } from "../screens/FolderDetailScreen";
 import { PreviewScreen } from "../screens/PreviewScreen";
 import { PdfReviewScreen } from "../screens/PdfReviewScreen";
-import { CameraCaptureScreen } from "../screens/CameraCaptureScreen";
 import { SearchScreen } from "../screens/SearchScreen";
 import { RootStackParams } from "../navigation/types";
 import { palette } from "../theme/tokens";
@@ -43,11 +42,6 @@ export function AppNavigator() {
         name="Preview"
         component={PreviewScreen}
         options={{ title: "Preview" }}
-      />
-      <Stack.Screen
-        name="CameraCapture"
-        component={CameraCaptureScreen}
-        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="PdfReview"
