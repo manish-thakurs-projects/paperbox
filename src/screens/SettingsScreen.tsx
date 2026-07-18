@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigation } from '@react-navigation/native';
 import { Feather } from "@expo/vector-icons";
 import { CameraMountError, CameraView, useCameraPermissions } from "expo-camera";
 import * as FileSystem from "expo-file-system/legacy";
@@ -19,6 +20,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from "react-native";
 import { Screen } from "../components/Screen";
 import { usePaperTheme } from "../theme/usePaperTheme";
@@ -65,6 +67,7 @@ export function SettingsScreen() {
   const theme = useSettingsStore((s) => s.theme),
     setTheme = useSettingsStore((s) => s.setTheme),
     lock = useSettingsStore((s) => s.lockEnabled);
+  const navigation = useNavigation();
 
   const files = useVaultStore((state) => state.files);
   const folders = useVaultStore((state) => state.folders);
@@ -702,11 +705,24 @@ export function SettingsScreen() {
         <SettingsRow icon="upload" label="Import" colors={colors} onPress={() => setImportVisible(true)}>
           <Feather key={theme} name="chevron-right" size={18} color={colors.secondary} />
         </SettingsRow>
-        <SettingsRow icon="shield" label="Privacy" colors={colors}>
+        <SettingsRow icon="shield" label="Privacy" colors={colors} onPress={() => navigation.navigate('Privacy')}>
+          <Feather key={theme} name="chevron-right" size={18} color={colors.secondary} />
+        </SettingsRow>
+        <SettingsRow icon="mail" label="Contact" colors={colors} onPress={async () => {
+          try {
+            const mailto = 'mailto:dustmedianetwork@gmail.com?subject=' + encodeURIComponent('Paper Box support');
+            const supported = await Linking.canOpenURL(mailto);
+            if (supported) await Linking.openURL(mailto);
+            else Alert.alert('Unable to open mail app', 'No mail app is available to send email.');
+          } catch (e) {
+            console.warn('open mail error', e);
+            Alert.alert('Unable to open mail app', 'Could not open your mail application.');
+          }
+        }}>
           <Feather key={theme} name="chevron-right" size={18} color={colors.secondary} />
         </SettingsRow>
       </View>
-      <Text style={s.version}>Paper Box - Version 1.0.0{"\n"}Offline-first personal document vault</Text>
+      <Text style={s.version}>Paper Box - Version 1.0.0{"\n"}</Text>
 
       <Modal animationType="slide" transparent visible={passcodeSetupVisible} onRequestClose={() => setPasscodeSetupVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 20} style={s.modalOverlay}>

@@ -8,6 +8,7 @@ import { PdfReviewScreen } from "../screens/PdfReviewScreen";
 import { SearchScreen } from "../screens/SearchScreen";
 import { AllFilesScreen } from "../screens/AllFilesScreen";
 import { CapturedFilesScreen } from "../screens/CapturedFilesScreen";
+import { PrivacyPolicyScreen } from "../screens/PrivacyPolicyScreen";
 import { RootStackParams } from "../navigation/types";
 import { usePaperTheme } from "../theme/usePaperTheme";
 const Stack = createNativeStackNavigator<RootStackParams>();
@@ -61,6 +62,11 @@ export function AppNavigator() {
         name="CapturedFiles"
         component={CapturedFilesScreen}
         options={{ title: "Captured files" }}
+      />
+      <Stack.Screen
+        name="Privacy"
+        component={PrivacyPolicyScreen}
+        options={{ title: "Privacy policy" }}
       />
     </Stack.Navigator>
   );
