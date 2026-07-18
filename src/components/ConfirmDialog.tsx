@@ -9,6 +9,7 @@ type ConfirmDialogProps = {
   confirmText?: string;
   cancelText?: string;
   destructive?: boolean;
+  hideCancelButton?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -20,6 +21,7 @@ export function ConfirmDialog({
   confirmText = "Delete",
   cancelText = "Cancel",
   destructive = false,
+  hideCancelButton = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -33,12 +35,14 @@ export function ConfirmDialog({
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
           <View style={styles.actions}>
-            <Pressable
-              style={({ pressed }) => [styles.button, styles.cancelButton, pressed && styles.buttonPressed]}
-              onPress={onCancel}
-            >
-              <Text style={[styles.buttonText, styles.cancelText]}>{cancelText}</Text>
-            </Pressable>
+            {!hideCancelButton ? (
+              <Pressable
+                style={({ pressed }) => [styles.button, styles.cancelButton, pressed && styles.buttonPressed]}
+                onPress={onCancel}
+              >
+                <Text style={[styles.buttonText, styles.cancelText]}>{cancelText}</Text>
+              </Pressable>
+            ) : null}
             <Pressable
               style={({ pressed }) => [styles.button, destructive ? styles.destructiveButton : styles.confirmButton, pressed && styles.buttonPressed]}
               onPress={onConfirm}
