@@ -219,7 +219,7 @@ export function HomeScreen() {
     <Screen>
       <View style={s.head}>
         <View>
-          <Text style={s.title}>Paper Box</Text>
+          <Text style={s.title}>PaperBox</Text>
         </View>
         <Pressable style={s.add} onPress={upload}>
           <Feather name="plus" size={23} color={colors.background} />
@@ -322,7 +322,7 @@ export function HomeScreen() {
       <ConfirmDialog
         visible={!!confirmDeleteFileId}
         title="Delete this file?"
-        message="This only removes it from Paper Box."
+        message="This only removes it from PaperBox."
         confirmText="Delete"
         destructive
         onConfirm={confirmDeleteFile}
@@ -331,7 +331,7 @@ export function HomeScreen() {
       <ConfirmDialog
         visible={confirmDeleteSelectionVisible}
         title="Delete selected files?"
-        message="This will remove the selected files from Paper Box."
+        message="This will remove the selected files from PaperBox."
         confirmText="Delete"
         destructive
         onConfirm={confirmDeleteSelectedRows}
@@ -476,3 +476,4 @@ const styles = (c: PaperColors) =>
       color: c.text,
     },
   });
+

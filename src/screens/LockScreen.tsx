@@ -29,7 +29,7 @@ export function LockScreen({ onUnlock }: { onUnlock: () => void }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Paper Box</Text>
+      <Text style={styles.title}>PaperBox</Text>
       <Text style={styles.subtitle}>Secure access required</Text>
       <View style={styles.promptCard}>
         {status === "pending" ? (
@@ -110,3 +110,4 @@ const s = (c: {
       fontWeight: "700",
     },
   });
+

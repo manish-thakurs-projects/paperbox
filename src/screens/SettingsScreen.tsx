@@ -217,7 +217,7 @@ export function SettingsScreen() {
     setShareFileBusy(true);
     try {
       await Sharing.shareAsync(exportFileUri, {
-        dialogTitle: "Share Paper Box export",
+        dialogTitle: "Share PaperBox export",
       });
     } catch (error) {
       console.warn("share export file error", error);
@@ -231,7 +231,7 @@ export function SettingsScreen() {
     if (!exportHandshakeLink || shareHandshakeBusy) return;
     setShareHandshakeBusy(true);
     try {
-      await Share.share({ message: exportHandshakeLink, title: "Paper Box transfer handshake" });
+      await Share.share({ message: exportHandshakeLink, title: "PaperBox transfer handshake" });
     } catch (error) {
       console.warn("share handshake error", error);
       Alert.alert("Unable to share handshake", "Try again later.");
@@ -344,7 +344,7 @@ export function SettingsScreen() {
       }
     }
 
-    Alert.alert("Invalid handshake", "Please scan a valid Paper Box transfer QR code.");
+    Alert.alert("Invalid handshake", "Please scan a valid PaperBox transfer QR code.");
     setScanned(false);
   };
 
@@ -379,7 +379,7 @@ export function SettingsScreen() {
       setScanned(false);
     } catch (error) {
       console.warn("import export file error", error);
-      Alert.alert("Unable to import file", "The selected file is not a valid Paper Box export.");
+      Alert.alert("Unable to import file", "The selected file is not a valid PaperBox export.");
     } finally {
       setImportBusy(false);
     }
@@ -619,7 +619,7 @@ export function SettingsScreen() {
              </Pressable>
            </>
           ) : (
-           <Text style={s.modalSubtitle}>Point your camera at a Paper Box transfer QR code to establish the secure connection.</Text>
+           <Text style={s.modalSubtitle}>Point your camera at a PaperBox transfer QR code to establish the secure connection.</Text>
           )}
           {importBusy ? <ActivityIndicator size="small" color={colors.inverse} /> : null}
           <Pressable
@@ -682,7 +682,7 @@ export function SettingsScreen() {
         </SettingsRow>
         <SettingsRow icon="mail" label="Contact" colors={colors} onPress={async () => {
           try {
-            const mailto = 'mailto:dustmedianetwork@gmail.com?subject=' + encodeURIComponent('Paper Box support');
+            const mailto = 'mailto:dustmedianetwork@gmail.com?subject=' + encodeURIComponent('PaperBox support');
             const supported = await Linking.canOpenURL(mailto);
             if (supported) await Linking.openURL(mailto);
             else Alert.alert('Unable to open mail app', 'No mail app is available to send email.');
@@ -694,7 +694,7 @@ export function SettingsScreen() {
           <Feather key={theme} name="chevron-right" size={18} color={colors.secondary} />
         </SettingsRow>
       </View>
-      <Text style={s.version}>Paper Box - Version 1.0.0{"\n"}</Text>
+      <Text style={s.version}>PaperBox - Version 1.0.0{"\n"}</Text>
 
       {renderExportOptions()}
       {renderExportSelection()}
@@ -941,3 +941,4 @@ const rowStyles = (c: {
     },
     name: { fontSize: 15, fontWeight: "600", color: c.text, flex: 1 },
   });
+
