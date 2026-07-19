@@ -34,7 +34,7 @@ export type Folder = {
   isPinned: boolean;
 };
 export type Settings = {
-  theme: "light" | "dark" | "system";
+  theme: "light" | "dark";
   hidePreviews: boolean;
   lockEnabled: boolean;
 };

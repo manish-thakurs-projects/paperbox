@@ -98,6 +98,6 @@ const styles = (c: any) =>
     title: { fontSize: 28, fontWeight: "800", color: c.text, marginBottom: 12 },
     sectionTitle: { fontSize: 16, fontWeight: "700", color: c.text, marginTop: 14, marginBottom: 6 },
     paragraph: { color: c.secondary, lineHeight: 20 },
-    link: { color: "#1E88E5", textDecorationLine: "underline" },
+    link: { color: c.accent, textDecorationLine: "underline" },
   });
 

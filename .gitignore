@@ -24,3 +24,7 @@ android/local.properties
 
 # Gradle
 .gradle/
+*.apk
+*.aab
+outputs/
+android/app/build/

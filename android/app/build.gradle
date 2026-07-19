@@ -95,7 +95,7 @@ android {
 
     namespace 'com.paperbox.vault'
     defaultConfig {
-        applicationId 'paperbox.dustmedia.org'
+        applicationId 'com.paperbox.vault'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

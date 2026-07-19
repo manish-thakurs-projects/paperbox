@@ -1,6 +1,7 @@
 import React from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { usePaperTheme } from "../theme/usePaperTheme";
+import { withAlpha } from "../theme/utils";
 import { Folder } from "../types";
 
 interface FolderMoveModalProps {
@@ -76,7 +77,7 @@ const styles = (c: {
     modalOverlay: {
       flex: 1,
       justifyContent: "flex-end",
-      backgroundColor: "rgba(0,0,0,0.38)",
+      backgroundColor: withAlpha(c.text, 0.38),
     },
     modalContent: {
       backgroundColor: c.surface,

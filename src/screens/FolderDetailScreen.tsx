@@ -21,6 +21,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { useVaultStore } from "../store/useVaultStore";
 import { radius } from "../theme/tokens";
 import { PaperColors, usePaperTheme } from "../theme/usePaperTheme";
+import { withAlpha } from "../theme/utils";
 import { isFileInFolder } from "../utils/files";
 
 type Props = NativeStackScreenProps<RootStackParams, "FolderDetail">;
@@ -452,7 +453,7 @@ const styles = (c: PaperColors) =>
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: withAlpha(c.text, 0.4),
     justifyContent: "flex-end",
   },
   modalContent: {

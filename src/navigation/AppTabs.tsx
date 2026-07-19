@@ -2,6 +2,7 @@
 import { Feather } from "@expo/vector-icons";
 import { BottomTabBarButtonProps, createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { withAlpha } from "../theme/utils";
 import { HomeScreen } from "../screens/HomeScreen";
 import { FoldersScreen } from "../screens/FoldersScreen";
 import { CameraScreen } from "@/screens/CameraScreen";
@@ -64,7 +65,7 @@ function IconOnlyTabBarButton({
     >
       {children}
       {showTooltip && (
-        <View style={[styles.tooltip, { backgroundColor: colors.elevated, borderColor: colors.border }]}> 
+        <View style={[styles.tooltip, { backgroundColor: colors.elevated, borderColor: colors.border, shadowColor: withAlpha(colors.text, 0.15) }]}> 
           <Text style={[styles.tooltipText, { color: colors.text }]}>{label}</Text>
         </View>
       )}
@@ -135,7 +136,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     zIndex: 99,
-    shadowColor: "#000",
+    shadowColor: "transparent",
     shadowOpacity: 0.15,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },

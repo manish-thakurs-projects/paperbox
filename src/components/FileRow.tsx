@@ -22,7 +22,7 @@ const icons: Record<string, keyof typeof Feather.glyphMap> = {
   text: 'align-left',
   other: 'file'
 };
-export function FileRow({
+export const FileRow = React.memo(function FileRow({
   file,
   onPress,
   onMore,
@@ -74,7 +74,8 @@ export function FileRow({
       )}
     </Pressable>
   );
-}
+});
+
 const styles = (c: PaperColors) =>
   StyleSheet.create({
     row: {
