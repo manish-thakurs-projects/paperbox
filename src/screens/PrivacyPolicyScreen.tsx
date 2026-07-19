@@ -1,5 +1,5 @@
 import React from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
 import { usePaperTheme } from "../theme/usePaperTheme";
 
 export function PrivacyPolicyScreen() {
@@ -13,8 +13,10 @@ export function PrivacyPolicyScreen() {
       <Text style={s.paragraph}>
         PaperBox is an offline first personal document vault. This Privacy Policy explains how the app collects,
         stores, and uses your data. The app is designed to keep your files on your device; no personal data is
-        shared with third parties by default.
+        shared with third parties by default. PaperBox is owned, run, and maintained by DustMedia. More information
+        is available at <Text style={s.link} onPress={() => Linking.openURL("https://paperbox.dustmedia.org")}>paperbox.dustmedia.org</Text>.
       </Text>
+
 
       <Text style={s.sectionTitle}>Data collection and storage</Text>
       <Text style={s.paragraph}>
@@ -80,7 +82,8 @@ export function PrivacyPolicyScreen() {
 
       <Text style={s.sectionTitle}>Contact</Text>
       <Text style={s.paragraph}>
-        For questions about privacy, contact the app developer or review the repository for implementation details.
+        For questions about privacy or app ownership, contact the developer at DustMedia or visit{' '}
+        <Text style={s.link} onPress={() => Linking.openURL("https://paperbox.dustmedia.org")}>paperbox.dustmedia.org</Text>.
       </Text>
 
       <View style={{ height: 40 }} />
@@ -95,5 +98,6 @@ const styles = (c: any) =>
     title: { fontSize: 28, fontWeight: "800", color: c.text, marginBottom: 12 },
     sectionTitle: { fontSize: 16, fontWeight: "700", color: c.text, marginTop: 14, marginBottom: 6 },
     paragraph: { color: c.secondary, lineHeight: 20 },
+    link: { color: "#1E88E5", textDecorationLine: "underline" },
   });
 

@@ -28,7 +28,7 @@ import { radius } from "../theme/tokens";
 import { useSettingsStore } from "../store/useSettingsStore";
 import { useVaultStore } from "../store/useVaultStore";
 import { checkLocalAuthenticationAvailable } from "../utils/localAuthentication";
-import { VaultFile, Folder } from "../types";
+import { VaultFile, Folder, Settings } from "../types";
 
 type SettingsRowProps = {
   icon: keyof typeof Feather.glyphMap;
@@ -318,6 +318,23 @@ export function SettingsScreen() {
   };
 
   const [importSession, setImportSession] = useState<ExportHandshake | null>(null);
+  const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
+
+  const themeOptions = useMemo(
+    () => [
+      { value: "system" as Settings["theme"], label: "System", description: "Follow your device theme settings." },
+      { value: "light" as Settings["theme"], label: "Light", description: "Always use light mode." },
+      { value: "dark" as Settings["theme"], label: "Dark", description: "Always use dark mode." },
+    ],
+    [],
+  );
+
+  const selectedThemeOption = themeOptions.find((option) => option.value === theme) ?? themeOptions[0];
+
+  const handleThemeSelect = (value: Settings["theme"]) => {
+    setTheme(value);
+    setThemeDropdownOpen(false);
+  };
 
   const handleBarCodeScanned = async (scanningResult: { data: string }) => {
     setScanned(true);
@@ -641,15 +658,46 @@ export function SettingsScreen() {
   return (
     <Screen>
       <Text style={s.title}>Settings</Text>
+     
       <Text style={s.label}>PREFERENCES</Text>
       <View style={s.group}>
-        <SettingsRow icon="moon" label="Dark mode" colors={colors}>
-          <Switch
-            value={theme === "dark"}
-            onValueChange={(v) => setTheme(v ? "dark" : "light")}
-            trackColor={{ false: colors.muted, true: colors.inverse }}
-          />
+        <SettingsRow icon="moon" label="Theme" colors={colors} onPress={() => setThemeDropdownOpen((current) => !current)}>
+          <View style={s.themeDropdownHeader}>
+            <Text style={s.themeDropdownLabel}>{selectedThemeOption.label}</Text>
+            <Feather
+              name={themeDropdownOpen ? "chevron-up" : "chevron-down"}
+              size={18}
+              color={colors.secondary}
+            />
+          </View>
         </SettingsRow>
+        {themeDropdownOpen ? (
+          <View style={s.themeDropdownOptions}>
+            {themeOptions.map((option) => {
+              const selected = theme === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  style={[
+                    s.themeDropdownOption,
+                    selected && s.themeDropdownOptionSelected,
+                  ]}
+                  onPress={() => handleThemeSelect(option.value)}
+                >
+                  <View style={s.themeDropdownOptionRow}>
+                    <Text style={[s.themeDropdownOptionLabel, selected && s.themeDropdownOptionLabelSelected]}>
+                      {option.label}
+                    </Text>
+                    {selected ? (
+                      <Feather name="check" size={16} color={colors.text} />
+                    ) : null}
+                  </View>
+                  <Text style={s.themeDropdownOptionDescription}>{option.description}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
         <SettingsRow icon="shield" label="App lock" colors={colors}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Switch
@@ -694,7 +742,7 @@ export function SettingsScreen() {
           <Feather key={theme} name="chevron-right" size={18} color={colors.secondary} />
         </SettingsRow>
       </View>
-      <Text style={s.version}>PaperBox - Version 1.0.0{"\n"}</Text>
+      <Text style={s.version}>PaperBox - Version 1.0.0{"\n"}  Developed by DustMedia. </Text>
 
       {renderExportOptions()}
       {renderExportSelection()}
@@ -753,6 +801,57 @@ const styles = (c: {
       borderBottomWidth: 1,
       borderColor: c.border,
       backgroundColor: c.surface,
+    },
+    themeDropdownHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    themeDropdownLabel: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: c.text,
+    },
+    description: {
+      color: c.secondary,
+      fontSize: 14,
+      lineHeight: 20,
+      marginBottom: 16,
+    },
+    themeDropdownOptions: {
+      borderBottomWidth: 1,
+      borderLeftWidth: 1,
+      borderRightWidth: 1,
+      borderColor: c.border,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
+    themeDropdownOption: {
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderColor: c.border,
+    },
+    themeDropdownOptionSelected: {
+      backgroundColor: c.elevated,
+    },
+    themeDropdownOptionRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    themeDropdownOptionLabel: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: c.text,
+    },
+    themeDropdownOptionLabelSelected: {
+      color: c.text,
+    },
+    themeDropdownOptionDescription: {
+      marginTop: 4,
+      fontSize: 13,
+      color: c.secondary,
+      lineHeight: 18,
     },
     name: { fontSize: 15, fontWeight: "600", color: c.text, flex: 1 },
     unavailableLabel: {
