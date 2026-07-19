@@ -1,6 +1,7 @@
 import React from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { PaperColors, usePaperTheme } from "../theme/usePaperTheme";
+import { withAlpha } from "../theme/utils";
 
 type ConfirmDialogProps = {
   visible: boolean;
@@ -62,7 +63,7 @@ const getStyles = (colors: PaperColors, destructive: boolean) =>
       flex: 1,
       justifyContent: "center",
       alignItems: "center",
-      backgroundColor: "rgba(0,0,0,0.45)",
+      backgroundColor: withAlpha(colors.text, 0.45),
       paddingHorizontal: 24,
     },
     container: {
@@ -73,7 +74,7 @@ const getStyles = (colors: PaperColors, destructive: boolean) =>
       padding: 24,
       borderWidth: 1,
       borderColor: colors.border,
-      shadowColor: "#000",
+      shadowColor: withAlpha(colors.text, 0.18),
       shadowOffset: { width: 0, height: 10 },
       shadowOpacity: 0.12,
       shadowRadius: 20,
@@ -116,7 +117,7 @@ const getStyles = (colors: PaperColors, destructive: boolean) =>
       backgroundColor: colors.text,
     },
     destructiveButton: {
-      backgroundColor: "#d32f2f",
+      backgroundColor: colors.destructive,
     },
     buttonText: {
       fontWeight: "700",

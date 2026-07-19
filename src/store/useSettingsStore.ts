@@ -32,11 +32,15 @@ const load = async (): Promise<Persisted | null> => {
   }
 };
 
+const normalizeTheme = (theme: unknown): Settings["theme"] => {
+  return theme === "dark" ? "dark" : "light";
+};
+
 export const useSettingsStore = create<State>((set, get) => {
   load().then((persisted) => {
     if (persisted) {
       set({
-        theme: persisted.theme ?? "system",
+        theme: normalizeTheme(persisted.theme),
         hidePreviews: persisted.hidePreviews ?? false,
         lockEnabled: persisted.lockEnabled ?? false,
       } as any);
@@ -44,7 +48,7 @@ export const useSettingsStore = create<State>((set, get) => {
   });
 
   return {
-    theme: "system",
+    theme: "light",
     hidePreviews: false,
     lockEnabled: false,
     lockSuppressed: false,

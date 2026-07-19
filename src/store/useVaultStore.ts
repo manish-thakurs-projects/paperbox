@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { Folder, VaultFile } from "../types";
 import { loadVault, saveVault } from "../services/vaultStorage";
-import { getFolderIdsForFile } from "../utils/files";
+import { getFolderIdsForFile, sanitizeVaultName } from "../utils/files";
 
 type State = {
  files: VaultFile[];
@@ -52,7 +52,11 @@ export const useVaultStore = create<State>((set, get) => ({
    set({ files, folders: data.folders ?? [], ready: true });
  },
  addFiles: (items) => {
-   const files = normalizeFiles([...items, ...get().files]);
+   const sanitizedItems = items.map((item) => ({
+     ...item,
+     name: sanitizeVaultName(item.name, "Untitled"),
+   }));
+   const files = normalizeFiles([...sanitizedItems, ...get().files]);
    set({ files });
    persist(files, get().folders);
  },
@@ -61,7 +65,7 @@ export const useVaultStore = create<State>((set, get) => ({
      ...get().folders,
      {
        id: Date.now().toString(),
-       name,
+       name: sanitizeVaultName(name, "Untitled folder"),
        parentId,
        createdAt: new Date().toISOString(),
        isFavorite: false,
@@ -141,7 +145,9 @@ export const useVaultStore = create<State>((set, get) => ({
    persist(files, get().folders);
  },
  renameFile: (id, name) => {
-   const files = normalizeFiles(get().files.map((f) => (f.id === id ? { ...f, name } : f)));
+   const files = normalizeFiles(
+     get().files.map((f) => (f.id === id ? { ...f, name: sanitizeVaultName(name, "Untitled") } : f)),
+   );
    set({ files });
    persist(files, get().folders);
  },
@@ -176,7 +182,7 @@ export const useVaultStore = create<State>((set, get) => ({
  },
  renameFolder: (id, name) => {
    const folders = get().folders.map((folder) =>
-     folder.id === id ? { ...folder, name } : folder,
+     folder.id === id ? { ...folder, name: sanitizeVaultName(name, "Untitled folder") } : folder,
    );
    set({ folders });
    persist(get().files, folders);

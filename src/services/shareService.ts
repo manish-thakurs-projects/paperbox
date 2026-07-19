@@ -49,7 +49,7 @@ async function copyToCache(file: VaultFile): Promise<string> {
     await fsAny.copyAsync({ from: file.uri, to: destination });
     return destination;
   } catch (e) {
-    console.warn("shareService copyAsync failed", file.uri, e);
+    console.warn("shareService failed to stage file", e);
     return file.uri;
   }
 }

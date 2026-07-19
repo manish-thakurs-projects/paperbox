@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { usePaperTheme } from "../theme/usePaperTheme";
+import { withAlpha } from "../theme/utils";
 import { VaultFile } from "../types";
 
 interface FileActionModalProps {
@@ -34,16 +35,34 @@ export function FileActionModal({
   const s = styles(colors);
   const [renameVisible, setRenameVisible] = useState(false);
   const [renameText, setRenameText] = useState("");
+  const inputRef = useRef<TextInput | null>(null);
 
   useEffect(() => {
-    setRenameText(file?.name || "");
-  }, [file]);
+    if (!file) {
+      setRenameText("");
+      return;
+    }
+
+    if (!renameVisible) {
+      setRenameText(file.name);
+    }
+  }, [file, renameVisible]);
 
   useEffect(() => {
     if (!visible) {
       setRenameVisible(false);
     }
   }, [visible]);
+
+  useEffect(() => {
+    if (!renameVisible) return;
+
+    const frame = requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [renameVisible]);
 
   const openRename = () => {
     if (!file) return;
@@ -61,68 +80,26 @@ export function FileActionModal({
   };
 
   return (
-    <>
-      <Modal animationType="slide" transparent visible={visible && !renameVisible} onRequestClose={onRequestClose}>
-        <Pressable style={s.modalOverlay} onPress={onRequestClose}>
-          <Pressable style={s.modalContent} onPress={() => {}}>
-            <Text style={s.modalTitle}>File actions</Text>
-            {file ? (
-              <>
-                <Text numberOfLines={1} style={s.modalFileName}>
-                  {file.name}
-                </Text>
-                <ScrollView style={s.modalActions}>
-                  <Pressable style={s.actionItem} onPress={onInfo}>
-                    <Text style={s.actionLabel}>Info</Text>
-                  </Pressable>
-                  <Pressable style={s.actionItem} onPress={openRename}>
-                    <Text style={s.actionLabel}>Rename file</Text>
-                  </Pressable>
-                  <Pressable style={s.actionItem} onPress={onToggleFavorite}>
-                    <Text style={s.actionLabel}>
-                      {file.isFavorite ? "Remove favorite" : "Add to favorites"}
-                    </Text>
-                  </Pressable>
-                  <Pressable style={s.actionItem} onPress={onTogglePin}>
-                    <Text style={s.actionLabel}>{file.isPinned ? "Unpin" : "Pin"}</Text>
-                  </Pressable>
-                  <Pressable style={s.actionItem} onPress={onOpenMoveModal}>
-                    <Text style={s.actionLabel}>Move to folders</Text>
-                  </Pressable>
-                  {onRemoveFromFolder ? (
-                    <Pressable style={s.actionItem} onPress={onRemoveFromFolder}>
-                      <Text style={s.actionLabel}>Remove from folder</Text>
-                    </Pressable>
-                  ) : null}
-                  <Pressable style={s.actionItem} onPress={onShare}>
-                    <Text style={s.actionLabel}>Share</Text>
-                  </Pressable>
-                  <Pressable style={s.actionItem} onPress={onDelete}>
-                    <Text style={[s.actionLabel, s.destructiveAction]}>Delete from vault</Text>
-                  </Pressable>
-                </ScrollView>
-                <Pressable style={[s.modalButton, s.modalCancelButton]} onPress={onRequestClose}>
-                  <Text style={[s.modalButtonText, s.modalCancelText]}>Cancel</Text>
-                </Pressable>
-              </>
-            ) : (
-              <Text style={s.modalEmpty}>Unable to load file actions.</Text>
-            )}
-          </Pressable>
-        </Pressable>
-      </Modal>
-      <Modal animationType="slide" transparent visible={renameVisible} onRequestClose={() => setRenameVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={s.modalOverlay}>
-          <Pressable style={s.modalOverlay} onPress={() => setRenameVisible(false)}>
-            <Pressable style={s.renameModalCard} onPress={() => {}}>
+    <Modal animationType="none" transparent visible={visible} onRequestClose={renameVisible ? () => setRenameVisible(false) : onRequestClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={s.modalOverlay}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 70 : 20}
+      >
+        <Pressable style={renameVisible ? s.renameModalOverlay : s.modalOverlay} onPress={renameVisible ? () => setRenameVisible(false) : onRequestClose}>
+          {renameVisible ? (
+            <Pressable style={s.renameModalCard} onPress={(event) => event.stopPropagation()}>
               <Text style={s.modalTitle}>Rename file</Text>
               <TextInput
+                ref={inputRef}
                 value={renameText}
                 onChangeText={setRenameText}
                 placeholder="Enter new file name"
                 placeholderTextColor={colors.secondary}
                 style={s.modalInput}
-                autoFocus
+                returnKeyType="done"
+                onSubmitEditing={saveRename}
+                blurOnSubmit={false}
               />
               <View style={s.modalFooter}>
                 <Pressable style={[s.modalActionButton, s.modalCancelButton]} onPress={() => setRenameVisible(false)}>
@@ -133,10 +110,56 @@ export function FileActionModal({
                 </Pressable>
               </View>
             </Pressable>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Modal>
-    </>
+          ) : (
+            <Pressable style={s.modalContent} onPress={(event) => event.stopPropagation()}>
+              <Text style={s.modalTitle}>File actions</Text>
+              {file ? (
+                <>
+                  <Text numberOfLines={1} style={s.modalFileName}>
+                    {file.name}
+                  </Text>
+                  <ScrollView style={s.modalActions} keyboardShouldPersistTaps="handled">
+                    <Pressable style={s.actionItem} onPress={onInfo}>
+                      <Text style={s.actionLabel}>Info</Text>
+                    </Pressable>
+                    <Pressable style={s.actionItem} onPress={openRename}>
+                      <Text style={s.actionLabel}>Rename file</Text>
+                    </Pressable>
+                    <Pressable style={s.actionItem} onPress={onToggleFavorite}>
+                      <Text style={s.actionLabel}>
+                        {file.isFavorite ? "Remove favorite" : "Add to favorites"}
+                      </Text>
+                    </Pressable>
+                    <Pressable style={s.actionItem} onPress={onTogglePin}>
+                      <Text style={s.actionLabel}>{file.isPinned ? "Unpin" : "Pin"}</Text>
+                    </Pressable>
+                    <Pressable style={s.actionItem} onPress={onOpenMoveModal}>
+                      <Text style={s.actionLabel}>Move to folders</Text>
+                    </Pressable>
+                    {onRemoveFromFolder ? (
+                      <Pressable style={s.actionItem} onPress={onRemoveFromFolder}>
+                        <Text style={s.actionLabel}>Remove from folder</Text>
+                      </Pressable>
+                    ) : null}
+                    <Pressable style={s.actionItem} onPress={onShare}>
+                      <Text style={s.actionLabel}>Share</Text>
+                    </Pressable>
+                    <Pressable style={s.actionItem} onPress={onDelete}>
+                      <Text style={[s.actionLabel, s.destructiveAction]}>Delete from vault</Text>
+                    </Pressable>
+                  </ScrollView>
+                  <Pressable style={[s.modalButton, s.modalCancelButton]} onPress={onRequestClose}>
+                    <Text style={[s.modalButtonText, s.modalCancelText]}>Cancel</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <Text style={s.modalEmpty}>Unable to load file actions.</Text>
+              )}
+            </Pressable>
+          )}
+        </Pressable>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
@@ -149,12 +172,21 @@ const styles = (c: {
   border: string;
   muted: string;
   inverse: string;
+  accent: string;
+  destructive: string;
 }) =>
   StyleSheet.create({
     modalOverlay: {
       flex: 1,
       justifyContent: "flex-end",
-      backgroundColor: "rgba(0,0,0,0.38)",
+      backgroundColor: withAlpha(c.text, 0.38),
+    },
+    renameModalOverlay: {
+      flex: 1,
+      justifyContent: "center",
+      paddingHorizontal: 20,
+      paddingVertical: 24,
+      backgroundColor: withAlpha(c.text, 0.38),
     },
     modalContent: {
       backgroundColor: c.surface,
@@ -189,7 +221,7 @@ const styles = (c: {
       fontSize: 16,
     },
     destructiveAction: {
-      color: "#d32f2f",
+      color: c.destructive,
     },
     modalButton: {
       paddingVertical: 14,

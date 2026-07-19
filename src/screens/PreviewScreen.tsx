@@ -19,7 +19,6 @@ import ImageViewer from "react-native-image-zoom-viewer";
 import { RootStackParams } from "../navigation/types";
 import { Screen } from "../components/Screen";
 import { useVaultStore } from "../store/useVaultStore";
-import { palette } from "../theme/tokens";
 import { usePaperTheme } from "../theme/usePaperTheme";
 import { withAlpha } from "../theme/utils";
 import * as FileSystem from "expo-file-system/legacy";
@@ -127,7 +126,7 @@ const saveUriToCache = async (uri: string, filename: string): Promise<string> =>
       await fsAny.deleteAsync(destination, { idempotent: true });
     }
   } catch (e) {
-    console.warn("saveUriToCache failed checking existing file", e);
+    // Ignore cache inspection failures.
   }
 
   if (cacheDir) {
@@ -148,7 +147,7 @@ const saveUriToCache = async (uri: string, filename: string): Promise<string> =>
       await FileSystem.copyAsync({ from: uri, to: destination });
       return destination;
     } catch (e) {
-      console.warn("saveUriToCache copyAsync failed", uri, e);
+      // Ignore copy failures and fall back to reading the file directly.
     }
 
     try {
@@ -160,7 +159,7 @@ const saveUriToCache = async (uri: string, filename: string): Promise<string> =>
       });
       return destination;
     } catch (e) {
-      console.warn("saveUriToCache read/write fallback failed", uri, e);
+      // Ignore fallback cache write errors.
       return uri;
     }
   }
@@ -210,7 +209,6 @@ export function PreviewScreen({ route }: Props) {
 
   // … (download logic unchanged) …
   useEffect(() => {
-    console.warn("PreviewScreen opening file:", uri);
     let mounted = true;
 
     async function maybeDownload() {
@@ -218,10 +216,9 @@ export function PreviewScreen({ route }: Props) {
         setLoading(true);
         try {
           const savedUri = await saveUriToCache(uri, filename);
-          console.warn("PreviewScreen savedUri:", savedUri);
+          // Cached preview URI prepared.
           if (mounted) setLocalUri(savedUri);
         } catch (e) {
-          console.warn("download error", e);
           if (mounted) setError("Unable to prepare file for preview.");
         } finally {
           if (mounted) setLoading(false);
@@ -245,7 +242,6 @@ export function PreviewScreen({ route }: Props) {
           await openExternally();
           if (mounted) setPdfOpened(true);
         } catch (e) {
-          console.warn("open PDF externally failed", e);
           if (mounted) setError("Unable to open PDF in default viewer.");
         }
       }
@@ -272,14 +268,7 @@ export function PreviewScreen({ route }: Props) {
 
       const finalTarget = target || uri;
       const mimeType = file.mimeType || mimeTypeFromExtension(ext);
-      console.warn(
-        "PreviewScreen openExternally finalTarget:",
-        finalTarget,
-        "mimeType:",
-        mimeType,
-        "localUri:",
-        localUri,
-      );
+      // Open the file with the appropriate external handler.
 
       if (Platform.OS === "android") {
         let dataUri = finalTarget;
@@ -294,7 +283,7 @@ export function PreviewScreen({ route }: Props) {
                 dataUri = contentUri;
               }
             } catch (e) {
-              console.error("getContentUriAsync failed", e);
+              // Ignore cache URI conversion failures and fall back to the original URI.
             }
           }
         }
@@ -307,7 +296,7 @@ export function PreviewScreen({ route }: Props) {
           });
           return;
         } catch (e) {
-          console.error("IntentLauncher failed", e);
+          // If IntentLauncher fails, we will try a generic open fallback.
         }
       }
 
@@ -315,23 +304,22 @@ export function PreviewScreen({ route }: Props) {
         await Linking.openURL(finalTarget);
         return;
       } catch (e) {
-        console.error("Linking.openURL failed for finalTarget", finalTarget, e);
+        // Linking failed, continue to fallback sharing.
       }
 
       try {
         const shareTarget = target;
         if (shareTarget) {
-          console.warn("PreviewScreen sharing fallback for:", shareTarget);
+          // Fallback to sharing if external open was not available.
           await Sharing.shareAsync(shareTarget);
           return;
         }
       } catch (e) {
-        console.error("Sharing.shareAsync failed", e);
+        // Share fallback failed, surface an error to the user.
       }
 
       setError("Unable to open file in another app.");
-    } catch (e) {
-      console.error("openExternally error", e);
+    } catch (_e) {
       setError("Unable to open file in another app.");
     }
   };
@@ -443,7 +431,7 @@ export function PreviewScreen({ route }: Props) {
 
   // PDF
   if (isPdf) {
-    const debugUri = localUri || uri;
+    const target = localUri || uri;
     return (
       <Screen style={styles.content}>
         <View style={styles.center}>
@@ -458,12 +446,9 @@ export function PreviewScreen({ route }: Props) {
           <TouchableOpacity
             onPress={async () => {
               try {
-                const target = debugUri;
-                console.warn("PreviewScreen share button target:", target);
                 if (target) await Sharing.shareAsync(target);
-              } catch (e) {
-                console.warn("share failed", e);
-                setError("Share failed");
+              } catch (_e) {
+                setError("Share failed. Please try again.");
               }
             }}
             style={[styles.primaryButton, { marginTop: 10 }]}
@@ -471,28 +456,7 @@ export function PreviewScreen({ route }: Props) {
             <Text style={styles.primaryButtonText}>Share / Open with…</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={async () => {
-              try {
-                const target = debugUri;
-                console.warn("PreviewScreen fileInfo target:", target);
-                if (!target) {
-                  setError("No file available to inspect.");
-                  return;
-                }
-                const info = await (FileSystem as any).getInfoAsync(target);
-                Alert.alert("File info", JSON.stringify(info, null, 2));
-              } catch (e) {
-                console.warn("getInfoAsync failed", e);
-                setError("Unable to read file info.");
-              }
-            }}
-            style={[styles.primaryButton, { marginTop: 10 }]}
-          >
-            <Text style={styles.primaryButtonText}>Show file info</Text>
-          </TouchableOpacity>
 
-          <Text style={[styles.copy, { marginTop: 12, fontSize: 12 }]}>URI: {debugUri}</Text>
         </View>
       </Screen>
     );

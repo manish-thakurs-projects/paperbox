@@ -322,7 +322,6 @@ export function SettingsScreen() {
 
   const themeOptions = useMemo(
     () => [
-      { value: "system" as Settings["theme"], label: "System", description: "Follow your device theme settings." },
       { value: "light" as Settings["theme"], label: "Light", description: "Always use light mode." },
       { value: "dark" as Settings["theme"], label: "Dark", description: "Always use dark mode." },
     ],

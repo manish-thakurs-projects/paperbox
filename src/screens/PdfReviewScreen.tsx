@@ -37,6 +37,28 @@ import { RootStackParams } from "../navigation/types";
 
 type Props = NativeStackScreenProps<RootStackParams, "PdfReview">;
 
+type ReviewPage = {
+  id: string;
+  uri: string;
+  previewUri?: string | null;
+};
+
+const createPreviewUri = async (uri: string) => {
+  try {
+    const result = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 240 } }],
+      {
+        compress: 0.8,
+        format: ImageManipulator.SaveFormat.JPEG,
+      },
+    );
+    return result.uri;
+  } catch {
+    return null;
+  }
+};
+
 export function PdfReviewScreen({ navigation, route }: Props) {
   const { imageUris } = route.params;
   const { width } = useWindowDimensions();
@@ -46,7 +68,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
     null,
   );
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
-  const [pages, setPages] = useState(
+  const [pages, setPages] = useState<ReviewPage[]>(
     imageUris.map((uri, index) => ({ id: `${index}-${uri}`, uri })),
   );
   const [selectedPageIds, setSelectedPageIds] = useState<string[]>([]);
@@ -174,6 +196,29 @@ export function PdfReviewScreen({ navigation, route }: Props) {
     return uri.startsWith("file://") ? uri : `file://${uri}`;
   };
 
+  useEffect(() => {
+    let active = true;
+    const pending = pages.filter((page) => !page.previewUri);
+    if (!pending.length) return;
+
+    (async () => {
+      const hydrated = await Promise.all(
+        pages.map(async (page) => {
+          if (page.previewUri) return page;
+          return { ...page, previewUri: await createPreviewUri(page.uri) };
+        }),
+      );
+
+      if (active) {
+        setPages(hydrated);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [pages.length]);
+
   const requestCameraPermission = async () => {
     if (Platform.OS !== "android") {
       return true;
@@ -223,13 +268,15 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         return;
       }
 
-      setPages((current) => [
-        ...current,
-        ...scannedImages.map((uri, index) => ({
-          id: `${Date.now()}-${current.length + index}-${uri}`,
+      const newPages = await Promise.all(
+        scannedImages.map(async (uri, index) => ({
+          id: `${Date.now()}-${index}-${uri}`,
           uri,
+          previewUri: await createPreviewUri(uri),
         })),
-      ]);
+      );
+
+      setPages((current) => [...current, ...newPages]);
     } catch (error) {
       console.warn("addPages error", error);
       Alert.alert("Scan failed", "Unable to scan documents. Please try again.");
@@ -243,22 +290,13 @@ export function PdfReviewScreen({ navigation, route }: Props) {
     navigation.setOptions({
       title: "Review pages",
       headerRight: () => (
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.headerAddButton}
-            onPress={addPages}
-            disabled={isScanning}
-          >
-            <Feather name="plus" size={20} color={colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerAddButton}
-            onPress={openMenu}
-            disabled={isScanning}
-          >
-            <Feather name="more-vertical" size={20} color={colors.text} />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.headerAddButton}
+          onPress={openMenu}
+          disabled={isScanning}
+        >
+          <Feather name="more-vertical" size={20} color={colors.text} />
+        </TouchableOpacity>
       ),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -327,7 +365,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         }),
       );
 
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=210mm, height=297mm, initial-scale=1.0" /><style>@page{size:210mm 297mm;margin:0;}html,body{margin:0;padding:0;background:#000;width:210mm;height:297mm;}body{padding:0;} .page{width:210mm;height:297mm;display:flex;justify-content:center;align-items:center;overflow:hidden;page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid;} .page:last-child{page-break-after:auto;break-after:auto;} img{width:210mm;height:297mm;object-fit:cover;display:block;margin:0;padding:0;border:none;}</style></head><body>${imagesHtml.join("")}</body></html>`;
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=210mm, height=297mm, initial-scale=1.0" /><style>@page{size:210mm 297mm;margin:0;}html,body{margin:0;padding:0;background:#ffffff;width:210mm;height:297mm;}body{padding:0;} .page{width:210mm;height:297mm;display:flex;justify-content:center;align-items:center;overflow:hidden;page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid;} .page:last-child{page-break-after:auto;break-after:auto;} img{width:210mm;height:297mm;object-fit:cover;display:block;margin:0;padding:0;border:none;}</style></head><body>${imagesHtml.join("")}</body></html>`;
       const { uri: generatedPdfUri } = await Print.printToFileAsync({ html });
 
       if (!generatedPdfUri) {
@@ -342,8 +380,6 @@ export function PdfReviewScreen({ navigation, route }: Props) {
 
       const destinationUri = `${documentDirectory}${filename}`;
       await FileSystem.copyAsync({ from: generatedPdfUri, to: destinationUri });
-      const info = await FileSystem.getInfoAsync(destinationUri);
-      console.warn("PdfReview created PDF destination info:", info);
       const fileSize = await getFileSize(destinationUri);
 
       addFiles([
@@ -413,9 +449,10 @@ export function PdfReviewScreen({ navigation, route }: Props) {
       }
 
       const newUri = scannedImages[0];
+      const previewUri = await createPreviewUri(newUri);
       setPages((current) =>
         current.map((page, pageIndex) =>
-          pageIndex === index ? { ...page, uri: newUri } : page,
+          pageIndex === index ? { ...page, uri: newUri, previewUri } : page,
         ),
       );
     } catch (error) {
@@ -630,25 +667,6 @@ export function PdfReviewScreen({ navigation, route }: Props) {
       ) : null}
 
       {hasPages ? (
-        <View style={styles.actionBar}>
-          <Text style={styles.actionButtonText}>Pages: {pages.length}</Text>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={addPages}
-            disabled={isScanning}
-          >
-            <Feather
-              name="plus"
-              size={16}
-              color={colors.text}
-              style={styles.actionIcon}
-            />
-            <Text style={styles.actionButtonText}>Add page</Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
-
-      {hasPages ? (
         <ScrollView
           style={styles.scrollArea}
           contentContainerStyle={styles.pagesGridContent}
@@ -695,7 +713,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
                 >
                   {/* When not reordering, a full-area Pressable owns tap / long-press.
                       When reordering, it's unmounted so the PanResponder owns the gesture. */}
-                  <Image source={{ uri: page.uri }} style={styles.pageImage} />
+                  <Image source={{ uri: page.previewUri ?? page.uri }} style={styles.pageImage} />
                   {!isReordering && (
                     <Pressable
                       style={[StyleSheet.absoluteFill, { zIndex: 1 }]}
@@ -724,6 +742,29 @@ export function PdfReviewScreen({ navigation, route }: Props) {
                 </View>
               );
             })}
+            {!isReordering ? (
+              <TouchableOpacity
+                style={[
+                  styles.addPageCard,
+                  {
+                    flexBasis: `${100 / columnCount}%`,
+                    maxWidth: `${100 / columnCount}%`,
+                    marginBottom: 0,
+                    borderLeftWidth: pages.length % columnCount === 0 ? 0 : 1,
+                    borderTopWidth: pages.length < columnCount ? 0 : 1,
+                  },
+                ]}
+                onPress={addPages}
+                activeOpacity={0.8}
+              >
+                <View style={styles.addPageInner}>
+                  <View style={styles.addPageIconContainer}>
+                    <Feather name="plus" size={28} color={colors.text} />
+                  </View>
+                  <Text style={styles.addPageText}>Add page</Text>
+                </View>
+              </TouchableOpacity>
+            ) : null}
           </View>
         </ScrollView>
       ) : (
@@ -847,7 +888,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
                     <Pressable key={p.id} onPress={() => {
                       setSelectedForDeletion((cur) => cur.includes(p.id) ? cur.filter(id=>id!==p.id) : [...cur, p.id]);
                     }} style={{ width: itemWidth, height: itemHeight, padding: 6 }}>
-                      <Image source={{ uri: p.uri }} style={{ width: '100%', height: '100%', opacity: sel ? 0.5 : 1 }} />
+                      <Image source={{ uri: p.previewUri ?? p.uri }} style={{ width: '100%', height: '100%', opacity: sel ? 0.5 : 1 }} />
                       {sel &&                       <View style={{ position: 'absolute', right: 8, top: 8, backgroundColor: withAlpha(colors.text, 0.6), padding: 4, borderRadius: 12 }}><Feather name="check" size={14} color={colors.background}/></View>}
                     </Pressable>
                   );
@@ -891,13 +932,13 @@ export function PdfReviewScreen({ navigation, route }: Props) {
           {selectedImageIndex !== null && pages[selectedImageIndex] ? (
             <View style={styles.previewScrollContainer}>
               <ImageViewer
-                imageUrls={[{ url: pages[selectedImageIndex].uri }]}
+                imageUrls={[{ url: pages[selectedImageIndex].previewUri ?? pages[selectedImageIndex].uri }]}
                 enableSwipeDown={false}
                 renderIndicator={() => <View />}
                 saveToLocalByLongPress={false}
                 backgroundColor={colors.background}
                 enableImageZoom
-                enablePreload
+                enablePreload={false}
                 style={styles.previewScrollContainer}
               />
             </View>
@@ -1139,17 +1180,20 @@ const getStyles = (
     },
     pageNumberBadge: {
       position: "absolute",
-      minWidth: 10,
-      minHeight: 10,
-      borderRadius: 14,
-    color: c.text,
+      top: 8,
+      left: 8,
+      minWidth: 24,
+      minHeight: 24,
+      borderRadius: 12,
+      paddingHorizontal: 8,
+      backgroundColor: withAlpha(c.text, 0.72),
+      color: c.background,
       fontSize: 12,
       fontWeight: "700",
       textAlign: "center",
       textAlignVertical: "center",
       lineHeight: 24,
-    },
-    emptyState: {
+    },    emptyState: {
       flex: 1,
       alignItems: "center",
       justifyContent: "center",
@@ -1333,6 +1377,45 @@ const getStyles = (
       alignItems: "center",
       justifyContent: "center",
     },
+    addPageCard: {
+      position: "relative",
+      borderRadius: 0,
+      overflow: "hidden",
+      backgroundColor: c.surface,
+      borderColor: c.border,
+      height: itemHeight,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: withAlpha(c.text, 0.12),
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.15,
+      shadowRadius: 25,
+      elevation: 6,
+    },
+    addPageInner: {
+      width: "100%",
+      height: "100%",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 8,
+    },
+    addPageIconContainer: {
+      width: 72,
+      height: 72,
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: c.border,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 12,
+      backgroundColor: withAlpha(c.background, 0.1),
+    },
+    addPageText: {
+      color: c.text,
+      fontWeight: "700",
+      fontSize: 13,
+      textAlign: "center",
+    },
     reorderBanner: {
       flexDirection: "row",
       alignItems: "center",
@@ -1468,7 +1551,7 @@ const getStyles = (
     },
     previewScrollContainer: {
       flex: 1,
-      backgroundColor: c.inverse,
+      backgroundColor: c.background,
     },
     previewScrollContent: {
       flex: 1,

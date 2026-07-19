@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Feather, MaterialIcons } from "@expo/vector-icons";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -26,13 +26,24 @@ export function FileDetailScreen({ route, navigation }: Props) {
   const [renameText, setRenameText] = useState("");
   const [moveVisible, setMoveVisible] = useState(false);
   const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([]);
+  const inputRef = useRef<TextInput | null>(null);
   const s = styles(colors);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (file) {
       setRenameText(file.name);
     }
   }, [file]);
+
+  useEffect(() => {
+    if (!renameVisible) return;
+
+    const frame = requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [renameVisible]);
 
   if (!file) {
     return (
@@ -144,36 +155,47 @@ export function FileDetailScreen({ route, navigation }: Props) {
         </Pressable>
       </View>
 
-      <Modal animationType="slide" transparent visible={renameVisible} onRequestClose={() => setRenameVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={s.modalOverlay}>
-          <View style={s.modalCard}>
-            <Text style={s.modalTitle}>Rename file</Text>
-            <TextInput
-              style={s.modalInput}
-              value={renameText}
-              onChangeText={setRenameText}
-              placeholder="Enter new file name"
-              placeholderTextColor={colors.secondary}
-              autoFocus
-            />
-            <View style={s.modalFooter}>
-              <Pressable style={[s.modalActionButton, s.modalCancelButton]} onPress={() => setRenameVisible(false)}>
-                <Text style={s.modalActionText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[s.modalActionButton, s.modalSaveButton]}
-                onPress={() => {
+      <Modal animationType="none" transparent visible={renameVisible} onRequestClose={() => setRenameVisible(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={s.modalOverlay} keyboardVerticalOffset={Platform.OS === "ios" ? 70 : 20}>
+          <Pressable style={s.modalBackdrop} onPress={() => setRenameVisible(false)}>
+            <Pressable style={s.modalCard} onPress={(event) => event.stopPropagation()}>
+              <Text style={s.modalTitle}>Rename file</Text>
+              <TextInput
+                ref={inputRef}
+                style={s.modalInput}
+                value={renameText}
+                onChangeText={setRenameText}
+                placeholder="Enter new file name"
+                placeholderTextColor={colors.secondary}
+                returnKeyType="done"
+                blurOnSubmit={false}
+                onSubmitEditing={() => {
                   const trimmed = renameText.trim();
                   if (trimmed && trimmed !== file.name) {
                     renameFile(file.id, trimmed);
                   }
                   setRenameVisible(false);
                 }}
-              >
-                <Text style={[s.modalActionText, s.modalSaveText]}>Save</Text>
-              </Pressable>
-            </View>
-          </View>
+              />
+              <View style={s.modalFooter}>
+                <Pressable style={[s.modalActionButton, s.modalCancelButton]} onPress={() => setRenameVisible(false)}>
+                  <Text style={s.modalActionText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={[s.modalActionButton, s.modalSaveButton]}
+                  onPress={() => {
+                    const trimmed = renameText.trim();
+                    if (trimmed && trimmed !== file.name) {
+                      renameFile(file.id, trimmed);
+                    }
+                    setRenameVisible(false);
+                  }}
+                >
+                  <Text style={[s.modalActionText, s.modalSaveText]}>Save</Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -295,6 +317,12 @@ const styles = (c: PaperColors) =>
       justifyContent: "center",
       alignItems: "center",
       padding: 20,
+    },
+    modalBackdrop: {
+      flex: 1,
+      width: "100%",
+      justifyContent: "center",
+      alignItems: "center",
     },
     modalCard: {
       width: "100%",

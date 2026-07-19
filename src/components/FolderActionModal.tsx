@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { usePaperTheme, PaperColors } from "../theme/usePaperTheme";
+import { withAlpha } from "../theme/utils";
 import { Folder } from "../types";
 
 interface FolderActionModalProps {
@@ -60,12 +61,12 @@ export function FolderActionModal({
 
   if (renameVisible) {
     return (
-      <Modal visible={visible} transparent animationType="fade" onRequestClose={onRequestClose}>
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setRenameVisible(false)}>
         <KeyboardAvoidingView 
           behavior={Platform.OS === "ios" ? "padding" : "height"} 
           style={s.overlay}
         >
-          <Pressable style={s.overlay} onPress={onRequestClose}>
+          <Pressable style={s.overlay} onPress={() => setRenameVisible(false)}>
             <Pressable style={s.modal} onPress={(e) => e.stopPropagation()}>
               <Text style={s.modalTitle}>Rename Folder</Text>
               <TextInput
@@ -79,10 +80,7 @@ export function FolderActionModal({
               <View style={s.footer}>
                 <Pressable
                   style={[s.button, s.cancelButton]}
-                  onPress={() => {
-                    setRenameVisible(false);
-                    onRequestClose();
-                  }}
+                  onPress={() => setRenameVisible(false)}
                 >
                   <Text style={[s.buttonText, s.cancelText]}>Cancel</Text>
                 </Pressable>
@@ -117,7 +115,7 @@ export function FolderActionModal({
               <Text style={s.actionLabel}>{folder?.isPinned ? "Unpin" : "Pin"}</Text>
             </Pressable>
             <Pressable style={[s.action, s.destructive]} onPress={handleDelete}>
-              <Feather name="trash-2" size={18} color="#d32f2f" />
+              <Feather name="trash-2" size={18} color={colors.destructive} />
               <Text style={[s.actionLabel, s.destructiveText]}>Delete</Text>
             </Pressable>
           </View>
@@ -131,7 +129,7 @@ const styles = (c: PaperColors) =>
   StyleSheet.create({
     overlay: {
       flex: 1,
-      backgroundColor: "rgba(0, 0, 0, 0.25)",
+      backgroundColor: withAlpha(c.text, 0.25),
       justifyContent: "flex-end",
     },
     modal: {
@@ -178,7 +176,7 @@ const styles = (c: PaperColors) =>
       borderBottomWidth: 0,
     },
     destructiveText: {
-      color: "#d32f2f",
+      color: c.destructive,
     },
     input: {
       borderWidth: 1,

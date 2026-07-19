@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { usePaperTheme } from "../theme/usePaperTheme";
+import { withAlpha } from "../theme/utils";
 import { authenticateWithLocalAuthentication } from "../utils/localAuthentication";
 
 export function LockScreen({ onUnlock }: { onUnlock: () => void }) {
@@ -82,7 +83,7 @@ const s = (c: {
       borderRadius: 16,
       padding: 24,
       alignItems: "center",
-      shadowColor: "#000",
+      shadowColor: withAlpha(c.text, 0.18),
       shadowOpacity: 0.12,
       shadowRadius: 12,
       shadowOffset: { width: 0, height: 4 },

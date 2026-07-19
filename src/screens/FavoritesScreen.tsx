@@ -78,7 +78,7 @@ const styles = (c: PaperColors) =>
       fontSize: 16,
     },
     destructiveAction: {
-      color: "#d32f2f",
+      color: c.destructive,
     },
     modalButton: {
       paddingVertical: 14,

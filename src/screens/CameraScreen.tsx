@@ -24,6 +24,7 @@ import { FolderMoveModal } from "../components/FolderMoveModal";
 import { EmptyState } from "../components/EmptyState";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { usePaperTheme } from "../theme/usePaperTheme";
+import { withAlpha } from "../theme/utils";
 import { shareVaultFile } from "../services/shareService";
 import { useVaultStore } from "../store/useVaultStore";
 import { useSettingsStore } from "../store/useSettingsStore";
@@ -342,7 +343,7 @@ export function CameraScreen() {
           <Text style={styles.sectionTitle}>RECENT CAPTURES</Text>
           {recentFiles.length > 5 ? (
             <Pressable style={styles.viewAllLink} onPress={() => navigation.navigate("CapturedFiles")}>
-              <Text style={styles.viewAllLinkText}>View all ›</Text>
+              <Text style={styles.viewAllLinkText}>View all ï¿½</Text>
             </Pressable>
           ) : null}
         </View>
@@ -490,7 +491,7 @@ const getStyles = (c: {
       alignItems: "center",
       justifyContent: "flex-start",
       paddingTop: 18,
-      shadowColor: "#000",
+      shadowColor: withAlpha(c.text, 0.18),
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.06,
       shadowRadius: 6,

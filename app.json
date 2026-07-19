@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "android": {
-      "package": "paperbox.dustmedia.org",
+      "package": "com.paperbox.vault",
       "versionCode": 3,
       "permissions": ["CAMERA"]
     },
