@@ -3,3 +3,24 @@ node_modules
 # APKs
 *.apk
 outputs/
+
+# Android signing
+android/key.properties
+android/app/release.keystore
+android/app/*.jks
+android/app/*.keystore
+
+# Build logs
+android/*.log
+android/bundle-build.log
+android/bundle-release.log
+
+# Build outputs
+android/app/build/
+android/build/
+
+# Local Android configuration
+android/local.properties
+
+# Gradle
+.gradle/
