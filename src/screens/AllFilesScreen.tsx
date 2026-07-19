@@ -266,7 +266,7 @@ export function AllFilesScreen() {
       <ConfirmDialog
         visible={!!confirmDeleteFileId}
         title="Delete this file?"
-        message="This only removes it from Paper Box."
+        message="This only removes it from PaperBox."
         confirmText="Delete"
         destructive
         onConfirm={confirmDeleteFile}
@@ -276,7 +276,7 @@ export function AllFilesScreen() {
       <ConfirmDialog
         visible={confirmDeleteSelectionVisible}
         title="Delete selected files?"
-        message="This will remove the selected files from Paper Box."
+        message="This will remove the selected files from PaperBox."
         confirmText="Delete"
         destructive
         onConfirm={confirmDeleteSelectedRows}
@@ -320,3 +320,4 @@ const getStyles = (c: any) =>
     },
     selectionActionText: { color: c.text, fontWeight: "700", fontSize: 13 },
   });
+

@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Alert,
   PermissionsAndroid,
@@ -238,7 +238,7 @@ export function CameraScreen() {
       PermissionsAndroid.PERMISSIONS.CAMERA,
       {
         title: "Camera access required",
-        message: "Paper Box needs camera access to scan documents.",
+        message: "PaperBox needs camera access to scan documents.",
         buttonPositive: "Allow",
         buttonNegative: "Deny",
       },
@@ -342,7 +342,7 @@ export function CameraScreen() {
           <Text style={styles.sectionTitle}>RECENT CAPTURES</Text>
           {recentFiles.length > 5 ? (
             <Pressable style={styles.viewAllLink} onPress={() => navigation.navigate("CapturedFiles")}>
-              <Text style={styles.viewAllLinkText}>View all ›</Text>
+              <Text style={styles.viewAllLinkText}>View all �</Text>
             </Pressable>
           ) : null}
         </View>
@@ -423,7 +423,7 @@ export function CameraScreen() {
       <ConfirmDialog
         visible={!!confirmDeleteFileId}
         title="Delete this file?"
-        message="This only removes it from Paper Box."
+        message="This only removes it from PaperBox."
         confirmText="Delete"
         destructive
         onConfirm={confirmDeleteFile}
@@ -432,7 +432,7 @@ export function CameraScreen() {
       <ConfirmDialog
         visible={confirmDeleteSelectionVisible}
         title="Delete selected files?"
-        message="This will remove the selected files from Paper Box."
+        message="This will remove the selected files from PaperBox."
         confirmText="Delete"
         destructive
         onConfirm={confirmDeleteSelectedRows}
@@ -594,3 +594,4 @@ const getStyles = (c: {
       fontSize: 13,
     },
   });
+

@@ -15,7 +15,7 @@ export async function checkLocalAuthenticationAvailable(): Promise<boolean> {
 export async function authenticateWithLocalAuthentication(): Promise<{ success: boolean; error?: string }> {
   try {
     const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: "Unlock Paper Box",
+      promptMessage: "Unlock PaperBox",
       fallbackLabel: "Use device credential",
       cancelLabel: "Cancel",
       disableDeviceFallback: false,
@@ -30,3 +30,4 @@ export async function authenticateWithLocalAuthentication(): Promise<{ success: 
     return { success: false, error: error?.message ?? "Unable to authenticate securely." };
   }
 }
+

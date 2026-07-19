@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Alert,
   Pressable,
@@ -430,7 +430,7 @@ export function FavoritesScreen() {
       <ConfirmDialog
         visible={!!confirmDeleteFileId}
         title="Delete this file?"
-        message="This only removes it from Paper Box."
+        message="This only removes it from PaperBox."
         confirmText="Delete"
         destructive
         onConfirm={confirmDeleteFile}
@@ -439,7 +439,7 @@ export function FavoritesScreen() {
       <ConfirmDialog
         visible={confirmDeleteSelectionVisible}
         title="Delete selected files?"
-        message="This will remove the selected files from Paper Box."
+        message="This will remove the selected files from PaperBox."
         confirmText="Delete"
         destructive
         onConfirm={confirmDeleteSelectedRows}
@@ -448,3 +448,4 @@ export function FavoritesScreen() {
     </Screen>
   );
 }
+

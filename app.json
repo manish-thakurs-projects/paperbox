@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Paper Box",
-    "slug": "paper-box",
+    "name": "PaperBox",
+    "slug": "paperbox",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
@@ -13,7 +13,7 @@
       "bundleIdentifier": "com.paperbox.vault",
       "infoPlist": {
         "NSCameraUsageDescription": "This app needs camera access to scan documents and capture images.",
-        "NSFaceIDUsageDescription": "Allow Paper Box to use Face ID to unlock your vault."
+        "NSFaceIDUsageDescription": "Allow PaperBox to use Face ID to unlock your vault."
       }
     },
     "androidStatusBarColor": "#000000",
@@ -33,3 +33,5 @@
     ]
   }
 }
+
+

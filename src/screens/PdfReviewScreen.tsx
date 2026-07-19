@@ -182,7 +182,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
       PermissionsAndroid.PERMISSIONS.CAMERA,
       {
         title: "Camera access required",
-        message: "Paper Box needs camera access to scan documents.",
+        message: "PaperBox needs camera access to scan documents.",
         buttonPositive: "Allow",
         buttonNegative: "Deny",
       },

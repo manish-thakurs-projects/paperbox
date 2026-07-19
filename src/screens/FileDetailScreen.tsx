@@ -43,7 +43,7 @@ export function FileDetailScreen({ route, navigation }: Props) {
   }
 
   const deleteFile = () =>
-    Alert.alert("Delete this file?", "This only removes it from Paper Box.", [
+    Alert.alert("Delete this file?", "This only removes it from PaperBox.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
@@ -381,3 +381,4 @@ const styles = (c: PaperColors) =>
       backgroundColor: c.border,
     },
   });
+
