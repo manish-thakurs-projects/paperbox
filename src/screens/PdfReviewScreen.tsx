@@ -243,9 +243,22 @@ export function PdfReviewScreen({ navigation, route }: Props) {
     navigation.setOptions({
       title: "Review pages",
       headerRight: () => (
-        <TouchableOpacity style={styles.headerAddButton} onPress={openMenu} disabled={isScanning}>
-          <Feather name="more-vertical" size={20} color={colors.text} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.headerAddButton}
+            onPress={addPages}
+            disabled={isScanning}
+          >
+            <Feather name="plus" size={20} color={colors.text} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.headerAddButton}
+            onPress={openMenu}
+            disabled={isScanning}
+          >
+            <Feather name="more-vertical" size={20} color={colors.text} />
+          </TouchableOpacity>
+        </View>
       ),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -617,6 +630,25 @@ export function PdfReviewScreen({ navigation, route }: Props) {
       ) : null}
 
       {hasPages ? (
+        <View style={styles.actionBar}>
+          <Text style={styles.actionButtonText}>Pages: {pages.length}</Text>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={addPages}
+            disabled={isScanning}
+          >
+            <Feather
+              name="plus"
+              size={16}
+              color={colors.text}
+              style={styles.actionIcon}
+            />
+            <Text style={styles.actionButtonText}>Add page</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      {hasPages ? (
         <ScrollView
           style={styles.scrollArea}
           contentContainerStyle={styles.pagesGridContent}
@@ -715,7 +747,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
                 <Feather
                   name="plus"
                   size={16}
-                  color={colors.background}
+                  color={colors.text}
                   style={styles.actionIcon}
                 />
                 <Text style={styles.actionButtonText}>Add page</Text>
@@ -769,9 +801,6 @@ export function PdfReviewScreen({ navigation, route }: Props) {
       <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={closeMenu}>
         <Pressable style={styles.menuOverlay} onPress={closeMenu}>
           <View style={[styles.menuContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <TouchableOpacity style={styles.menuItem} onPress={() => { closeMenu(); addPages(); }} disabled={isScanning}>
-              <Text style={[styles.menuItemText, { color: colors.text }]}>Add</Text>
-            </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={openInfo}>
               <Text style={[styles.menuItemText, { color: colors.text }]}>Info</Text>
             </TouchableOpacity>
@@ -849,7 +878,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
               style={styles.previewHeaderButton}
               onPress={closePreview}
             >
-              <Feather name="arrow-left" size={20} color={colors.background} />
+              <Feather name="arrow-left" size={20} color={colors.text} />
             </TouchableOpacity>
             <Text style={styles.previewTitle}>
               {selectedImageIndex !== null
@@ -866,7 +895,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
                 enableSwipeDown={false}
                 renderIndicator={() => <View />}
                 saveToLocalByLongPress={false}
-                backgroundColor={colors.inverse}
+                backgroundColor={colors.background}
                 enableImageZoom
                 enablePreload
                 style={styles.previewScrollContainer}
@@ -882,13 +911,13 @@ export function PdfReviewScreen({ navigation, route }: Props) {
               }}
               disabled={isScanning}
             >
-              <Feather name="refresh-cw" size={18} color={colors.background} />
+              <Feather name="refresh-cw" size={18} color={colors.text} />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.previewFooterButton}
               onPress={deletePreviewPage}
             >
-              <Feather name="trash-2" size={18} color={colors.background} />
+              <Feather name="trash-2" size={18} color={colors.text} />
             </TouchableOpacity>
           </View>
         </View>
@@ -1003,6 +1032,10 @@ const getStyles = (
       color: c.text,
       fontWeight: "800",
       fontSize: 18,
+    },
+    headerActions: {
+      flexDirection: "row",
+      alignItems: "center",
     },
     headerAddButton: {
       width: 40,
@@ -1374,7 +1407,7 @@ const getStyles = (
     },
     previewModalContainer: {
       flex: 1,
-      backgroundColor: c.inverse,
+      backgroundColor: c.background,
     },
     previewHeader: {
       flexDirection: "row",
@@ -1383,22 +1416,26 @@ const getStyles = (
       paddingHorizontal: 20,
       paddingTop: 32,
       paddingBottom: 12,
-      backgroundColor: withAlpha(c.text, 0.45),
+      backgroundColor: withAlpha(c.surface, 0.9),
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
     },
     previewHeaderButton: {
       width: 40,
       height: 40,
       borderRadius: 20,
-      backgroundColor: withAlpha(c.background, 0.18),
+      backgroundColor: withAlpha(c.surface, 0.18),
       alignItems: "center",
       justifyContent: "center",
+      borderWidth: 1,
+      borderColor: withAlpha(c.border, 0.7),
     },
     previewHeaderSpacer: {
       width: 40,
       height: 40,
     },
     previewTitle: {
-      color: c.background,
+      color: c.text,
       fontSize: 16,
       fontWeight: "700",
       flex: 1,
@@ -1407,7 +1444,7 @@ const getStyles = (
     previewImage: {
       flex: 1,
       width: "100%",
-      backgroundColor: c.inverse,
+      backgroundColor: c.background,
     },
     previewFooter: {
       flexDirection: "row",
@@ -1415,17 +1452,19 @@ const getStyles = (
       justifyContent: "center",
       gap: 16,
       paddingVertical: 20,
-      backgroundColor: withAlpha(c.text, 0.5),
+      backgroundColor: withAlpha(c.surface, 0.9),
+      borderTopWidth: 1,
+      borderTopColor: c.border,
     },
     previewFooterButton: {
       width: 54,
       height: 54,
       borderRadius: 27,
-      backgroundColor: withAlpha(c.background, 0.15),
+      backgroundColor: withAlpha(c.surface, 0.15),
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 1,
-      borderColor: withAlpha(c.background, 0.2),
+      borderColor: withAlpha(c.text, 0.2),
     },
     previewScrollContainer: {
       flex: 1,
