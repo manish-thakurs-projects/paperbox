@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { usePaperTheme } from "../theme/usePaperTheme";
 import { VaultFile } from "../types";
 
@@ -112,27 +112,29 @@ export function FileActionModal({
         </Pressable>
       </Modal>
       <Modal animationType="slide" transparent visible={renameVisible} onRequestClose={() => setRenameVisible(false)}>
-        <Pressable style={s.modalOverlay} onPress={() => setRenameVisible(false)}>
-          <Pressable style={s.renameModalCard} onPress={() => {}}>
-            <Text style={s.modalTitle}>Rename file</Text>
-            <TextInput
-              value={renameText}
-              onChangeText={setRenameText}
-              placeholder="Enter new file name"
-              placeholderTextColor={colors.secondary}
-              style={s.modalInput}
-              autoFocus
-            />
-            <View style={s.modalFooter}>
-              <Pressable style={[s.modalActionButton, s.modalCancelButton]} onPress={() => setRenameVisible(false)}>
-                <Text style={s.modalActionText}>Cancel</Text>
-              </Pressable>
-              <Pressable style={[s.modalActionButton, s.modalSaveButton]} onPress={saveRename}>
-                <Text style={[s.modalActionText, s.modalSaveText]}>Save</Text>
-              </Pressable>
-            </View>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={s.modalOverlay}>
+          <Pressable style={s.modalOverlay} onPress={() => setRenameVisible(false)}>
+            <Pressable style={s.renameModalCard} onPress={() => {}}>
+              <Text style={s.modalTitle}>Rename file</Text>
+              <TextInput
+                value={renameText}
+                onChangeText={setRenameText}
+                placeholder="Enter new file name"
+                placeholderTextColor={colors.secondary}
+                style={s.modalInput}
+                autoFocus
+              />
+              <View style={s.modalFooter}>
+                <Pressable style={[s.modalActionButton, s.modalCancelButton]} onPress={() => setRenameVisible(false)}>
+                  <Text style={s.modalActionText}>Cancel</Text>
+                </Pressable>
+                <Pressable style={[s.modalActionButton, s.modalSaveButton]} onPress={saveRename}>
+                  <Text style={[s.modalActionText, s.modalSaveText]}>Save</Text>
+                </Pressable>
+              </View>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );
