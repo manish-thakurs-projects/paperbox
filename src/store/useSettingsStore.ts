@@ -36,7 +36,7 @@ export const useSettingsStore = create<State>((set, get) => {
   load().then((persisted) => {
     if (persisted) {
       set({
-        theme: persisted.theme ?? "light",
+        theme: persisted.theme ?? "system",
         hidePreviews: persisted.hidePreviews ?? false,
         lockEnabled: persisted.lockEnabled ?? false,
       } as any);
@@ -44,7 +44,7 @@ export const useSettingsStore = create<State>((set, get) => {
   });
 
   return {
-    theme: "light",
+    theme: "system",
     hidePreviews: false,
     lockEnabled: false,
     lockSuppressed: false,

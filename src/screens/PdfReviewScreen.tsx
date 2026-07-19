@@ -29,6 +29,7 @@ import DocumentScanner, {
 import { usePaperTheme } from "../theme/usePaperTheme";
 import { withAlpha } from "../theme/utils";
 import { Feather } from "@expo/vector-icons";
+import ImageViewer from "react-native-image-zoom-viewer";
 import { useSettingsStore } from "../store/useSettingsStore";
 import { useVaultStore } from "../store/useVaultStore";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -162,7 +163,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
 
   const addFiles = useVaultStore((s) => s.addFiles);
   const setLockSuppressed = useSettingsStore((s) => s.setLockSuppressed);
-  const { colors } = usePaperTheme();
+  const { mode, colors } = usePaperTheme();
   const styles = getStyles(colors, itemWidth, itemHeight, width);
   const pageUris = pages.map((page) => page.uri);
   const rowSelectionMode = !isReordering && selectedPageIds.length > 0;
@@ -368,6 +369,51 @@ export function PdfReviewScreen({ navigation, route }: Props) {
     setSelectedImageIndex(null);
   };
 
+  const retakePage = async (index: number) => {
+    if (isScanning) return;
+    const granted = await requestCameraPermission();
+    if (!granted) {
+      Alert.alert(
+        "Camera permission required",
+        "Allow camera access to retake a page.",
+      );
+      return;
+    }
+
+    setLockSuppressed(true);
+    setIsScanning(true);
+
+    try {
+      const result = await DocumentScanner.scanDocument({
+        responseType: ResponseType.ImageFilePath,
+        maxNumDocuments: 1,
+      });
+
+      if (result.status === ScanDocumentResponseStatus.Cancel) {
+        return;
+      }
+
+      const scannedImages = result.scannedImages?.filter(Boolean).map(normalizeUri) ?? [];
+      if (!scannedImages.length) {
+        Alert.alert("No scan result", "Try retaking the image again.");
+        return;
+      }
+
+      const newUri = scannedImages[0];
+      setPages((current) =>
+        current.map((page, pageIndex) =>
+          pageIndex === index ? { ...page, uri: newUri } : page,
+        ),
+      );
+    } catch (error) {
+      console.warn("retakePage error", error);
+      Alert.alert("Retake failed", "Unable to retake the page. Please try again.");
+    } finally {
+      setIsScanning(false);
+      setLockSuppressed(false);
+    }
+  };
+
   const updateGridOrigin = () => {
     try {
       gridRef.current?.measureInWindow((x, y) => {
@@ -531,7 +577,10 @@ export function PdfReviewScreen({ navigation, route }: Props) {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+      <StatusBar
+        barStyle={mode === "dark" ? "light-content" : "dark-content"}
+        backgroundColor={colors.background}
+      />
 
       {isReordering ? (
         <View style={styles.reorderBanner}>
@@ -614,9 +663,10 @@ export function PdfReviewScreen({ navigation, route }: Props) {
                 >
                   {/* When not reordering, a full-area Pressable owns tap / long-press.
                       When reordering, it's unmounted so the PanResponder owns the gesture. */}
+                  <Image source={{ uri: page.uri }} style={styles.pageImage} />
                   {!isReordering && (
                     <Pressable
-                      style={StyleSheet.absoluteFill}
+                      style={[StyleSheet.absoluteFill, { zIndex: 1 }]}
                       onPress={() =>
                         rowSelectionMode
                           ? togglePageSelection(page.id)
@@ -625,8 +675,6 @@ export function PdfReviewScreen({ navigation, route }: Props) {
                       onLongPress={() => handleLongPressDelete(page.id)}
                     />
                   )}
-
-                  <Image source={{ uri: page.uri }} style={styles.pageImage} />
                   {isSelected ? (
                     <>
                       <View style={styles.pageSelectionOverlay} />
@@ -812,14 +860,30 @@ export function PdfReviewScreen({ navigation, route }: Props) {
           </View>
 
           {selectedImageIndex !== null && pages[selectedImageIndex] ? (
-            <Image
-              source={{ uri: pages[selectedImageIndex].uri }}
-              style={styles.previewImage}
-              resizeMode="contain"
-            />
+            <View style={styles.previewScrollContainer}>
+              <ImageViewer
+                imageUrls={[{ url: pages[selectedImageIndex].uri }]}
+                enableSwipeDown={false}
+                renderIndicator={() => <View />}
+                saveToLocalByLongPress={false}
+                backgroundColor={colors.inverse}
+                enableImageZoom
+                enablePreload
+                style={styles.previewScrollContainer}
+              />
+            </View>
           ) : null}
 
           <View style={styles.previewFooter}>
+            <TouchableOpacity
+              style={styles.previewFooterButton}
+              onPress={() => {
+                if (selectedImageIndex !== null) retakePage(selectedImageIndex);
+              }}
+              disabled={isScanning}
+            >
+              <Feather name="refresh-cw" size={18} color={colors.background} />
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.previewFooterButton}
               onPress={deletePreviewPage}
@@ -1285,10 +1349,6 @@ const getStyles = (
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: c.surface,
-      shadowColor: withAlpha(c.text, 1),
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.08,
-      shadowRadius: 8,
       elevation: 3,
     },
     primaryButton: {
@@ -1321,7 +1381,7 @@ const getStyles = (
       alignItems: "center",
       justifyContent: "space-between",
       paddingHorizontal: 20,
-      paddingTop: 16,
+      paddingTop: 32,
       paddingBottom: 12,
       backgroundColor: withAlpha(c.text, 0.45),
     },
@@ -1366,6 +1426,16 @@ const getStyles = (
       justifyContent: "center",
       borderWidth: 1,
       borderColor: withAlpha(c.background, 0.2),
+    },
+    previewScrollContainer: {
+      flex: 1,
+      backgroundColor: c.inverse,
+    },
+    previewScrollContent: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 16,
     },
 
   });

@@ -1,6 +1,7 @@
-import React from "react";
+﻿import React, { useEffect, useState } from "react";
 import { Feather } from "@expo/vector-icons";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { BottomTabBarButtonProps, createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { HomeScreen } from "../screens/HomeScreen";
 import { FoldersScreen } from "../screens/FoldersScreen";
 import { CameraScreen } from "@/screens/CameraScreen";
@@ -22,6 +23,55 @@ const icons: Record<keyof Tabs, keyof typeof Feather.glyphMap> = {
   Favorites: "star",
   Settings: "settings",
 };
+
+function IconOnlyTabBarButton({
+  accessibilityState,
+  children,
+  onPress,
+  onLongPress,
+  style,
+  label,
+  ...props
+}: Omit<BottomTabBarButtonProps, "style"> & { label: string; style?: any }) {
+  const { colors } = usePaperTheme();
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  useEffect(() => {
+    if (!showTooltip) {
+      return;
+    }
+
+    const timeout = setTimeout(() => setShowTooltip(false), 1200);
+    return () => clearTimeout(timeout);
+  }, [showTooltip]);
+
+  const { ref, ...buttonProps } = props as any;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={accessibilityState}
+      onPress={onPress}
+      onLongPress={(event) => {
+        setShowTooltip(true);
+        if (onLongPress) {
+          onLongPress(event);
+        }
+      }}
+      onPressOut={() => setShowTooltip(false)}
+      style={[styles.tabButton, style]}
+      {...buttonProps}
+    >
+      {children}
+      {showTooltip && (
+        <View style={[styles.tooltip, { backgroundColor: colors.elevated, borderColor: colors.border }]}> 
+          <Text style={[styles.tooltipText, { color: colors.text }]}>{label}</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
 export function AppTabs() {
   const { colors } = usePaperTheme();
 
@@ -30,6 +80,7 @@ export function AppTabs() {
       backBehavior="history"
       screenOptions={({ route }) => ({
         headerShown: false,
+        tabBarShowLabel: false,
         tabBarActiveTintColor: colors.text,
         tabBarInactiveTintColor: colors.secondary,
         tabBarStyle: {
@@ -45,11 +96,9 @@ export function AppTabs() {
         tabBarItemStyle: {
           paddingTop: 0,
         },
-        tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: "600",
-          marginBottom: 4,
-        },
+        tabBarButton: (props) => (
+          <IconOnlyTabBarButton {...props} label={route.name} />
+        ),
         tabBarIcon: ({ color, size }) => (
           <Feather
             name={icons[route.name]}
@@ -68,3 +117,33 @@ export function AppTabs() {
     </Tab.Navigator>
   );
 }
+
+const styles = StyleSheet.create({
+  tabButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 56,
+  },
+  tooltip: {
+    position: "absolute",
+    top: -36,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 99,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  tooltipText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+});
+
