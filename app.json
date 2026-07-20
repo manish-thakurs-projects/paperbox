@@ -6,12 +6,12 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "android": {
-      "package": "com.paperbox.vault",
-      "versionCode": 3,
+      "package": "paperbox.dustmedia.org",
+      "versionCode": 4,
       "permissions": ["CAMERA"]
     },
     "ios": {
-      "bundleIdentifier": "com.paperbox.vault",
+      "bundleIdentifier": "paperbox.dustmedia.org",
       "infoPlist": {
         "NSCameraUsageDescription": "This app needs camera access to scan documents and capture images.",
         "NSFaceIDUsageDescription": "Allow PaperBox to use Face ID to unlock your vault."

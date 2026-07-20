@@ -761,7 +761,6 @@ export function PdfReviewScreen({ navigation, route }: Props) {
                   <View style={styles.addPageIconContainer}>
                     <Feather name="plus" size={28} color={colors.text} />
                   </View>
-                  <Text style={styles.addPageText}>Add page</Text>
                 </View>
               </TouchableOpacity>
             ) : null}
@@ -1404,11 +1403,8 @@ const getStyles = (
       width: 72,
       height: 72,
       borderRadius: 24,
-      borderWidth: 1,
-      borderColor: c.border,
       alignItems: "center",
       justifyContent: "center",
-      marginBottom: 12,
       backgroundColor: withAlpha(c.background, 0.1),
     },
     addPageText: {
