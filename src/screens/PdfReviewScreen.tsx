@@ -932,7 +932,8 @@ export function PdfReviewScreen({ navigation, route }: Props) {
           {selectedImageIndex !== null && pages[selectedImageIndex] ? (
             <View style={styles.previewScrollContainer}>
               <ImageViewer
-                imageUrls={[{ url: pages[selectedImageIndex].previewUri ?? pages[selectedImageIndex].uri }]}
+                // Use the full-quality image for the viewer. Thumbnails keep using previewUri
+                imageUrls={[{ url: normalizeUri(pages[selectedImageIndex].uri) }]}
                 enableSwipeDown={false}
                 renderIndicator={() => <View />}
                 saveToLocalByLongPress={false}
