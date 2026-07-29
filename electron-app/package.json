@@ -1,0 +1,22 @@
+{
+  "name": "paperbox-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p .",
+    "start": "npm run build && electron .",
+    "dev": "tsc -p . -w"
+  },
+  "dependencies": {
+    "bonjour-service": "^3.5.2",
+    "express": "^4.18.2",
+    "ws": "^8.13.0",
+    "multer": "^1.4.5"
+  },
+  "devDependencies": {
+    "electron": "^26.0.0",
+    "typescript": "^5.3.3",
+    "@types/node": "^20.4.2"
+  }
+}
