@@ -2,6 +2,7 @@ import JSZip from "jszip";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system/legacy";
 import { VaultFile } from "../types";
+import { decryptVaultFileForUse } from "./vaultStorage";
 
 const CACHE_DIRECTORY = (FileSystem as any).cacheDirectory ??
   (FileSystem as any).documentDirectory ??
@@ -69,8 +70,15 @@ async function downloadIfNeeded(file: VaultFile): Promise<string> {
   return file.uri;
 }
 
+async function prepareFileForSharing(file: VaultFile): Promise<string> {
+  if (file.uri.endsWith(".enc") || file.uri.includes(".enc?")) {
+    return await decryptVaultFileForUse(file);
+  }
+  return downloadIfNeeded(file);
+}
+
 export async function shareVaultFile(file: VaultFile): Promise<void> {
-  const targetUri = await downloadIfNeeded(file);
+  const targetUri = await prepareFileForSharing(file);
 
   if (!(await Sharing.isAvailableAsync())) {
     throw new Error("Sharing not available on this device");
@@ -89,7 +97,7 @@ export async function shareVaultFiles(files: VaultFile[]): Promise<void> {
   const zip = new JSZip();
   await Promise.all(
     files.map(async (file) => {
-      const uri = await downloadIfNeeded(file);
+      const uri = await prepareFileForSharing(file);
       const data = await FileSystem.readAsStringAsync(uri, { encoding: "base64" });
       zip.file(file.name, data, { base64: true });
     }),

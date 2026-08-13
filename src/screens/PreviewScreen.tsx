@@ -24,6 +24,8 @@ import { withAlpha } from "../theme/utils";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as IntentLauncher from "expo-intent-launcher";
+import * as ScreenCapture from "expo-screen-capture";
+import { decryptVaultFileForUse } from "../services/vaultStorage";
 
 type Props = NativeStackScreenProps<RootStackParams, "Preview">;
 
@@ -142,6 +144,22 @@ const saveUriToCache = async (uri: string, filename: string): Promise<string> =>
     return downloadedUri;
   }
 
+  if (uri.endsWith(".enc") || uri.includes(".enc?")) {
+    const decryptedUri = await decryptVaultFileForUse({
+      id: "preview",
+      name: filename,
+      uri,
+      size: 0,
+      extension: filename.includes(".") ? (filename.split(".").pop() || "bin") : "bin",
+      kind: "other",
+      createdAt: new Date().toISOString(),
+      isFavorite: false,
+      isPinned: false,
+      tags: [],
+    });
+    return decryptedUri;
+  }
+
   if (uri.startsWith("content://") || uri.startsWith("file://")) {
     try {
       await FileSystem.copyAsync({ from: uri, to: destination });
@@ -187,6 +205,13 @@ export function PreviewScreen({ route }: Props) {
 
   const uri = file.uri;
   const name = file.name || "preview";
+
+  useEffect(() => {
+    void ScreenCapture.preventScreenCaptureAsync();
+    return () => {
+      void ScreenCapture.allowScreenCaptureAsync();
+    };
+  }, []);
   const extension = file.extension?.toLowerCase() || "";
   const mimeExtension = extensionFromMimeType(file.mimeType);
   const ext = extFromUri(uri) || extension || mimeExtension || (file.kind === "pdf" ? "pdf" : "");
@@ -233,6 +258,13 @@ export function PreviewScreen({ route }: Props) {
       mounted = false;
     };
   }, [uri]);
+
+  useEffect(() => {
+    return () => {
+      if (!localUri || localUri === uri) return;
+      void (FileSystem as any).deleteAsync(localUri, { idempotent: true }).catch(() => undefined);
+    };
+  }, [localUri, uri]);
 
   useEffect(() => {
     let mounted = true;

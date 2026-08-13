@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { Folder, VaultFile } from "../types";
-import { loadVault, saveVault } from "../services/vaultStorage";
+import { deleteVaultFile, loadVault, saveVault } from "../services/vaultStorage";
 import { getFolderIdsForFile, sanitizeVaultName } from "../utils/files";
 
 type State = {
@@ -159,7 +159,11 @@ export const useVaultStore = create<State>((set, get) => ({
    set({ files });
    persist(files, get().folders);
  },
- removeFile: (id) => {
+ removeFile: async (id) => {
+   const file = get().files.find((entry) => entry.id === id);
+   if (file) {
+     await deleteVaultFile(file.uri);
+   }
    const files = normalizeFiles(get().files.filter((f) => f.id !== id));
    set({ files });
    persist(files, get().folders);

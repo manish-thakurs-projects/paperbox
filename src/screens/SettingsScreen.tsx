@@ -29,6 +29,7 @@ import { useSettingsStore } from "../store/useSettingsStore";
 import { useVaultStore } from "../store/useVaultStore";
 import { checkLocalAuthenticationAvailable } from "../utils/localAuthentication";
 import { VaultFile, Folder, Settings } from "../types";
+import { decryptVaultFileForUse } from "../services/vaultStorage";
 
 type SettingsRowProps = {
   icon: keyof typeof Feather.glyphMap;
@@ -177,7 +178,21 @@ export function SettingsScreen() {
       return await FileSystem.readAsStringAsync(uri, { encoding: "base64" });
     }
 
-    return await FileSystem.readAsStringAsync(file.uri, { encoding: "base64" });
+    const decryptedUri = file.uri.endsWith(".enc") || file.uri.includes(".enc?")
+      ? await decryptVaultFileForUse(file)
+      : file.uri;
+
+    try {
+      return await FileSystem.readAsStringAsync(decryptedUri, { encoding: "base64" });
+    } finally {
+      if (decryptedUri !== file.uri) {
+        try {
+          await FileSystem.deleteAsync(decryptedUri, { idempotent: true });
+        } catch {
+          // no-op cleanup
+        }
+      }
+    }
   };
 
   const prepareExportPayload = async (type: ExportType, selectedIds: string[]): Promise<ExportPayload> => {

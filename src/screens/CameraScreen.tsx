@@ -31,6 +31,7 @@ import { useSettingsStore } from "../store/useSettingsStore";
 import { getFolderIdsForFile, extensionOf, kindOf } from "../utils/files";
 import { RootStackParams } from "../navigation/types";
 import { VaultFile } from "../types";
+import { persistVaultFile } from "../services/vaultStorage";
 
 export function CameraScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParams>>();
@@ -211,11 +212,13 @@ export function CameraScreen() {
     const normalizedUri = normalizeUri(uri);
     const filename = `Scan-${Date.now()}.jpg`;
     const extension = extensionOf(normalizedUri) || "jpg";
-    const fileInfo = await FileSystem.getInfoAsync(normalizedUri);
+    const fileId = `${Date.now()}-${Math.random()}`;
+    const durableUri = await persistVaultFile(normalizedUri, `${fileId}-scan`, extension);
+    const fileInfo = await FileSystem.getInfoAsync(durableUri);
     const file: VaultFile = {
-      id: `${Date.now()}-${Math.random()}`,
+      id: fileId,
       name: filename,
-      uri: normalizedUri,
+      uri: durableUri,
       mimeType: "image/jpeg",
       size: fileInfo.exists ? fileInfo.size : 0,
       extension,

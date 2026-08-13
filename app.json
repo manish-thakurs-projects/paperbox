@@ -8,7 +8,10 @@
     "android": {
       "package": "paperbox.dustmedia.org",
       "versionCode": 4,
-      "permissions": ["CAMERA"]
+      "permissions": [
+        "CAMERA"
+      ],
+      "allowBackup": false
     },
     "ios": {
       "bundleIdentifier": "paperbox.dustmedia.org",
@@ -30,9 +33,8 @@
         {
           "cameraPermission": "This app needs camera access to scan documents."
         }
-      ]
+      ],
+      "expo-secure-store"
     ]
   }
 }
-
-
