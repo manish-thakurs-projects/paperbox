@@ -34,6 +34,7 @@ import { useSettingsStore } from "../store/useSettingsStore";
 import { useVaultStore } from "../store/useVaultStore";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { RootStackParams } from "../navigation/types";
+import { persistVaultFile } from "../services/vaultStorage";
 
 type Props = NativeStackScreenProps<RootStackParams, "PdfReview">;
 
@@ -82,11 +83,14 @@ export function PdfReviewScreen({ navigation, route }: Props) {
   // menu and modal state
   const [menuVisible, setMenuVisible] = useState(false);
   const [infoModalVisible, setInfoModalVisible] = useState(false);
-  const [deleteSelectModalVisible, setDeleteSelectModalVisible] = useState(false);
+  const [deleteSelectModalVisible, setDeleteSelectModalVisible] =
+    useState(false);
   const [selectedForDeletion, setSelectedForDeletion] = useState<string[]>([]);
   const [infoLoading, setInfoLoading] = useState(false);
   const [infoTotalSize, setInfoTotalSize] = useState<number | null>(null);
-  const [infoEstimatedPdfSize, setInfoEstimatedPdfSize] = useState<number | null>(null);
+  const [infoEstimatedPdfSize, setInfoEstimatedPdfSize] = useState<
+    number | null
+  >(null);
 
   const formatBytes = (bytes: number) => {
     if (!bytes) return "0 B";
@@ -104,7 +108,9 @@ export function PdfReviewScreen({ navigation, route }: Props) {
     setInfoLoading(true);
     setInfoModalVisible(true);
     try {
-      const ids = selectedPageIds.length ? selectedPageIds : pages.map((p) => p.id);
+      const ids = selectedPageIds.length
+        ? selectedPageIds
+        : pages.map((p) => p.id);
       const uris = pages.filter((p) => ids.includes(p.id)).map((p) => p.uri);
       const sizes = await Promise.all(uris.map((u) => getFileSize(u)));
       const total = sizes.reduce((s, v) => s + v, 0);
@@ -122,7 +128,9 @@ export function PdfReviewScreen({ navigation, route }: Props) {
 
   const openDeleteSelect = () => {
     closeMenu();
-    setSelectedForDeletion(selectedPageIds.length ? selectedPageIds.slice() : []);
+    setSelectedForDeletion(
+      selectedPageIds.length ? selectedPageIds.slice() : [],
+    );
     setDeleteSelectModalVisible(true);
   };
 
@@ -151,7 +159,9 @@ export function PdfReviewScreen({ navigation, route }: Props) {
   }, [draggedIndex]);
 
   // PanResponder cache per page id
-  const panResponderMapRef = useRef(new Map<string, ReturnType<typeof PanResponder.create>>());
+  const panResponderMapRef = useRef(
+    new Map<string, ReturnType<typeof PanResponder.create>>(),
+  );
   const columnCount = 6;
   const itemWidth = width / columnCount;
   const itemHeight = itemWidth;
@@ -373,20 +383,21 @@ export function PdfReviewScreen({ navigation, route }: Props) {
       }
 
       const filename = `Scan-${Date.now()}.pdf`;
-      const documentDirectory = FileSystem.documentDirectory;
-      if (!documentDirectory) {
-        throw new Error("Unable to access the document directory");
-      }
+      const fileId = `${Date.now()}-${Math.random()}`;
 
-      const destinationUri = `${documentDirectory}${filename}`;
-      await FileSystem.copyAsync({ from: generatedPdfUri, to: destinationUri });
-      const fileSize = await getFileSize(destinationUri);
+      // Encrypt and persist the PDF to vault storage using the same method as photos
+      const encryptedUri = await persistVaultFile(
+        generatedPdfUri,
+        fileId,
+        "pdf",
+      );
+      const fileSize = await getFileSize(encryptedUri);
 
       addFiles([
         {
-          id: `${Date.now()}-${Math.random()}`,
+          id: fileId,
           name: filename,
-          uri: destinationUri,
+          uri: encryptedUri,
           mimeType: "application/pdf",
           size: fileSize,
           extension: "pdf",
@@ -442,7 +453,8 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         return;
       }
 
-      const scannedImages = result.scannedImages?.filter(Boolean).map(normalizeUri) ?? [];
+      const scannedImages =
+        result.scannedImages?.filter(Boolean).map(normalizeUri) ?? [];
       if (!scannedImages.length) {
         Alert.alert("No scan result", "Try retaking the image again.");
         return;
@@ -457,7 +469,10 @@ export function PdfReviewScreen({ navigation, route }: Props) {
       );
     } catch (error) {
       console.warn("retakePage error", error);
-      Alert.alert("Retake failed", "Unable to retake the page. Please try again.");
+      Alert.alert(
+        "Retake failed",
+        "Unable to retake the page. Please try again.",
+      );
     } finally {
       setIsScanning(false);
       setLockSuppressed(false);
@@ -673,7 +688,11 @@ export function PdfReviewScreen({ navigation, route }: Props) {
           showsVerticalScrollIndicator={false}
           scrollEnabled={!isReordering}
         >
-          <View ref={gridRef} onLayout={updateGridOrigin} style={[styles.pagesGrid, { width }]}>
+          <View
+            ref={gridRef}
+            onLayout={updateGridOrigin}
+            style={[styles.pagesGrid, { width }]}
+          >
             {pages.map((page, index) => {
               const responder = createPanResponder(page.id);
               // Only attach the PanResponder's raw responder props while actually
@@ -713,7 +732,10 @@ export function PdfReviewScreen({ navigation, route }: Props) {
                 >
                   {/* When not reordering, a full-area Pressable owns tap / long-press.
                       When reordering, it's unmounted so the PanResponder owns the gesture. */}
-                  <Image source={{ uri: page.previewUri ?? page.uri }} style={styles.pageImage} />
+                  <Image
+                    source={{ uri: page.previewUri ?? page.uri }}
+                    style={styles.pageImage}
+                  />
                   {!isReordering && (
                     <Pressable
                       style={[StyleSheet.absoluteFill, { zIndex: 1 }]}
@@ -729,13 +751,21 @@ export function PdfReviewScreen({ navigation, route }: Props) {
                     <>
                       <View style={styles.pageSelectionOverlay} />
                       <View style={styles.pageSelectionIcon}>
-                        <Feather name="check-circle" size={20} color={colors.background} />
+                        <Feather
+                          name="check-circle"
+                          size={20}
+                          color={colors.background}
+                        />
                       </View>
                     </>
                   ) : null}
                   {isReordering ? (
                     <View style={styles.dragHandle}>
-                      <Feather name="move" size={12} color={colors.background} />
+                      <Feather
+                        name="move"
+                        size={12}
+                        color={colors.background}
+                      />
                     </View>
                   ) : null}
                   <Text style={styles.pageNumberBadge}>{index + 1}</Text>
@@ -834,25 +864,46 @@ export function PdfReviewScreen({ navigation, route }: Props) {
             color={colors.text}
           />
         </TouchableOpacity>
-        
       </View>
 
       {/* Menu modal */}
-      <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={closeMenu}>
+      <Modal
+        visible={menuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeMenu}
+      >
         <Pressable style={styles.menuOverlay} onPress={closeMenu}>
-          <View style={[styles.menuContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.menuContainer,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
             <TouchableOpacity style={styles.menuItem} onPress={openInfo}>
-              <Text style={[styles.menuItemText, { color: colors.text }]}>Info</Text>
+              <Text style={[styles.menuItemText, { color: colors.text }]}>
+                Info
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={openDeleteSelect}>
-              <Text style={[styles.menuItemText, { color: colors.text }]}>Delete</Text>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={openDeleteSelect}
+            >
+              <Text style={[styles.menuItemText, { color: colors.text }]}>
+                Delete
+              </Text>
             </TouchableOpacity>
           </View>
         </Pressable>
       </Modal>
 
       {/* Info modal */}
-      <Modal visible={infoModalVisible} transparent animationType="fade" onRequestClose={() => setInfoModalVisible(false)}>
+      <Modal
+        visible={infoModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setInfoModalVisible(false)}
+      >
         <View style={styles.alertOverlay}>
           <View style={[styles.alertContainer, { maxWidth: 420 }]}>
             <Text style={styles.alertTitle}>Images info</Text>
@@ -860,13 +911,29 @@ export function PdfReviewScreen({ navigation, route }: Props) {
               <ActivityIndicator size="small" color={colors.text} />
             ) : (
               <>
-                <Text style={styles.alertMessage}>Total images: {selectedPageIds.length ? selectedPageIds.length : pages.length}</Text>
-                <Text style={styles.alertMessage}>Total size: {infoTotalSize !== null ? formatBytes(infoTotalSize) : "—"}</Text>
-                <Text style={styles.alertMessage}>Estimated PDF size: {infoEstimatedPdfSize !== null ? formatBytes(infoEstimatedPdfSize) : "—"}</Text>
+                <Text style={styles.alertMessage}>
+                  Total images:{" "}
+                  {selectedPageIds.length
+                    ? selectedPageIds.length
+                    : pages.length}
+                </Text>
+                <Text style={styles.alertMessage}>
+                  Total size:{" "}
+                  {infoTotalSize !== null ? formatBytes(infoTotalSize) : "—"}
+                </Text>
+                <Text style={styles.alertMessage}>
+                  Estimated PDF size:{" "}
+                  {infoEstimatedPdfSize !== null
+                    ? formatBytes(infoEstimatedPdfSize)
+                    : "—"}
+                </Text>
               </>
             )}
             <View style={styles.alertActions}>
-              <TouchableOpacity style={[styles.alertButton, styles.alertCancelButton]} onPress={() => setInfoModalVisible(false)}>
+              <TouchableOpacity
+                style={[styles.alertButton, styles.alertCancelButton]}
+                onPress={() => setInfoModalVisible(false)}
+              >
                 <Text style={styles.alertCancelText}>Close</Text>
               </TouchableOpacity>
             </View>
@@ -875,30 +942,77 @@ export function PdfReviewScreen({ navigation, route }: Props) {
       </Modal>
 
       {/* Delete select modal */}
-      <Modal visible={deleteSelectModalVisible} transparent animationType="fade" onRequestClose={() => setDeleteSelectModalVisible(false)}>
+      <Modal
+        visible={deleteSelectModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDeleteSelectModalVisible(false)}
+      >
         <View style={styles.alertOverlay}>
           <View style={[styles.alertContainer, { maxWidth: 640 }]}>
             <Text style={styles.alertTitle}>Select images to delete</Text>
             <ScrollView contentContainerStyle={{ paddingVertical: 12 }}>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+              <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
                 {pages.map((p, i) => {
                   const sel = selectedForDeletion.includes(p.id);
                   return (
-                    <Pressable key={p.id} onPress={() => {
-                      setSelectedForDeletion((cur) => cur.includes(p.id) ? cur.filter(id=>id!==p.id) : [...cur, p.id]);
-                    }} style={{ width: itemWidth, height: itemHeight, padding: 6 }}>
-                      <Image source={{ uri: p.previewUri ?? p.uri }} style={{ width: '100%', height: '100%', opacity: sel ? 0.5 : 1 }} />
-                      {sel &&                       <View style={{ position: 'absolute', right: 8, top: 8, backgroundColor: withAlpha(colors.text, 0.6), padding: 4, borderRadius: 12 }}><Feather name="check" size={14} color={colors.background}/></View>}
+                    <Pressable
+                      key={p.id}
+                      onPress={() => {
+                        setSelectedForDeletion((cur) =>
+                          cur.includes(p.id)
+                            ? cur.filter((id) => id !== p.id)
+                            : [...cur, p.id],
+                        );
+                      }}
+                      style={{
+                        width: itemWidth,
+                        height: itemHeight,
+                        padding: 6,
+                      }}
+                    >
+                      <Image
+                        source={{ uri: p.previewUri ?? p.uri }}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          opacity: sel ? 0.5 : 1,
+                        }}
+                      />
+                      {sel && (
+                        <View
+                          style={{
+                            position: "absolute",
+                            right: 8,
+                            top: 8,
+                            backgroundColor: withAlpha(colors.text, 0.6),
+                            padding: 4,
+                            borderRadius: 12,
+                          }}
+                        >
+                          <Feather
+                            name="check"
+                            size={14}
+                            color={colors.background}
+                          />
+                        </View>
+                      )}
                     </Pressable>
                   );
                 })}
               </View>
             </ScrollView>
             <View style={styles.alertActions}>
-              <TouchableOpacity style={[styles.alertButton, styles.alertCancelButton]} onPress={() => setDeleteSelectModalVisible(false)}>
+              <TouchableOpacity
+                style={[styles.alertButton, styles.alertCancelButton]}
+                onPress={() => setDeleteSelectModalVisible(false)}
+              >
                 <Text style={styles.alertCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.alertButton, styles.alertDeleteButton]} onPress={confirmDeleteSelectedFromModal}>
+              <TouchableOpacity
+                style={[styles.alertButton, styles.alertDeleteButton]}
+                onPress={confirmDeleteSelectedFromModal}
+              >
                 <Text style={styles.alertDeleteText}>Delete</Text>
               </TouchableOpacity>
             </View>
@@ -932,7 +1046,9 @@ export function PdfReviewScreen({ navigation, route }: Props) {
             <View style={styles.previewScrollContainer}>
               <ImageViewer
                 // Use the full-quality image for the viewer. Thumbnails keep using previewUri
-                imageUrls={[{ url: normalizeUri(pages[selectedImageIndex].uri) }]}
+                imageUrls={[
+                  { url: normalizeUri(pages[selectedImageIndex].uri) },
+                ]}
                 enableSwipeDown={false}
                 renderIndicator={() => <View />}
                 saveToLocalByLongPress={false}
@@ -1155,7 +1271,7 @@ const getStyles = (
     pageCardDragged: {
       zIndex: 10,
       elevation: 12,
-    shadowColor: withAlpha(c.text, 1),
+      shadowColor: withAlpha(c.text, 1),
       shadowOffset: { width: 0, height: 6 },
       shadowOpacity: 0.3,
       shadowRadius: 10,
@@ -1174,7 +1290,7 @@ const getStyles = (
       width: 20,
       height: 20,
       borderRadius: 10,
-    backgroundColor: withAlpha(c.text, 0.55),
+      backgroundColor: withAlpha(c.text, 0.55),
       alignItems: "center",
       justifyContent: "center",
     },
@@ -1193,7 +1309,8 @@ const getStyles = (
       textAlign: "center",
       textAlignVertical: "center",
       lineHeight: 24,
-    },    emptyState: {
+    },
+    emptyState: {
       flex: 1,
       alignItems: "center",
       justifyContent: "center",
@@ -1364,7 +1481,7 @@ const getStyles = (
     },
     pageSelectionOverlay: {
       ...StyleSheet.absoluteFillObject,
-      backgroundColor: withAlpha(c.text, 0.30),
+      backgroundColor: withAlpha(c.text, 0.3),
     },
     pageSelectionIcon: {
       position: "absolute",
@@ -1556,5 +1673,4 @@ const getStyles = (
       justifyContent: "center",
       padding: 16,
     },
-
   });
