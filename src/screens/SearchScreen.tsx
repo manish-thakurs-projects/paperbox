@@ -1,6 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Alert,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Screen } from "../components/Screen";
@@ -16,7 +23,8 @@ import { getFolderIdsForFile } from "../utils/files";
 import { RootStackParams } from "../navigation/types";
 
 export function SearchScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParams>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParams>>();
   const { colors } = usePaperTheme();
   const [query, setQuery] = useState("");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
@@ -30,13 +38,18 @@ export function SearchScreen() {
   const toggleFavorite = useVaultStore((s) => s.toggleFavorite);
   const togglePin = useVaultStore((s) => s.togglePin);
   const renameFile = useVaultStore((s) => s.renameFile);
-  const setFileFolderMembership = useVaultStore((s) => s.setFileFolderMembership);
+  const setFileFolderMembership = useVaultStore(
+    (s) => s.setFileFolderMembership,
+  );
   const removeFile = useVaultStore((s) => s.removeFile);
   const removeFileFromFolder = useVaultStore((s) => s.removeFileFromFolder);
   const s = styles(colors);
 
   const actionFile = useMemo(
-    () => (actionFileId ? files.find((file) => file.id === actionFileId) ?? null : null),
+    () =>
+      actionFileId
+        ? (files.find((file) => file.id === actionFileId) ?? null)
+        : null,
     [files, actionFileId],
   );
 
@@ -60,7 +73,10 @@ export function SearchScreen() {
 
     setRecentSearches((current) => {
       const trimmed = text.trim().toLowerCase();
-      const next = [trimmed, ...current.filter((item) => item !== trimmed)].slice(0, 5);
+      const next = [
+        trimmed,
+        ...current.filter((item) => item !== trimmed),
+      ].slice(0, 5);
       return next;
     });
   };
@@ -135,8 +151,14 @@ export function SearchScreen() {
     try {
       await shareVaultFile(actionFile);
     } catch (error) {
-      if (error instanceof Error && error.message === "Sharing not available on this device") {
-        Alert.alert("Sharing not available", "This device cannot share files directly.");
+      if (
+        error instanceof Error &&
+        error.message === "Sharing not available on this device"
+      ) {
+        Alert.alert(
+          "Sharing not available",
+          "This device cannot share files directly.",
+        );
       } else {
         console.warn("shareFile error", error);
         Alert.alert("Could not share file", "Try again later.");
@@ -192,7 +214,11 @@ export function SearchScreen() {
           </View>
           {recentSearches.length ? (
             recentSearches.map((item) => (
-              <Pressable key={item} style={s.recentItem} onPress={() => handleSearch(item)}>
+              <Pressable
+                key={item}
+                style={s.recentItem}
+                onPress={() => handleSearch(item)}
+              >
                 <Feather name="clock" size={16} color={colors.secondary} />
                 <Text style={s.recentText}>{item}</Text>
               </Pressable>
@@ -247,7 +273,16 @@ export function SearchScreen() {
     </Screen>
   );
 }
-const styles = (c: { background: string; surface: string; elevated: string; text: string; secondary: string; border: string; muted: string; inverse: string }) =>
+const styles = (c: {
+  background: string;
+  surface: string;
+  elevated: string;
+  text: string;
+  secondary: string;
+  border: string;
+  muted: string;
+  inverse: string;
+}) =>
   StyleSheet.create({
     box: {
       height: 52,

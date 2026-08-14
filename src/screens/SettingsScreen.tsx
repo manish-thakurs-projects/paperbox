@@ -1,9 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParams } from "../navigation/types";
 import { Feather } from "@expo/vector-icons";
-import { CameraMountError, CameraView, useCameraPermissions } from "expo-camera";
+import {
+  CameraMountError,
+  CameraView,
+  useCameraPermissions,
+} from "expo-camera";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as DocumentPicker from "expo-document-picker";
@@ -50,11 +54,21 @@ type ExportPayload = {
   files: Array<VaultFile & { contentBase64: string }>;
 };
 
-const SettingsRow = ({ icon, label, children, colors, onPress }: SettingsRowProps) => {
+const SettingsRow = ({
+  icon,
+  label,
+  children,
+  colors,
+  onPress,
+}: SettingsRowProps) => {
   const styles = rowStyles(colors);
   const RowComponent = onPress ? Pressable : View;
   return (
-    <RowComponent style={styles.row} onPress={onPress} android_ripple={{ color: colors.muted }}>
+    <RowComponent
+      style={styles.row}
+      onPress={onPress}
+      android_ripple={{ color: colors.muted }}
+    >
       <Feather name={icon} size={19} color={colors.text} />
       <Text style={styles.name}>{label}</Text>
       {children}
@@ -69,7 +83,8 @@ export function SettingsScreen() {
     setTheme = useSettingsStore((s) => s.setTheme),
     lockEnabled = useSettingsStore((s) => s.lockEnabled),
     setLockEnabled = useSettingsStore((s) => s.setLockEnabled);
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParams>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParams>>();
 
   const files = useVaultStore((state) => state.files);
   const folders = useVaultStore((state) => state.folders);
@@ -94,7 +109,9 @@ export function SettingsScreen() {
   const [exportLoading, setExportLoading] = useState(false);
   const [exportType, setExportType] = useState<ExportType | null>(null);
   const [selectedExportIds, setSelectedExportIds] = useState<string[]>([]);
-  const [exportPayload, setExportPayload] = useState<ExportPayload | null>(null);
+  const [exportPayload, setExportPayload] = useState<ExportPayload | null>(
+    null,
+  );
   const [exportHandshakeLink, setExportHandshakeLink] = useState<string>("");
   const [exportFileUri, setExportFileUri] = useState<string | null>(null);
   const [exportSize, setExportSize] = useState<number | null>(null);
@@ -103,10 +120,11 @@ export function SettingsScreen() {
 
   const [importVisible, setImportVisible] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
-  const [scannerPermission, setScannerPermission] = useState<boolean | null>(null);
+  const [scannerPermission, setScannerPermission] = useState<boolean | null>(
+    null,
+  );
   const [scanned, setScanned] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
-
 
   const folderSelection = useMemo(
     () => [...folders].sort((a, b) => a.name.localeCompare(b.name)),
@@ -145,7 +163,9 @@ export function SettingsScreen() {
 
   const toggleExportSelection = (id: string) => {
     setSelectedExportIds((current) =>
-      current.includes(id) ? current.filter((existing) => existing !== id) : [...current, id],
+      current.includes(id)
+        ? current.filter((existing) => existing !== id)
+        : [...current, id],
     );
   };
 
@@ -178,12 +198,15 @@ export function SettingsScreen() {
       return await FileSystem.readAsStringAsync(uri, { encoding: "base64" });
     }
 
-    const decryptedUri = file.uri.endsWith(".enc") || file.uri.includes(".enc?")
-      ? await decryptVaultFileForUse(file)
-      : file.uri;
+    const decryptedUri =
+      file.uri.endsWith(".enc") || file.uri.includes(".enc?")
+        ? await decryptVaultFileForUse(file)
+        : file.uri;
 
     try {
-      return await FileSystem.readAsStringAsync(decryptedUri, { encoding: "base64" });
+      return await FileSystem.readAsStringAsync(decryptedUri, {
+        encoding: "base64",
+      });
     } finally {
       if (decryptedUri !== file.uri) {
         try {
@@ -195,21 +218,33 @@ export function SettingsScreen() {
     }
   };
 
-  const prepareExportPayload = async (type: ExportType, selectedIds: string[]): Promise<ExportPayload> => {
+  const prepareExportPayload = async (
+    type: ExportType,
+    selectedIds: string[],
+  ): Promise<ExportPayload> => {
     const now = new Date().toISOString();
-    const foldersToExport = type === "folder" ? folders.filter((folder) => selectedIds.includes(folder.id)) : type === "all" ? folders : [];
+    const foldersToExport =
+      type === "folder"
+        ? folders.filter((folder) => selectedIds.includes(folder.id))
+        : type === "all"
+          ? folders
+          : [];
     const fileIdsToExport =
       type === "file"
         ? selectedIds
         : type === "folder"
-        ? files
-            .filter((file) =>
-              (file.folderIds ?? [file.folderId]).some((folderId) => folderId && selectedIds.includes(folderId)),
-            )
-            .map((file) => file.id)
-        : files.map((file) => file.id);
+          ? files
+              .filter((file) =>
+                (file.folderIds ?? [file.folderId]).some(
+                  (folderId) => folderId && selectedIds.includes(folderId),
+                ),
+              )
+              .map((file) => file.id)
+          : files.map((file) => file.id);
 
-    const filesToExport = files.filter((file) => fileIdsToExport.includes(file.id));
+    const filesToExport = files.filter((file) =>
+      fileIdsToExport.includes(file.id),
+    );
     const filesWithContent = await Promise.all(
       filesToExport.map(async (file) => ({
         ...file,
@@ -246,7 +281,10 @@ export function SettingsScreen() {
     if (!exportHandshakeLink || shareHandshakeBusy) return;
     setShareHandshakeBusy(true);
     try {
-      await Share.share({ message: exportHandshakeLink, title: "PaperBox transfer handshake" });
+      await Share.share({
+        message: exportHandshakeLink,
+        title: "PaperBox transfer handshake",
+      });
     } catch (error) {
       console.warn("share handshake error", error);
       Alert.alert("Unable to share handshake", "Try again later.");
@@ -256,7 +294,9 @@ export function SettingsScreen() {
   };
 
   const generateRandomKey = (length: number) =>
-    Array.from({ length }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+    Array.from({ length }, () =>
+      Math.floor(Math.random() * 16).toString(16),
+    ).join("");
 
   const finalizeExportPayload = async (payload: ExportPayload) => {
     const payloadText = JSON.stringify(payload);
@@ -264,7 +304,9 @@ export function SettingsScreen() {
     setExportSize(size);
 
     const uri = `${FileSystem.cacheDirectory}paperbox-export-${Date.now()}.json`;
-    await FileSystem.writeAsStringAsync(uri, payloadText, { encoding: FileSystem.EncodingType.UTF8 });
+    await FileSystem.writeAsStringAsync(uri, payloadText, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
     setExportFileUri(uri);
     setExportPayload(payload);
 
@@ -310,7 +352,10 @@ export function SettingsScreen() {
   const proceedExportSelection = async () => {
     if (!exportType) return;
     if (!selectedExportIds.length && exportType !== "all") {
-      Alert.alert("Select at least one item", "Choose folders or files to export.");
+      Alert.alert(
+        "Select at least one item",
+        "Choose folders or files to export.",
+      );
       return;
     }
 
@@ -332,18 +377,29 @@ export function SettingsScreen() {
     }
   };
 
-  const [importSession, setImportSession] = useState<ExportHandshake | null>(null);
+  const [importSession, setImportSession] = useState<ExportHandshake | null>(
+    null,
+  );
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
 
   const themeOptions = useMemo(
     () => [
-      { value: "light" as Settings["theme"], label: "Light", description: "Always use light mode." },
-      { value: "dark" as Settings["theme"], label: "Dark", description: "Always use dark mode." },
+      {
+        value: "light" as Settings["theme"],
+        label: "Light",
+        description: "Always use light mode.",
+      },
+      {
+        value: "dark" as Settings["theme"],
+        label: "Dark",
+        description: "Always use dark mode.",
+      },
     ],
     [],
   );
 
-  const selectedThemeOption = themeOptions.find((option) => option.value === theme) ?? themeOptions[0];
+  const selectedThemeOption =
+    themeOptions.find((option) => option.value === theme) ?? themeOptions[0];
 
   const handleThemeSelect = (value: Settings["theme"]) => {
     setTheme(value);
@@ -363,11 +419,16 @@ export function SettingsScreen() {
       }
       try {
         const session = JSON.parse(payloadText) as ExportHandshake;
-        if (session.kind !== "paperbox-handshake") throw new Error("Invalid handshake payload");
+        if (session.kind !== "paperbox-handshake")
+          throw new Error("Invalid handshake payload");
         setImportSession(session);
         Alert.alert(
           "Connection established",
-          "Ready to receive " + session.fileCount + " file" + (session.fileCount === 1 ? "" : "s") + ". Ask the sender to transfer the export file now.",
+          "Ready to receive " +
+            session.fileCount +
+            " file" +
+            (session.fileCount === 1 ? "" : "s") +
+            ". Ask the sender to transfer the export file now.",
         );
         return;
       } catch (error) {
@@ -375,27 +436,42 @@ export function SettingsScreen() {
       }
     }
 
-    Alert.alert("Invalid handshake", "Please scan a valid PaperBox transfer QR code.");
+    Alert.alert(
+      "Invalid handshake",
+      "Please scan a valid PaperBox transfer QR code.",
+    );
     setScanned(false);
   };
 
   const onScannerMountError = (error: CameraMountError) => {
     console.warn("Scanner mount error", error);
-    Alert.alert("Scanner unavailable", error.message ?? "Unable to start the camera scanner.");
+    Alert.alert(
+      "Scanner unavailable",
+      error.message ?? "Unable to start the camera scanner.",
+    );
   };
 
   const importExportFile = async () => {
     if (!importSession) {
-      Alert.alert("No active session", "Scan a transfer handshake before importing a file.");
+      Alert.alert(
+        "No active session",
+        "Scan a transfer handshake before importing a file.",
+      );
       return;
     }
 
     setImportBusy(true);
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: "application/json", copyToCacheDirectory: true });
-      if (result.canceled || !result.assets?.length || !result.assets[0]?.uri) return;
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "application/json",
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.length || !result.assets[0]?.uri)
+        return;
       const fileUri = result.assets[0].uri;
-      const fileText = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.UTF8 });
+      const fileText = await FileSystem.readAsStringAsync(fileUri, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
       const payload = JSON.parse(fileText) as ExportPayload;
       if (payload.kind !== "paperbox-transfer") {
         throw new Error("Invalid export payload");
@@ -403,14 +479,21 @@ export function SettingsScreen() {
       await importPayload(payload);
       Alert.alert(
         "Import complete",
-        "Added " + payload.files.length + " file" + (payload.files.length === 1 ? "" : "s") + " to your vault.",
+        "Added " +
+          payload.files.length +
+          " file" +
+          (payload.files.length === 1 ? "" : "s") +
+          " to your vault.",
       );
       setImportVisible(false);
       setImportSession(null);
       setScanned(false);
     } catch (error) {
       console.warn("import export file error", error);
-      Alert.alert("Unable to import file", "The selected file is not a valid PaperBox export.");
+      Alert.alert(
+        "Unable to import file",
+        "The selected file is not a valid PaperBox export.",
+      );
     } finally {
       setImportBusy(false);
     }
@@ -440,7 +523,9 @@ export function SettingsScreen() {
         const newId = `${Date.now()}-${Math.random()}`;
         const safeName = file.name.replace(/[^a-z0-9._-]/gi, "_");
         const dest = `${FileSystem.documentDirectory}PaperBox-import-${Date.now()}-${safeName}`;
-        await FileSystem.writeAsStringAsync(dest, file.contentBase64, { encoding: "base64" });
+        await FileSystem.writeAsStringAsync(dest, file.contentBase64, {
+          encoding: "base64",
+        });
         importedFiles.push({
           ...file,
           id: newId,
@@ -460,25 +545,38 @@ export function SettingsScreen() {
     }
   };
 
-
   const renderExportOptions = () => (
-    <Modal animationType="slide" transparent visible={exportOptionsVisible} onRequestClose={() => setExportOptionsVisible(false)}>
+    <Modal
+      animationType="slide"
+      transparent
+      visible={exportOptionsVisible}
+      onRequestClose={() => setExportOptionsVisible(false)}
+    >
       <View style={s.modalOverlay}>
         <View style={s.modalContent}>
           <Text style={s.modalTitle}>Export options</Text>
-          <Pressable style={s.optionItem} onPress={() => beginExport("folder")}> 
+          <Pressable style={s.optionItem} onPress={() => beginExport("folder")}>
             <Text style={s.optionTitle}>Export folders</Text>
-            <Text style={s.optionSubtitle}>Select folders and share their contents.</Text>
+            <Text style={s.optionSubtitle}>
+              Select folders and share their contents.
+            </Text>
           </Pressable>
-          <Pressable style={s.optionItem} onPress={() => beginExport("file")}> 
+          <Pressable style={s.optionItem} onPress={() => beginExport("file")}>
             <Text style={s.optionTitle}>Export files</Text>
-            <Text style={s.optionSubtitle}>Select individual files to share.</Text>
+            <Text style={s.optionSubtitle}>
+              Select individual files to share.
+            </Text>
           </Pressable>
-          <Pressable style={s.optionItem} onPress={() => beginExport("all")}> 
+          <Pressable style={s.optionItem} onPress={() => beginExport("all")}>
             <Text style={s.optionTitle}>Export all</Text>
-            <Text style={s.optionSubtitle}>Share your full vault with files and folders.</Text>
+            <Text style={s.optionSubtitle}>
+              Share your full vault with files and folders.
+            </Text>
           </Pressable>
-          <Pressable style={[s.modalButton, s.modalCancelButton]} onPress={() => setExportOptionsVisible(false)}>
+          <Pressable
+            style={[s.modalButton, s.modalCancelButton]}
+            onPress={() => setExportOptionsVisible(false)}
+          >
             <Text style={[s.modalButtonText, s.modalCancelText]}>Cancel</Text>
           </Pressable>
         </View>
@@ -487,11 +585,21 @@ export function SettingsScreen() {
   );
 
   const renderExportSelection = () => (
-    <Modal animationType="slide" transparent visible={exportSelectionVisible} onRequestClose={() => setExportSelectionVisible(false)}>
+    <Modal
+      animationType="slide"
+      transparent
+      visible={exportSelectionVisible}
+      onRequestClose={() => setExportSelectionVisible(false)}
+    >
       <View style={s.modalOverlay}>
         <View style={s.modalContent}>
-          <Text style={s.modalTitle}>{exportType === "folder" ? "Select folders" : "Select files"}</Text>
-          <ScrollView style={s.modalActions} showsVerticalScrollIndicator={false}>
+          <Text style={s.modalTitle}>
+            {exportType === "folder" ? "Select folders" : "Select files"}
+          </Text>
+          <ScrollView
+            style={s.modalActions}
+            showsVerticalScrollIndicator={false}
+          >
             {exportType === "folder" ? (
               folderSelection.length ? (
                 folderSelection.map((folder) => {
@@ -508,34 +616,41 @@ export function SettingsScreen() {
                   );
                 })
               ) : (
-                <Text style={s.modalEmpty}>No folders available to export.</Text>
+                <Text style={s.modalEmpty}>
+                  No folders available to export.
+                </Text>
               )
+            ) : fileSelection.length ? (
+              fileSelection.map((file) => {
+                const selected = selectedExportIds.includes(file.id);
+                return (
+                  <Pressable
+                    key={file.id}
+                    style={[s.optionItem, selected && s.selectedRow]}
+                    onPress={() => toggleExportSelection(file.id)}
+                  >
+                    <Text style={s.optionTitle}>{file.name}</Text>
+                    <Text style={s.actionLabel}>{selected ? "✓" : "○"}</Text>
+                  </Pressable>
+                );
+              })
             ) : (
-              fileSelection.length ? (
-                fileSelection.map((file) => {
-                  const selected = selectedExportIds.includes(file.id);
-                  return (
-                    <Pressable
-                      key={file.id}
-                      style={[s.optionItem, selected && s.selectedRow]}
-                      onPress={() => toggleExportSelection(file.id)}
-                    >
-                      <Text style={s.optionTitle}>{file.name}</Text>
-                      <Text style={s.actionLabel}>{selected ? "✓" : "○"}</Text>
-                    </Pressable>
-                  );
-                })
-              ) : (
-                <Text style={s.modalEmpty}>No files available to export.</Text>
-              )
+              <Text style={s.modalEmpty}>No files available to export.</Text>
             )}
           </ScrollView>
           <View style={s.modalFooter}>
-            <Pressable style={[s.modalActionButton, s.modalCancelButton]} onPress={() => setExportSelectionVisible(false)}>
+            <Pressable
+              style={[s.modalActionButton, s.modalCancelButton]}
+              onPress={() => setExportSelectionVisible(false)}
+            >
               <Text style={s.modalActionText}>Cancel</Text>
             </Pressable>
             <Pressable
-              style={[s.modalActionButton, s.modalSaveButton, !selectedExportIds.length && s.modalDisabledButton]}
+              style={[
+                s.modalActionButton,
+                s.modalSaveButton,
+                !selectedExportIds.length && s.modalDisabledButton,
+              ]}
               onPress={proceedExportSelection}
               disabled={!selectedExportIds.length}
             >
@@ -548,7 +663,12 @@ export function SettingsScreen() {
   );
 
   const renderExportPreview = () => (
-    <Modal animationType="slide" transparent visible={exportPreviewVisible} onRequestClose={() => setExportPreviewVisible(false)}>
+    <Modal
+      animationType="slide"
+      transparent
+      visible={exportPreviewVisible}
+      onRequestClose={() => setExportPreviewVisible(false)}
+    >
       <View style={s.modalOverlay}>
         <View style={s.modalContent}>
           <Text style={s.modalTitle}>Share transfer</Text>
@@ -560,43 +680,72 @@ export function SettingsScreen() {
           ) : exportHandshakeLink ? (
             <>
               <View style={s.qrFrame}>
-                <QRCode value={exportHandshakeLink} size={280} backgroundColor="transparent" color={colors.text} />
+                <QRCode
+                  value={exportHandshakeLink}
+                  size={280}
+                  backgroundColor="transparent"
+                  color={colors.text}
+                />
               </View>
               <Text style={s.modalSubtitle}>
-                Scan this QR to establish a secure transfer session. Then send the export file to complete the transfer.
+                Scan this QR to establish a secure transfer session. Then send
+                the export file to complete the transfer.
               </Text>
               {exportSize !== null ? (
-                <Text style={s.modalFileName}>Export file size: {(exportSize / 1024).toFixed(1)} KB</Text>
+                <Text style={s.modalFileName}>
+                  Export file size: {(exportSize / 1024).toFixed(1)} KB
+                </Text>
               ) : null}
-              <Text style={s.modalFileName} numberOfLines={2} ellipsizeMode="middle">
+              <Text
+                style={s.modalFileName}
+                numberOfLines={2}
+                ellipsizeMode="middle"
+              >
                 {exportHandshakeLink}
               </Text>
               <Pressable
-                style={[s.modalButton, s.modalSaveButton, shareHandshakeBusy && s.modalDisabledButton]}
+                style={[
+                  s.modalButton,
+                  s.modalSaveButton,
+                  shareHandshakeBusy && s.modalDisabledButton,
+                ]}
                 onPress={shareExportLink}
                 disabled={shareHandshakeBusy}
               >
                 {shareHandshakeBusy ? (
                   <ActivityIndicator size="small" color={colors.background} />
                 ) : (
-                  <Text style={[s.modalActionText, s.modalSaveText]}>Share handshake</Text>
+                  <Text style={[s.modalActionText, s.modalSaveText]}>
+                    Share handshake
+                  </Text>
                 )}
               </Pressable>
               {exportFileUri ? (
                 <Pressable
-                  style={[s.modalButton, s.modalSaveButton, shareFileBusy && s.modalDisabledButton]}
+                  style={[
+                    s.modalButton,
+                    s.modalSaveButton,
+                    shareFileBusy && s.modalDisabledButton,
+                  ]}
                   onPress={shareExportFile}
                   disabled={shareFileBusy}
                 >
                   {shareFileBusy ? (
                     <ActivityIndicator size="small" color={colors.background} />
                   ) : (
-                    <Text style={[s.modalActionText, s.modalSaveText]}>Share export file</Text>
+                    <Text style={[s.modalActionText, s.modalSaveText]}>
+                      Share export file
+                    </Text>
                   )}
                 </Pressable>
               ) : null}
-              <Pressable style={[s.modalButton, s.modalCancelButton]} onPress={() => setExportPreviewVisible(false)}>
-                <Text style={[s.modalButtonText, s.modalCancelText]}>Close</Text>
+              <Pressable
+                style={[s.modalButton, s.modalCancelButton]}
+                onPress={() => setExportPreviewVisible(false)}
+              >
+                <Text style={[s.modalButtonText, s.modalCancelText]}>
+                  Close
+                </Text>
               </Pressable>
             </>
           ) : (
@@ -608,51 +757,72 @@ export function SettingsScreen() {
   );
 
   const renderImportScanner = () => (
-    <Modal animationType="slide" transparent visible={importVisible} onRequestClose={() => setImportVisible(false)}>
+    <Modal
+      animationType="slide"
+      transparent
+      visible={importVisible}
+      onRequestClose={() => setImportVisible(false)}
+    >
       <View style={s.modalOverlay}>
         <View style={s.modalContent}>
           <Text style={s.modalTitle}>Import transfer</Text>
           {scannerPermission === false ? (
-           <Text style={s.modalSubtitle}>Camera access is required to scan transfer handshakes.</Text>
+            <Text style={s.modalSubtitle}>
+              Camera access is required to scan transfer handshakes.
+            </Text>
           ) : scannerPermission === null ? (
-           <ActivityIndicator size="large" color={colors.inverse} />
+            <ActivityIndicator size="large" color={colors.inverse} />
           ) : (
-           <View style={s.scannerContainer}>
-             <CameraView
-               style={s.scanner}
-               active={true}
-               onMountError={onScannerMountError}
-               onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-               barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-             />
-           </View>
+            <View style={s.scannerContainer}>
+              <CameraView
+                style={s.scanner}
+                active={true}
+                onMountError={onScannerMountError}
+                onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+                barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+              />
+            </View>
           )}
           {importSession ? (
-           <>
-             <View style={{ marginBottom: 16 }}>
-               <Text style={s.modalSubtitle}>
-                 Connected to session {importSession.sessionId}. Receive {importSession.fileCount} file{importSession.fileCount === 1 ? "" : "s"} from the sender.
-               </Text>
-               <Text style={s.modalSubtitle}>
-                 Once the sender shares the exported file, use the button below to import it into your vault.
-               </Text>
-             </View>
-             <Pressable
-               style={[s.modalButton, s.modalSaveButton, importBusy && s.modalDisabledButton]}
-               onPress={importExportFile}
-               disabled={importBusy}
-             >
-               {importBusy ? (
-                 <ActivityIndicator size="small" color={colors.background} />
-               ) : (
-                 <Text style={[s.modalActionText, s.modalSaveText]}>Import export file</Text>
-               )}
-             </Pressable>
-           </>
+            <>
+              <View style={{ marginBottom: 16 }}>
+                <Text style={s.modalSubtitle}>
+                  Connected to session {importSession.sessionId}. Receive{" "}
+                  {importSession.fileCount} file
+                  {importSession.fileCount === 1 ? "" : "s"} from the sender.
+                </Text>
+                <Text style={s.modalSubtitle}>
+                  Once the sender shares the exported file, use the button below
+                  to import it into your vault.
+                </Text>
+              </View>
+              <Pressable
+                style={[
+                  s.modalButton,
+                  s.modalSaveButton,
+                  importBusy && s.modalDisabledButton,
+                ]}
+                onPress={importExportFile}
+                disabled={importBusy}
+              >
+                {importBusy ? (
+                  <ActivityIndicator size="small" color={colors.background} />
+                ) : (
+                  <Text style={[s.modalActionText, s.modalSaveText]}>
+                    Import export file
+                  </Text>
+                )}
+              </Pressable>
+            </>
           ) : (
-           <Text style={s.modalSubtitle}>Point your camera at a PaperBox transfer QR code to establish the secure connection.</Text>
+            <Text style={s.modalSubtitle}>
+              Point your camera at a PaperBox transfer QR code to establish the
+              secure connection.
+            </Text>
           )}
-          {importBusy ? <ActivityIndicator size="small" color={colors.inverse} /> : null}
+          {importBusy ? (
+            <ActivityIndicator size="small" color={colors.inverse} />
+          ) : null}
           <Pressable
             style={[s.modalButton, s.modalCancelButton]}
             onPress={() => {
@@ -662,7 +832,7 @@ export function SettingsScreen() {
               setScannerPermission(null);
             }}
           >
-           <Text style={[s.modalButtonText, s.modalCancelText]}>Cancel</Text>
+            <Text style={[s.modalButtonText, s.modalCancelText]}>Cancel</Text>
           </Pressable>
         </View>
       </View>
@@ -672,12 +842,19 @@ export function SettingsScreen() {
   return (
     <Screen>
       <Text style={s.title}>Settings</Text>
-     
+
       <Text style={s.label}>PREFERENCES</Text>
       <View style={s.group}>
-        <SettingsRow icon="moon" label="Theme" colors={colors} onPress={() => setThemeDropdownOpen((current) => !current)}>
+        <SettingsRow
+          icon="moon"
+          label="Theme"
+          colors={colors}
+          onPress={() => setThemeDropdownOpen((current) => !current)}
+        >
           <View style={s.themeDropdownHeader}>
-            <Text style={s.themeDropdownLabel}>{selectedThemeOption.label}</Text>
+            <Text style={s.themeDropdownLabel}>
+              {selectedThemeOption.label}
+            </Text>
             <Feather
               name={themeDropdownOpen ? "chevron-up" : "chevron-down"}
               size={18}
@@ -699,14 +876,21 @@ export function SettingsScreen() {
                   onPress={() => handleThemeSelect(option.value)}
                 >
                   <View style={s.themeDropdownOptionRow}>
-                    <Text style={[s.themeDropdownOptionLabel, selected && s.themeDropdownOptionLabelSelected]}>
+                    <Text
+                      style={[
+                        s.themeDropdownOptionLabel,
+                        selected && s.themeDropdownOptionLabelSelected,
+                      ]}
+                    >
                       {option.label}
                     </Text>
                     {selected ? (
                       <Feather name="check" size={16} color={colors.text} />
                     ) : null}
                   </View>
-                  <Text style={s.themeDropdownOptionDescription}>{option.description}</Text>
+                  <Text style={s.themeDropdownOptionDescription}>
+                    {option.description}
+                  </Text>
                 </Pressable>
               );
             })}
@@ -727,36 +911,88 @@ export function SettingsScreen() {
         </SettingsRow>
         {!authAvailable ? (
           <Text style={s.helpText}>
-            App lock requires a native runtime with secure authentication support. Use a custom build or standalone app.
+            App lock requires a native runtime with secure authentication
+            support. Use a custom build or standalone app.
           </Text>
         ) : null}
       </View>
       <Text style={s.label}>VAULT</Text>
       <View style={s.group}>
-        <SettingsRow icon="download" label="Export" colors={colors} onPress={openExportOptions}>
-          <Feather key={theme} name="chevron-right" size={18} color={colors.secondary} />
+        <SettingsRow
+          icon="download"
+          label="Export"
+          colors={colors}
+          onPress={openExportOptions}
+        >
+          <Feather
+            key={theme}
+            name="chevron-right"
+            size={18}
+            color={colors.secondary}
+          />
         </SettingsRow>
-        <SettingsRow icon="upload" label="Import" colors={colors} onPress={() => setImportVisible(true)}>
-          <Feather key={theme} name="chevron-right" size={18} color={colors.secondary} />
+        <SettingsRow
+          icon="upload"
+          label="Import"
+          colors={colors}
+          onPress={() => setImportVisible(true)}
+        >
+          <Feather
+            key={theme}
+            name="chevron-right"
+            size={18}
+            color={colors.secondary}
+          />
         </SettingsRow>
-        <SettingsRow icon="shield" label="Privacy" colors={colors} onPress={() => navigation.navigate('Privacy')}>
-          <Feather key={theme} name="chevron-right" size={18} color={colors.secondary} />
+        <SettingsRow
+          icon="shield"
+          label="Privacy"
+          colors={colors}
+          onPress={() => navigation.navigate("Privacy")}
+        >
+          <Feather
+            key={theme}
+            name="chevron-right"
+            size={18}
+            color={colors.secondary}
+          />
         </SettingsRow>
-        <SettingsRow icon="mail" label="Contact" colors={colors} onPress={async () => {
-          try {
-            const mailto = 'mailto:dustmedianetwork@gmail.com?subject=' + encodeURIComponent('PaperBox support');
-            const supported = await Linking.canOpenURL(mailto);
-            if (supported) await Linking.openURL(mailto);
-            else Alert.alert('Unable to open mail app', 'No mail app is available to send email.');
-          } catch (e) {
-            console.warn('open mail error', e);
-            Alert.alert('Unable to open mail app', 'Could not open your mail application.');
-          }
-        }}>
-          <Feather key={theme} name="chevron-right" size={18} color={colors.secondary} />
+        <SettingsRow
+          icon="mail"
+          label="Contact"
+          colors={colors}
+          onPress={async () => {
+            try {
+              const mailto =
+                "mailto:dustmedianetwork@gmail.com?subject=" +
+                encodeURIComponent("PaperBox support");
+              const supported = await Linking.canOpenURL(mailto);
+              if (supported) await Linking.openURL(mailto);
+              else
+                Alert.alert(
+                  "Unable to open mail app",
+                  "No mail app is available to send email.",
+                );
+            } catch (e) {
+              console.warn("open mail error", e);
+              Alert.alert(
+                "Unable to open mail app",
+                "Could not open your mail application.",
+              );
+            }
+          }}
+        >
+          <Feather
+            key={theme}
+            name="chevron-right"
+            size={18}
+            color={colors.secondary}
+          />
         </SettingsRow>
       </View>
-      <Text style={s.version}>PaperBox - Version 1.0.0{"\n"}  Developed by DustMedia. </Text>
+      <Text style={s.version}>
+        PaperBox - Version 1.0.0{"\n"} Developed by DustMedia.{" "}
+      </Text>
 
       {renderExportOptions()}
       {renderExportSelection()}
@@ -1054,4 +1290,3 @@ const rowStyles = (c: {
     },
     name: { fontSize: 15, fontWeight: "600", color: c.text, flex: 1 },
   });
-

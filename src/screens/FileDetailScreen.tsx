@@ -1,5 +1,16 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { Feather, MaterialIcons } from "@expo/vector-icons";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParams } from "../navigation/types";
@@ -15,11 +26,15 @@ type Props = NativeStackScreenProps<RootStackParams, "FileDetail">;
 
 export function FileDetailScreen({ route, navigation }: Props) {
   const { colors } = usePaperTheme();
-  const file = useVaultStore((s) => s.files.find((f) => f.id === route.params.fileId));
+  const file = useVaultStore((s) =>
+    s.files.find((f) => f.id === route.params.fileId),
+  );
   const toggleFavorite = useVaultStore((s) => s.toggleFavorite);
   const togglePin = useVaultStore((s) => s.togglePin);
   const renameFile = useVaultStore((s) => s.renameFile);
-  const setFileFolderMembership = useVaultStore((s) => s.setFileFolderMembership);
+  const setFileFolderMembership = useVaultStore(
+    (s) => s.setFileFolderMembership,
+  );
   const folders = useVaultStore((s) => s.folders);
   const remove = useVaultStore((s) => s.removeFile);
   const [renameVisible, setRenameVisible] = useState(false);
@@ -66,7 +81,9 @@ export function FileDetailScreen({ route, navigation }: Props) {
       },
     ]);
 
-  const currentFolders = folders.filter((folder) => getFolderIdsForFile(file).includes(folder.id));
+  const currentFolders = folders.filter((folder) =>
+    getFolderIdsForFile(file).includes(folder.id),
+  );
 
   const openMoveModal = () => {
     if (!folders.length) {
@@ -90,8 +107,14 @@ export function FileDetailScreen({ route, navigation }: Props) {
     try {
       await shareVaultFile(file);
     } catch (e) {
-      if (e instanceof Error && e.message === "Sharing not available on this device") {
-        Alert.alert("Sharing not available", "This device cannot share files directly.");
+      if (
+        e instanceof Error &&
+        e.message === "Sharing not available on this device"
+      ) {
+        Alert.alert(
+          "Sharing not available",
+          "This device cannot share files directly.",
+        );
         return;
       }
 
@@ -113,16 +136,22 @@ export function FileDetailScreen({ route, navigation }: Props) {
           {file.name}
         </Text>
         <Text style={s.meta}>
-          {file.extension.toUpperCase() || "FILE"} · {fileSize(file.size)} · Added {relativeDate(file.createdAt)}
+          {file.extension.toUpperCase() || "FILE"} · {fileSize(file.size)} ·
+          Added {relativeDate(file.createdAt)}
         </Text>
         {currentFolders.length ? (
-          <Text style={s.folderLabel}>In {currentFolders.map((folder) => folder.name).join(", ")}</Text>
+          <Text style={s.folderLabel}>
+            In {currentFolders.map((folder) => folder.name).join(", ")}
+          </Text>
         ) : (
           <Text style={s.folderLabel}>Not in any folder</Text>
         )}
       </View>
 
-      <Pressable onPress={() => navigation.navigate("Preview", { fileId: file.id })} style={s.preview}>
+      <Pressable
+        onPress={() => navigation.navigate("Preview", { fileId: file.id })}
+        style={s.preview}
+      >
         <Feather name="maximize" size={19} color={colors.background} />
         <Text style={s.previewText}>Open preview</Text>
       </Pressable>
@@ -131,11 +160,15 @@ export function FileDetailScreen({ route, navigation }: Props) {
       <View style={s.group}>
         <Pressable style={s.row} onPress={() => toggleFavorite(file.id)}>
           <MaterialIcons name={favoriteIcon} size={19} color={colors.text} />
-          <Text style={s.name}>{file.isFavorite ? "Remove from favorites" : "Add to favorites"}</Text>
+          <Text style={s.name}>
+            {file.isFavorite ? "Remove from favorites" : "Add to favorites"}
+          </Text>
         </Pressable>
         <Pressable style={s.row} onPress={() => togglePin(file.id)}>
           <MaterialIcons name={pinnedIcon} size={19} color={colors.text} />
-          <Text style={s.name}>{file.isPinned ? "Unpin file" : "Pin file"}</Text>
+          <Text style={s.name}>
+            {file.isPinned ? "Unpin file" : "Pin file"}
+          </Text>
         </Pressable>
         <Pressable style={s.row} onPress={() => setRenameVisible(true)}>
           <Feather name="edit" size={19} color={colors.text} />
@@ -155,10 +188,25 @@ export function FileDetailScreen({ route, navigation }: Props) {
         </Pressable>
       </View>
 
-      <Modal animationType="none" transparent visible={renameVisible} onRequestClose={() => setRenameVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={s.modalOverlay} keyboardVerticalOffset={Platform.OS === "ios" ? 70 : 20}>
-          <Pressable style={s.modalBackdrop} onPress={() => setRenameVisible(false)}>
-            <Pressable style={s.modalCard} onPress={(event) => event.stopPropagation()}>
+      <Modal
+        animationType="none"
+        transparent
+        visible={renameVisible}
+        onRequestClose={() => setRenameVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={s.modalOverlay}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 70 : 20}
+        >
+          <Pressable
+            style={s.modalBackdrop}
+            onPress={() => setRenameVisible(false)}
+          >
+            <Pressable
+              style={s.modalCard}
+              onPress={(event) => event.stopPropagation()}
+            >
               <Text style={s.modalTitle}>Rename file</Text>
               <TextInput
                 ref={inputRef}
@@ -178,7 +226,10 @@ export function FileDetailScreen({ route, navigation }: Props) {
                 }}
               />
               <View style={s.modalFooter}>
-                <Pressable style={[s.modalActionButton, s.modalCancelButton]} onPress={() => setRenameVisible(false)}>
+                <Pressable
+                  style={[s.modalActionButton, s.modalCancelButton]}
+                  onPress={() => setRenameVisible(false)}
+                >
                   <Text style={s.modalActionText}>Cancel</Text>
                 </Pressable>
                 <Pressable
@@ -199,12 +250,22 @@ export function FileDetailScreen({ route, navigation }: Props) {
         </KeyboardAvoidingView>
       </Modal>
 
-      <Modal animationType="slide" transparent visible={moveVisible} onRequestClose={() => setMoveVisible(false)}>
+      <Modal
+        animationType="slide"
+        transparent
+        visible={moveVisible}
+        onRequestClose={() => setMoveVisible(false)}
+      >
         <View style={s.modalOverlay}>
           <View style={s.modalCard}>
             <Text style={s.modalTitle}>Move to folders</Text>
-            <Text style={s.modalSubtitle}>Select one or more folders for this file.</Text>
-            <ScrollView style={s.folderList} showsVerticalScrollIndicator={false}>
+            <Text style={s.modalSubtitle}>
+              Select one or more folders for this file.
+            </Text>
+            <ScrollView
+              style={s.folderList}
+              showsVerticalScrollIndicator={false}
+            >
               {folders.length ? (
                 folders.map((folder) => {
                   const selected = selectedFolderIds.includes(folder.id);
@@ -221,26 +282,46 @@ export function FileDetailScreen({ route, navigation }: Props) {
                       }
                     >
                       <View style={s.folderRowContent}>
-                        <Feather name="folder" size={18} color={selected ? colors.text : colors.secondary} />
+                        <Feather
+                          name="folder"
+                          size={18}
+                          color={selected ? colors.text : colors.secondary}
+                        />
                         <Text style={s.folderRowText}>{folder.name}</Text>
                       </View>
                       {selected ? (
-                        <Feather name="check-circle" size={20} color={colors.text} />
+                        <Feather
+                          name="check-circle"
+                          size={20}
+                          color={colors.text}
+                        />
                       ) : (
-                        <Feather name="circle" size={20} color={colors.secondary} />
+                        <Feather
+                          name="circle"
+                          size={20}
+                          color={colors.secondary}
+                        />
                       )}
                     </Pressable>
                   );
                 })
               ) : (
-                <Text style={s.emptyFolderText}>Create a folder first to organize this file.</Text>
+                <Text style={s.emptyFolderText}>
+                  Create a folder first to organize this file.
+                </Text>
               )}
             </ScrollView>
             <View style={s.modalFooter}>
-              <Pressable style={[s.modalActionButton, s.modalCancelButton]} onPress={() => setMoveVisible(false)}>
+              <Pressable
+                style={[s.modalActionButton, s.modalCancelButton]}
+                onPress={() => setMoveVisible(false)}
+              >
                 <Text style={s.modalActionText}>Cancel</Text>
               </Pressable>
-              <Pressable style={[s.modalActionButton, s.modalSaveButton]} onPress={saveFolderSelection}>
+              <Pressable
+                style={[s.modalActionButton, s.modalSaveButton]}
+                onPress={saveFolderSelection}
+              >
                 <Text style={[s.modalActionText, s.modalSaveText]}>Done</Text>
               </Pressable>
             </View>
@@ -409,4 +490,3 @@ const styles = (c: PaperColors) =>
       backgroundColor: c.border,
     },
   });
-

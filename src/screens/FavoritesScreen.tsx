@@ -187,8 +187,11 @@ export function FavoritesScreen() {
   const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([]);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [selectionMoveMode, setSelectionMoveMode] = useState(false);
-  const [confirmDeleteFileId, setConfirmDeleteFileId] = useState<string | null>(null);
-  const [confirmDeleteSelectionVisible, setConfirmDeleteSelectionVisible] = useState(false);
+  const [confirmDeleteFileId, setConfirmDeleteFileId] = useState<string | null>(
+    null,
+  );
+  const [confirmDeleteSelectionVisible, setConfirmDeleteSelectionVisible] =
+    useState(false);
 
   const favorites = useMemo(() => files.filter((f) => f.isFavorite), [files]);
   const rowSelectionMode = selectedRowIds.length > 0;
@@ -215,7 +218,8 @@ export function FavoritesScreen() {
 
   const clearRowSelection = () => setSelectedRowIds([]);
 
-  const selectAllRows = () => setSelectedRowIds(favorites.map((file) => file.id));
+  const selectAllRows = () =>
+    setSelectedRowIds(favorites.map((file) => file.id));
 
   const deleteSelectedRows = () => {
     if (!selectedRowIds.length) return;
@@ -366,13 +370,22 @@ export function FavoritesScreen() {
             <Pressable style={s.selectionActionButton} onPress={selectAllRows}>
               <Text style={s.selectionActionText}>Select all</Text>
             </Pressable>
-            <Pressable style={s.selectionActionButton} onPress={clearRowSelection}>
+            <Pressable
+              style={s.selectionActionButton}
+              onPress={clearRowSelection}
+            >
               <Text style={s.selectionActionText}>Clear</Text>
             </Pressable>
-            <Pressable style={s.selectionActionButton} onPress={openSelectionMoveModal}>
+            <Pressable
+              style={s.selectionActionButton}
+              onPress={openSelectionMoveModal}
+            >
               <Text style={s.selectionActionText}>Move</Text>
             </Pressable>
-            <Pressable style={s.selectionActionButton} onPress={deleteSelectedRows}>
+            <Pressable
+              style={s.selectionActionButton}
+              onPress={deleteSelectedRows}
+            >
               <Text style={s.selectionActionText}>Delete</Text>
             </Pressable>
           </View>
@@ -448,4 +461,3 @@ export function FavoritesScreen() {
     </Screen>
   );
 }
-

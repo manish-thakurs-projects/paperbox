@@ -45,7 +45,9 @@ const getCacheDirectory = () =>
   "";
 
 const normalizeFileUri = (uri: string) =>
-  uri.startsWith("file://") || uri.startsWith("content://") ? uri : `file://${uri}`;
+  uri.startsWith("file://") || uri.startsWith("content://")
+    ? uri
+    : `file://${uri}`;
 
 const ensureFilename = (name: string, ext: string) => {
   const cleaned = name.replace(/[^a-z0-9\-_.]/gi, "_");
@@ -61,11 +63,14 @@ const extensionFromMimeType = (mimeType?: string) => {
   if (!mimeType) return "";
   const type = mimeType.toLowerCase();
   if (type.includes("pdf")) return "pdf";
-  if (type.includes("presentationml.presentation") || type.includes("pptx")) return "pptx";
+  if (type.includes("presentationml.presentation") || type.includes("pptx"))
+    return "pptx";
   if (type.includes("powerpoint") || type.includes("ppt")) return "ppt";
-  if (type.includes("wordprocessingml.document") || type.includes("docx")) return "docx";
+  if (type.includes("wordprocessingml.document") || type.includes("docx"))
+    return "docx";
   if (type.includes("msword")) return "doc";
-  if (type.includes("spreadsheetml.sheet") || type.includes("xlsx")) return "xlsx";
+  if (type.includes("spreadsheetml.sheet") || type.includes("xlsx"))
+    return "xlsx";
   if (type.includes("excel") || type.includes("xls")) return "xls";
   return "";
 };
@@ -108,7 +113,10 @@ const mimeTypeFromExtension = (ext: string): string => {
   }
 };
 
-const saveUriToCache = async (uri: string, filename: string): Promise<string> => {
+const saveUriToCache = async (
+  uri: string,
+  filename: string,
+): Promise<string> => {
   const cacheDir = getCacheDirectory();
   const destinationPath = `${cacheDir}${filename}`;
   const destination = normalizeFileUri(destinationPath);
@@ -140,7 +148,10 @@ const saveUriToCache = async (uri: string, filename: string): Promise<string> =>
   }
 
   if (uri.startsWith("http://") || uri.startsWith("https://")) {
-    const { uri: downloadedUri } = await FileSystem.downloadAsync(uri, destination);
+    const { uri: downloadedUri } = await FileSystem.downloadAsync(
+      uri,
+      destination,
+    );
     return downloadedUri;
   }
 
@@ -150,7 +161,9 @@ const saveUriToCache = async (uri: string, filename: string): Promise<string> =>
       name: filename,
       uri,
       size: 0,
-      extension: filename.includes(".") ? (filename.split(".").pop() || "bin") : "bin",
+      extension: filename.includes(".")
+        ? filename.split(".").pop() || "bin"
+        : "bin",
       kind: "other",
       createdAt: new Date().toISOString(),
       isFavorite: false,
@@ -183,7 +196,7 @@ const saveUriToCache = async (uri: string, filename: string): Promise<string> =>
   }
 
   return uri;
-}
+};
 
 export function PreviewScreen({ route }: Props) {
   const { colors } = usePaperTheme();
@@ -214,8 +227,15 @@ export function PreviewScreen({ route }: Props) {
   }, []);
   const extension = file.extension?.toLowerCase() || "";
   const mimeExtension = extensionFromMimeType(file.mimeType);
-  const ext = extFromUri(uri) || extension || mimeExtension || (file.kind === "pdf" ? "pdf" : "");
-  const filename = ensureFilename(name, ext || extension || mimeExtension || "bin");
+  const ext =
+    extFromUri(uri) ||
+    extension ||
+    mimeExtension ||
+    (file.kind === "pdf" ? "pdf" : "");
+  const filename = ensureFilename(
+    name,
+    ext || extension || mimeExtension || "bin",
+  );
 
   const [loading, setLoading] = useState<boolean>(false);
   const [localUri, setLocalUri] = useState<string | null>(null);
@@ -262,7 +282,9 @@ export function PreviewScreen({ route }: Props) {
   useEffect(() => {
     return () => {
       if (!localUri || localUri === uri) return;
-      void (FileSystem as any).deleteAsync(localUri, { idempotent: true }).catch(() => undefined);
+      void (FileSystem as any)
+        .deleteAsync(localUri, { idempotent: true })
+        .catch(() => undefined);
     };
   }, [localUri, uri]);
 
@@ -310,7 +332,8 @@ export function PreviewScreen({ route }: Props) {
           if (typeof fsAny.getContentUriAsync === "function") {
             try {
               const content = await fsAny.getContentUriAsync(dataUri);
-              const contentUri = typeof content === "string" ? content : content?.uri;
+              const contentUri =
+                typeof content === "string" ? content : content?.uri;
               if (contentUri && contentUri.startsWith("content://")) {
                 dataUri = contentUri;
               }
@@ -321,11 +344,14 @@ export function PreviewScreen({ route }: Props) {
         }
 
         try {
-          await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
-            data: dataUri,
-            type: mimeType,
-            flags: 1,
-          });
+          await IntentLauncher.startActivityAsync(
+            "android.intent.action.VIEW",
+            {
+              data: dataUri,
+              type: mimeType,
+              flags: 1,
+            },
+          );
           return;
         } catch (e) {
           // If IntentLauncher fails, we will try a generic open fallback.
@@ -469,9 +495,14 @@ export function PreviewScreen({ route }: Props) {
         <View style={styles.center}>
           <Feather name="file-text" size={64} color={colors.text} />
           <Text style={styles.title}>{file.name}</Text>
-          <Text style={styles.copy}>PDFs open in your device's default viewer.</Text>
+          <Text style={styles.copy}>
+            PDFs open in your device's default viewer.
+          </Text>
 
-          <TouchableOpacity onPress={openExternally} style={styles.primaryButton}>
+          <TouchableOpacity
+            onPress={openExternally}
+            style={styles.primaryButton}
+          >
             <Text style={styles.primaryButtonText}>Open PDF</Text>
           </TouchableOpacity>
 
@@ -487,8 +518,6 @@ export function PreviewScreen({ route }: Props) {
           >
             <Text style={styles.primaryButtonText}>Share / Open with…</Text>
           </TouchableOpacity>
-
-
         </View>
       </Screen>
     );

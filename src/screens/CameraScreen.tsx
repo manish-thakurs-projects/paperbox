@@ -34,7 +34,8 @@ import { VaultFile } from "../types";
 import { persistVaultFile } from "../services/vaultStorage";
 
 export function CameraScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParams>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParams>>();
   const { colors } = usePaperTheme();
   const styles = getStyles(colors);
   const files = useVaultStore((state) => state.files);
@@ -43,29 +44,42 @@ export function CameraScreen() {
   const toggleFavorite = useVaultStore((state) => state.toggleFavorite);
   const togglePin = useVaultStore((state) => state.togglePin);
   const renameFile = useVaultStore((state) => state.renameFile);
-  const setFileFolderMembership = useVaultStore((state) => state.setFileFolderMembership);
+  const setFileFolderMembership = useVaultStore(
+    (state) => state.setFileFolderMembership,
+  );
   const removeFile = useVaultStore((state) => state.removeFile);
-  const setLockSuppressed = useSettingsStore((state) => state.setLockSuppressed);
+  const setLockSuppressed = useSettingsStore(
+    (state) => state.setLockSuppressed,
+  );
 
   const [actionFileId, setActionFileId] = useState<string | null>(null);
   const [actionsVisible, setActionsVisible] = useState(false);
   const [moveVisible, setMoveVisible] = useState(false);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([]);
-  const [confirmDeleteFileId, setConfirmDeleteFileId] = useState<string | null>(null);
-  const [confirmDeleteSelectionVisible, setConfirmDeleteSelectionVisible] = useState(false);
+  const [confirmDeleteFileId, setConfirmDeleteFileId] = useState<string | null>(
+    null,
+  );
+  const [confirmDeleteSelectionVisible, setConfirmDeleteSelectionVisible] =
+    useState(false);
   const [isScanning, setIsScanning] = useState(false);
 
   const actionFile = useMemo(
-    () => (actionFileId ? files.find((file) => file.id === actionFileId) ?? null : null),
-    [files, actionFileId]
+    () =>
+      actionFileId
+        ? (files.find((file) => file.id === actionFileId) ?? null)
+        : null,
+    [files, actionFileId],
   );
 
   const recentFiles = useMemo(
     () =>
       [...files]
         .filter((file) => file.source === "camera")
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        ),
     [files],
   );
 
@@ -134,7 +148,10 @@ export function CameraScreen() {
     try {
       await shareVaultFile(actionFile);
     } catch (error) {
-      if (error instanceof Error && error.message === "Sharing not available on this device") {
+      if (
+        error instanceof Error &&
+        error.message === "Sharing not available on this device"
+      ) {
         Alert.alert(
           "Sharing not available",
           "This device cannot share files directly.",
@@ -172,7 +189,8 @@ export function CameraScreen() {
 
   const clearRowSelection = () => setSelectedRowIds([]);
 
-  const selectAllFiles = () => setSelectedRowIds(recentFiles.map((file) => file.id));
+  const selectAllFiles = () =>
+    setSelectedRowIds(recentFiles.map((file) => file.id));
 
   const deleteSelectedRows = () => {
     if (!selectedRowIds.length) return;
@@ -213,7 +231,11 @@ export function CameraScreen() {
     const filename = `Scan-${Date.now()}.jpg`;
     const extension = extensionOf(normalizedUri) || "jpg";
     const fileId = `${Date.now()}-${Math.random()}`;
-    const durableUri = await persistVaultFile(normalizedUri, `${fileId}-scan`, extension);
+    const durableUri = await persistVaultFile(
+      normalizedUri,
+      `${fileId}-scan`,
+      extension,
+    );
     const fileInfo = await FileSystem.getInfoAsync(durableUri);
     const file: VaultFile = {
       id: fileId,
@@ -277,7 +299,8 @@ export function CameraScreen() {
         return;
       }
 
-      const scannedImages = result.scannedImages?.map(normalizeUri).filter(Boolean) ?? [];
+      const scannedImages =
+        result.scannedImages?.map(normalizeUri).filter(Boolean) ?? [];
       if (!scannedImages.length) {
         Alert.alert("No scan result", "Try scanning again.");
         return;
@@ -325,7 +348,12 @@ export function CameraScreen() {
           disabled={isScanning}
         >
           <View style={styles.cardContent}>
-            <Feather name="camera" size={30} color={colors.text} style={styles.cardIcon} />
+            <Feather
+              name="camera"
+              size={30}
+              color={colors.text}
+              style={styles.cardIcon}
+            />
             <Text style={styles.cardLabel}>Take picture</Text>
           </View>
         </TouchableOpacity>
@@ -335,7 +363,12 @@ export function CameraScreen() {
           disabled={isScanning}
         >
           <View style={styles.cardContent}>
-            <Feather name="file-text" size={30} color={colors.text} style={styles.cardIcon} />
+            <Feather
+              name="file-text"
+              size={30}
+              color={colors.text}
+              style={styles.cardIcon}
+            />
             <Text style={styles.cardLabel}>Create PDF</Text>
           </View>
         </TouchableOpacity>
@@ -345,7 +378,10 @@ export function CameraScreen() {
         <View style={styles.labelRow}>
           <Text style={styles.sectionTitle}>RECENT CAPTURES</Text>
           {recentFiles.length > 5 ? (
-            <Pressable style={styles.viewAllLink} onPress={() => navigation.navigate("CapturedFiles")}>
+            <Pressable
+              style={styles.viewAllLink}
+              onPress={() => navigation.navigate("CapturedFiles")}
+            >
               <Text style={styles.viewAllLinkText}>View all �</Text>
             </Pressable>
           ) : null}
@@ -363,18 +399,32 @@ export function CameraScreen() {
           <View style={styles.recentList}>
             {rowSelectionMode ? (
               <View style={styles.selectionBar}>
-                <Text style={styles.selectionTitle}>{selectedRowIds.length} selected</Text>
+                <Text style={styles.selectionTitle}>
+                  {selectedRowIds.length} selected
+                </Text>
                 <View style={styles.selectionActions}>
-                  <TouchableOpacity style={styles.selectionActionButton} onPress={selectAllFiles}>
+                  <TouchableOpacity
+                    style={styles.selectionActionButton}
+                    onPress={selectAllFiles}
+                  >
                     <Text style={styles.selectionActionText}>Select all</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.selectionActionButton} onPress={clearRowSelection}>
+                  <TouchableOpacity
+                    style={styles.selectionActionButton}
+                    onPress={clearRowSelection}
+                  >
                     <Text style={styles.selectionActionText}>Clear</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.selectionActionButton} onPress={openSelectionMoveModal}>
+                  <TouchableOpacity
+                    style={styles.selectionActionButton}
+                    onPress={openSelectionMoveModal}
+                  >
                     <Text style={styles.selectionActionText}>Move</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.selectionActionButton} onPress={deleteSelectedRows}>
+                  <TouchableOpacity
+                    style={styles.selectionActionButton}
+                    onPress={deleteSelectedRows}
+                  >
                     <Text style={styles.selectionActionText}>Delete</Text>
                   </TouchableOpacity>
                 </View>
@@ -598,4 +648,3 @@ const getStyles = (c: {
       fontSize: 13,
     },
   });
-

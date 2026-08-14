@@ -1,12 +1,6 @@
 import React from "react";
 import { Feather } from "@expo/vector-icons";
-import {
-  Alert,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParams } from "../navigation/types";
@@ -41,14 +35,22 @@ export function HomeScreen() {
   const [actionFileId, setActionFileId] = React.useState<string | null>(null);
   const [actionsVisible, setActionsVisible] = React.useState(false);
   const [moveVisible, setMoveVisible] = React.useState(false);
-  const [selectedFolderIds, setSelectedFolderIds] = React.useState<string[]>([]);
+  const [selectedFolderIds, setSelectedFolderIds] = React.useState<string[]>(
+    [],
+  );
   const [selectedRowIds, setSelectedRowIds] = React.useState<string[]>([]);
   const [isSelectionMove, setIsSelectionMove] = React.useState(false);
-  const [confirmDeleteFileId, setConfirmDeleteFileId] = React.useState<string | null>(null);
-  const [confirmDeleteSelectionVisible, setConfirmDeleteSelectionVisible] = React.useState(false);
+  const [confirmDeleteFileId, setConfirmDeleteFileId] = React.useState<
+    string | null
+  >(null);
+  const [confirmDeleteSelectionVisible, setConfirmDeleteSelectionVisible] =
+    React.useState(false);
 
   const actionFile = React.useMemo(
-    () => (actionFileId ? files.find((file) => file.id === actionFileId) ?? null : null),
+    () =>
+      actionFileId
+        ? (files.find((file) => file.id === actionFileId) ?? null)
+        : null,
     [files, actionFileId],
   );
 
@@ -126,7 +128,8 @@ export function HomeScreen() {
 
   const clearRowSelection = () => setSelectedRowIds([]);
 
-  const selectAllRows = () => setSelectedRowIds(visibleFiles.map((file) => file.id));
+  const selectAllRows = () =>
+    setSelectedRowIds(visibleFiles.map((file) => file.id));
 
   const deleteSelectedRows = () => {
     if (!selectedRowIds.length) return;
@@ -189,7 +192,10 @@ export function HomeScreen() {
     try {
       await shareVaultFile(actionFile);
     } catch (error) {
-      if (error instanceof Error && error.message === "Sharing not available on this device") {
+      if (
+        error instanceof Error &&
+        error.message === "Sharing not available on this device"
+      ) {
         Alert.alert(
           "Sharing not available",
           "This device cannot share files directly.",
@@ -242,53 +248,70 @@ export function HomeScreen() {
       <View style={s.labelRow}>
         <Text style={s.label}>RECENTLY ADDED</Text>
         {files.length > 5 ? (
-                  <Pressable style={s.viewAllLink} onPress={() => navigation.navigate("AllFiles")}>
-                    <Text style={s.viewAllLinkText}>View all ›</Text>
+          <Pressable
+            style={s.viewAllLink}
+            onPress={() => navigation.navigate("AllFiles")}
+          >
+            <Text style={s.viewAllLinkText}>View all ›</Text>
           </Pressable>
         ) : null}
       </View>
       {visibleFiles.length ? (
-       <View>
-         {rowSelectionMode ? (
-           <View style={s.selectionBar}>
-             <Text style={s.selectionTitle}>{selectedRowIds.length} selected</Text>
-             <View style={s.selectionActions}>
-               <Pressable style={s.selectionActionButton} onPress={selectAllRows}>
-                 <Text style={s.selectionActionText}>Select all</Text>
-               </Pressable>
-               <Pressable style={s.selectionActionButton} onPress={clearRowSelection}>
-                 <Text style={s.selectionActionText}>Clear</Text>
-               </Pressable>
-               <Pressable style={s.selectionActionButton} onPress={openSelectionMoveModal}>
-                 <Text style={s.selectionActionText}>Move</Text>
-               </Pressable>
-               <Pressable style={s.selectionActionButton} onPress={deleteSelectedRows}>
-                 <Text style={s.selectionActionText}>Delete</Text>
-               </Pressable>
-             </View>
-           </View>
-         ) : null}
-         {visibleFiles.map((f) => (
-           <FileRow
-             key={f.id}
-             file={f}
-             selected={selectedRowIds.includes(f.id)}
-             onPress={() =>
-               rowSelectionMode
-                 ? toggleRowSelection(f.id)
-                 : navigation.navigate("Preview", { fileId: f.id })
-             }
-             onLongPress={() => toggleRowSelection(f.id)}
-             onMore={() => openFileActions(f)}
-           />
-         ))}
-       </View>
+        <View>
+          {rowSelectionMode ? (
+            <View style={s.selectionBar}>
+              <Text style={s.selectionTitle}>
+                {selectedRowIds.length} selected
+              </Text>
+              <View style={s.selectionActions}>
+                <Pressable
+                  style={s.selectionActionButton}
+                  onPress={selectAllRows}
+                >
+                  <Text style={s.selectionActionText}>Select all</Text>
+                </Pressable>
+                <Pressable
+                  style={s.selectionActionButton}
+                  onPress={clearRowSelection}
+                >
+                  <Text style={s.selectionActionText}>Clear</Text>
+                </Pressable>
+                <Pressable
+                  style={s.selectionActionButton}
+                  onPress={openSelectionMoveModal}
+                >
+                  <Text style={s.selectionActionText}>Move</Text>
+                </Pressable>
+                <Pressable
+                  style={s.selectionActionButton}
+                  onPress={deleteSelectedRows}
+                >
+                  <Text style={s.selectionActionText}>Delete</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
+          {visibleFiles.map((f) => (
+            <FileRow
+              key={f.id}
+              file={f}
+              selected={selectedRowIds.includes(f.id)}
+              onPress={() =>
+                rowSelectionMode
+                  ? toggleRowSelection(f.id)
+                  : navigation.navigate("Preview", { fileId: f.id })
+              }
+              onLongPress={() => toggleRowSelection(f.id)}
+              onMore={() => openFileActions(f)}
+            />
+          ))}
+        </View>
       ) : (
-       <EmptyState
-         icon="upload"
-         title="Your vault is empty"
-         body="Import documents, images, and more to keep everything in one quiet place."
-       />
+        <EmptyState
+          icon="upload"
+          title="Your vault is empty"
+          body="Import documents, images, and more to keep everything in one quiet place."
+        />
       )}
       <FileActionModal
         visible={actionsVisible}
@@ -317,7 +340,7 @@ export function HomeScreen() {
               : [...current, folderId],
           )
         }
-       onSave={isSelectionMove ? handleMoveSelection : saveFolderSelection}
+        onSave={isSelectionMove ? handleMoveSelection : saveFolderSelection}
       />
       <ConfirmDialog
         visible={!!confirmDeleteFileId}
@@ -338,10 +361,10 @@ export function HomeScreen() {
         onCancel={cancelDeleteSelectedRows}
       />
     </Screen>
- );
+  );
 }
 const styles = (c: PaperColors) =>
- StyleSheet.create({
+  StyleSheet.create({
     head: {
       flexDirection: "row",
       alignItems: "center",
@@ -476,4 +499,3 @@ const styles = (c: PaperColors) =>
       color: c.text,
     },
   });
-

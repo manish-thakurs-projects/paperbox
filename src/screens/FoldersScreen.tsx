@@ -1,5 +1,12 @@
 import React, { useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Alert,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -14,7 +21,8 @@ import { useVaultStore } from "../store/useVaultStore";
 import { Folder } from "../types";
 
 export function FoldersScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParams>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParams>>();
   const { colors } = usePaperTheme();
   const folders = useVaultStore((s) => s.folders),
     files = useVaultStore((s) => s.files),
@@ -91,13 +99,20 @@ export function FoldersScreen() {
       )}
       {folders.length ? (
         folders.map((f) => {
-          const folderFiles = files.filter((file) => isFileInFolder(file, f.id));
-          const folderSize = folderFiles.reduce((sum, file) => sum + file.size, 0);
+          const folderFiles = files.filter((file) =>
+            isFileInFolder(file, f.id),
+          );
+          const folderSize = folderFiles.reduce(
+            (sum, file) => sum + file.size,
+            0,
+          );
           return (
             <Pressable
               key={f.id}
               style={s.row}
-              onPress={() => navigation.navigate("FolderDetail", { folderId: f.id })}
+              onPress={() =>
+                navigation.navigate("FolderDetail", { folderId: f.id })
+              }
               onLongPress={() => openFolderActions(f)}
             >
               <View style={s.icon}>
@@ -106,13 +121,19 @@ export function FoldersScreen() {
               <View style={s.folderText}>
                 <Text style={s.name}>{f.name}</Text>
                 <Text style={s.count}>
-                  {folderFiles.length} {folderFiles.length === 1 ? "file" : "files"} · {fileSize(folderSize)}
+                  {folderFiles.length}{" "}
+                  {folderFiles.length === 1 ? "file" : "files"} ·{" "}
+                  {fileSize(folderSize)}
                 </Text>
               </View>
               {f.isPinned && (
                 <Feather name="bookmark" size={18} color={colors.text} />
               )}
-              <Feather name="chevron-right" size={18} color={colors.secondary} />
+              <Feather
+                name="chevron-right"
+                size={18}
+                color={colors.secondary}
+              />
             </Pressable>
           );
         })
@@ -148,7 +169,6 @@ const styles = (c: PaperColors) =>
       fontWeight: "800",
       letterSpacing: -1,
       color: c.text,
-      
     },
     new: {
       backgroundColor: c.inverse,
@@ -192,4 +212,3 @@ const styles = (c: PaperColors) =>
     folderText: { flex: 1 },
     count: { fontSize: 13, color: c.secondary, marginTop: 3 },
   });
-

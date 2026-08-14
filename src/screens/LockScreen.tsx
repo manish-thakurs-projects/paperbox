@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { usePaperTheme } from "../theme/usePaperTheme";
 import { withAlpha } from "../theme/utils";
 import { authenticateWithLocalAuthentication } from "../utils/localAuthentication";
@@ -8,7 +14,9 @@ export function LockScreen({ onUnlock }: { onUnlock: () => void }) {
   const { colors } = usePaperTheme();
   const styles = s(colors);
   const [message, setMessage] = useState("Preparing secure authentication...");
-  const [status, setStatus] = useState<"pending" | "failed" | "unavailable">("pending");
+  const [status, setStatus] = useState<"pending" | "failed" | "unavailable">(
+    "pending",
+  );
 
   const authenticate = async () => {
     setStatus("pending");
@@ -21,7 +29,10 @@ export function LockScreen({ onUnlock }: { onUnlock: () => void }) {
     }
 
     setStatus(result.error ? "failed" : "unavailable");
-    setMessage(result.error ?? "Secure authentication is unavailable in this runtime. Rebuild the app with local authentication support.");
+    setMessage(
+      result.error ??
+        "Secure authentication is unavailable in this runtime. Rebuild the app with local authentication support.",
+    );
   };
 
   useEffect(() => {
@@ -34,7 +45,11 @@ export function LockScreen({ onUnlock }: { onUnlock: () => void }) {
       <Text style={styles.subtitle}>Secure access required</Text>
       <View style={styles.promptCard}>
         {status === "pending" ? (
-          <ActivityIndicator size="large" color={colors.inverse} style={styles.indicator} />
+          <ActivityIndicator
+            size="large"
+            color={colors.inverse}
+            style={styles.indicator}
+          />
         ) : null}
         <Text style={styles.message}>{message}</Text>
         {status !== "pending" ? (
@@ -111,4 +126,3 @@ const s = (c: {
       fontWeight: "700",
     },
   });
-

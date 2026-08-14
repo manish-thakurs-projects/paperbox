@@ -34,7 +34,9 @@ export function FolderDetailScreen({ route, navigation }: Props) {
   const files = useVaultStore((s) => s.files);
   const folders = useVaultStore((s) => s.folders);
   const assignFilesToFolder = useVaultStore((s) => s.assignFilesToFolder);
-  const setFileFolderMembership = useVaultStore((s) => s.setFileFolderMembership);
+  const setFileFolderMembership = useVaultStore(
+    (s) => s.setFileFolderMembership,
+  );
   const removeFile = useVaultStore((s) => s.removeFile);
   const removeFileFromFolder = useVaultStore((s) => s.removeFileFromFolder);
   const toggleFavorite = useVaultStore((s) => s.toggleFavorite);
@@ -43,10 +45,15 @@ export function FolderDetailScreen({ route, navigation }: Props) {
   const [modalVisible, setModalVisible] = React.useState(false);
   const [selectedFileIds, setSelectedFileIds] = React.useState<string[]>([]);
   const [selectedRowIds, setSelectedRowIds] = React.useState<string[]>([]);
-  const [selectedFolderIds, setSelectedFolderIds] = React.useState<string[]>([]);
+  const [selectedFolderIds, setSelectedFolderIds] = React.useState<string[]>(
+    [],
+  );
   const [actionFileId, setActionFileId] = React.useState<string | null>(null);
-  const [confirmDeleteFileId, setConfirmDeleteFileId] = React.useState<string | null>(null);
-  const [confirmDeleteSelectionVisible, setConfirmDeleteSelectionVisible] = React.useState(false);
+  const [confirmDeleteFileId, setConfirmDeleteFileId] = React.useState<
+    string | null
+  >(null);
+  const [confirmDeleteSelectionVisible, setConfirmDeleteSelectionVisible] =
+    React.useState(false);
   const [actionsVisible, setActionsVisible] = React.useState(false);
   const [selectionMoveVisible, setSelectionMoveVisible] = React.useState(false);
   const s = styles(colors);
@@ -69,7 +76,8 @@ export function FolderDetailScreen({ route, navigation }: Props) {
   );
   const rowSelectionMode = selectedRowIds.length > 0;
 
-  const actionFile = folderFiles.find((file) => file.id === actionFileId) ?? null;
+  const actionFile =
+    folderFiles.find((file) => file.id === actionFileId) ?? null;
 
   const availableFiles = React.useMemo(
     () => files.filter((file) => !isFileInFolder(file, route.params.folderId)),
@@ -183,7 +191,8 @@ export function FolderDetailScreen({ route, navigation }: Props) {
 
   const clearRowSelection = () => setSelectedRowIds([]);
 
-  const selectAllFolderFiles = () => setSelectedRowIds(folderFiles.map((file) => file.id));
+  const selectAllFolderFiles = () =>
+    setSelectedRowIds(folderFiles.map((file) => file.id));
 
   const deleteSelectedRows = () => {
     if (!selectedRowIds.length) return;
@@ -224,8 +233,12 @@ export function FolderDetailScreen({ route, navigation }: Props) {
 
   const handleRemoveFromFolder = () => {
     if (!activeFile) return;
-    const currentFolderIds = activeFile.folderIds ?? (activeFile.folderId ? [activeFile.folderId] : []);
-    const nextFolderIds = currentFolderIds.filter((id) => id !== route.params.folderId);
+    const currentFolderIds =
+      activeFile.folderIds ??
+      (activeFile.folderId ? [activeFile.folderId] : []);
+    const nextFolderIds = currentFolderIds.filter(
+      (id) => id !== route.params.folderId,
+    );
     setFileFolderMembership(activeFile.id, nextFolderIds);
     setActionFileId(null);
   };
@@ -236,18 +249,32 @@ export function FolderDetailScreen({ route, navigation }: Props) {
         <View>
           {rowSelectionMode ? (
             <View style={s.selectionBar}>
-              <Text style={s.selectionTitle}>{selectedRowIds.length} selected</Text>
+              <Text style={s.selectionTitle}>
+                {selectedRowIds.length} selected
+              </Text>
               <View style={s.selectionActions}>
-                <Pressable style={s.selectionActionButton} onPress={selectAllFolderFiles}>
+                <Pressable
+                  style={s.selectionActionButton}
+                  onPress={selectAllFolderFiles}
+                >
                   <Text style={s.selectionActionText}>Select all</Text>
                 </Pressable>
-                <Pressable style={s.selectionActionButton} onPress={clearRowSelection}>
+                <Pressable
+                  style={s.selectionActionButton}
+                  onPress={clearRowSelection}
+                >
                   <Text style={s.selectionActionText}>Clear</Text>
                 </Pressable>
-                <Pressable style={s.selectionActionButton} onPress={openSelectionMoveModal}>
+                <Pressable
+                  style={s.selectionActionButton}
+                  onPress={openSelectionMoveModal}
+                >
                   <Text style={s.selectionActionText}>Move</Text>
                 </Pressable>
-                <Pressable style={s.selectionActionButton} onPress={deleteSelectedRows}>
+                <Pressable
+                  style={s.selectionActionButton}
+                  onPress={deleteSelectedRows}
+                >
                   <Text style={s.selectionActionText}>Delete</Text>
                 </Pressable>
               </View>
@@ -256,7 +283,9 @@ export function FolderDetailScreen({ route, navigation }: Props) {
           {folderFiles.map((file, index) => (
             <View
               key={file.id}
-              style={index !== folderFiles.length - 1 ? s.fileRowWrapper : undefined}
+              style={
+                index !== folderFiles.length - 1 ? s.fileRowWrapper : undefined
+              }
             >
               <FileRow
                 file={file}
@@ -264,13 +293,13 @@ export function FolderDetailScreen({ route, navigation }: Props) {
                 onPress={() =>
                   rowSelectionMode
                     ? toggleRowSelection(file.id)
-                   : goToPreview(file)
+                    : goToPreview(file)
                 }
                 onLongPress={() => toggleRowSelection(file.id)}
-               onMore={() => {
-                 setActionFileId(file.id);
-                 setActionsVisible(true);
-               }}
+                onMore={() => {
+                  setActionFileId(file.id);
+                  setActionsVisible(true);
+                }}
               />
             </View>
           ))}
@@ -294,7 +323,10 @@ export function FolderDetailScreen({ route, navigation }: Props) {
 
             <Text style={s.modalTitle}>Choose imported files</Text>
 
-            <ScrollView style={s.modalList} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={s.modalList}
+              showsVerticalScrollIndicator={false}
+            >
               {availableFiles.length > 0 ? (
                 availableFiles.map((file) => {
                   const selected = selectedFileIds.includes(file.id);
@@ -310,12 +342,22 @@ export function FolderDetailScreen({ route, navigation }: Props) {
                     >
                       <View style={s.fileItemInfo}>
                         <Text style={s.fileName}>{file.name}</Text>
-                        <Text style={s.fileSubtitle}>{file.extension || file.kind}</Text>
+                        <Text style={s.fileSubtitle}>
+                          {file.extension || file.kind}
+                        </Text>
                       </View>
                       {selected ? (
-                        <Feather name="check-circle" size={22} color={colors.text} />
+                        <Feather
+                          name="check-circle"
+                          size={22}
+                          color={colors.text}
+                        />
                       ) : (
-                        <Feather name="circle" size={22} color={colors.secondary} />
+                        <Feather
+                          name="circle"
+                          size={22}
+                          color={colors.secondary}
+                        />
                       )}
                     </Pressable>
                   );
@@ -325,7 +367,8 @@ export function FolderDetailScreen({ route, navigation }: Props) {
                   <Feather name="inbox" size={40} color={colors.secondary} />
                   <Text style={s.emptyModalTitle}>No imported files</Text>
                   <Text style={s.emptyModalBody}>
-                    Import files first from the home screen before adding them to folders.
+                    Import files first from the home screen before adding them
+                    to folders.
                   </Text>
                 </View>
               )}
@@ -355,7 +398,10 @@ export function FolderDetailScreen({ route, navigation }: Props) {
                 disabled={!selectedFileIds.length}
               >
                 <Text style={s.modalAddText}>
-                  Add {selectedFileIds.length > 0 ? `(${selectedFileIds.length})` : ""}
+                  Add{" "}
+                  {selectedFileIds.length > 0
+                    ? `(${selectedFileIds.length})`
+                    : ""}
                 </Text>
               </Pressable>
             </View>
@@ -414,207 +460,206 @@ export function FolderDetailScreen({ route, navigation }: Props) {
 
 const styles = (c: PaperColors) =>
   StyleSheet.create({
-  screen: {
-    paddingTop: -10,
-    paddingHorizontal: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "800",
-    letterSpacing: -0.7,
-    color: c.text,
-    marginBottom: 4,
-  },
-  headerAction: {
-    padding: 8,
-  },
-  addButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: c.inverse,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: radius.md,
-    gap: 8,
-  },
-  addButtonPressed: {
-    opacity: 0.8,
-  },
-  addText: {
-    color: c.background,
-    fontWeight: "700",
-    fontSize: 14,
-  },
-  fileRowWrapper: {
-    borderBottomWidth: 1,
-    borderColor: c.border,
-    paddingVertical: 4,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: withAlpha(c.text, 0.4),
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: c.elevated,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 28,
-    maxHeight: "85%",
-    ...Platform.select({
-      ios: {
-        shadowColor: c.text,
-        shadowOffset: { width: 0, height: -6 },
-        shadowOpacity: 0.1,
-        shadowRadius: 20,
-      },
-      android: {
-        elevation: 10,
-      },
-    }),
-  },
-  modalHandle: {
-    width: 40,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: c.border,
-    alignSelf: "center",
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: c.text,
-    marginBottom: 8,
-    letterSpacing: -0.5,
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: c.secondary,
-    marginBottom: 20,
-  },
-  modalList: {
-    marginBottom: 20,
-  },
-  fileItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: radius.md,
-    backgroundColor: c.background,
-    borderWidth: 1,
-    borderColor: c.border,
-    marginBottom: 10,
-  },
-  fileItemSelected: {
-    backgroundColor: c.surface,
-    borderColor: c.text,
-  },
-  fileItemPressed: {
-    opacity: 0.7,
-    transform: [{ scale: 0.98 }],
-  },
-  fileItemInfo: {
-    flex: 1,
-    marginRight: 12,
-  },
-  fileName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: c.text,
-  },
-  fileSubtitle: {
-    fontSize: 13,
-    color: c.secondary,
-    marginTop: 2,
-  },
-  emptyModalMessage: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 32,
-  },
-  emptyModalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: c.text,
-    marginTop: 12,
-    marginBottom: 6,
-  },
-  emptyModalBody: {
-    textAlign: "center",
-    color: c.secondary,
-    fontSize: 14,
-    lineHeight: 20,
-    maxWidth: "80%",
-  },
-  modalActions: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: radius.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalButtonPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.97 }],
-  },
-  modalCancelButton: {
-    backgroundColor: c.border,
-  },
-  modalAddButton: {
-    backgroundColor: c.inverse,
-  },
-  modalButtonDisabled: {
-    opacity: 0.5,
-  },
-  modalCancelText: {
-    color: c.text,
-    fontWeight: "700",
-    fontSize: 15,
-  },
-  modalAddText: {
-    color: c.background,
-    fontWeight: "700",
-    fontSize: 15,
-  },
-  selectionBar: {
-    marginBottom: 12,
-    padding: 12,
-    borderRadius: radius.md,
-    backgroundColor: c.surface,
-    borderWidth: 1,
-    borderColor: c.border,
-  },
-  selectionTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: c.text,
-    marginBottom: 8,
-  },
-  selectionActions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  selectionActionButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: radius.md,
-    backgroundColor: c.elevated,
-  },
-  selectionActionText: {
-    color: c.text,
-    fontWeight: "700",
-    fontSize: 13,
-  },
-});
-
+    screen: {
+      paddingTop: -10,
+      paddingHorizontal: 16,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: "800",
+      letterSpacing: -0.7,
+      color: c.text,
+      marginBottom: 4,
+    },
+    headerAction: {
+      padding: 8,
+    },
+    addButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: c.inverse,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: radius.md,
+      gap: 8,
+    },
+    addButtonPressed: {
+      opacity: 0.8,
+    },
+    addText: {
+      color: c.background,
+      fontWeight: "700",
+      fontSize: 14,
+    },
+    fileRowWrapper: {
+      borderBottomWidth: 1,
+      borderColor: c.border,
+      paddingVertical: 4,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: withAlpha(c.text, 0.4),
+      justifyContent: "flex-end",
+    },
+    modalContent: {
+      backgroundColor: c.elevated,
+      borderTopLeftRadius: radius.lg,
+      borderTopRightRadius: radius.lg,
+      paddingHorizontal: 20,
+      paddingTop: 12,
+      paddingBottom: 28,
+      maxHeight: "85%",
+      ...Platform.select({
+        ios: {
+          shadowColor: c.text,
+          shadowOffset: { width: 0, height: -6 },
+          shadowOpacity: 0.1,
+          shadowRadius: 20,
+        },
+        android: {
+          elevation: 10,
+        },
+      }),
+    },
+    modalHandle: {
+      width: 40,
+      height: 5,
+      borderRadius: 3,
+      backgroundColor: c.border,
+      alignSelf: "center",
+      marginBottom: 16,
+    },
+    modalTitle: {
+      fontSize: 22,
+      fontWeight: "700",
+      color: c.text,
+      marginBottom: 8,
+      letterSpacing: -0.5,
+    },
+    modalSubtitle: {
+      fontSize: 14,
+      color: c.secondary,
+      marginBottom: 20,
+    },
+    modalList: {
+      marginBottom: 20,
+    },
+    fileItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      borderRadius: radius.md,
+      backgroundColor: c.background,
+      borderWidth: 1,
+      borderColor: c.border,
+      marginBottom: 10,
+    },
+    fileItemSelected: {
+      backgroundColor: c.surface,
+      borderColor: c.text,
+    },
+    fileItemPressed: {
+      opacity: 0.7,
+      transform: [{ scale: 0.98 }],
+    },
+    fileItemInfo: {
+      flex: 1,
+      marginRight: 12,
+    },
+    fileName: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: c.text,
+    },
+    fileSubtitle: {
+      fontSize: 13,
+      color: c.secondary,
+      marginTop: 2,
+    },
+    emptyModalMessage: {
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 32,
+    },
+    emptyModalTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: c.text,
+      marginTop: 12,
+      marginBottom: 6,
+    },
+    emptyModalBody: {
+      textAlign: "center",
+      color: c.secondary,
+      fontSize: 14,
+      lineHeight: 20,
+      maxWidth: "80%",
+    },
+    modalActions: {
+      flexDirection: "row",
+      gap: 12,
+    },
+    modalButton: {
+      flex: 1,
+      paddingVertical: 14,
+      borderRadius: radius.md,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    modalButtonPressed: {
+      opacity: 0.8,
+      transform: [{ scale: 0.97 }],
+    },
+    modalCancelButton: {
+      backgroundColor: c.border,
+    },
+    modalAddButton: {
+      backgroundColor: c.inverse,
+    },
+    modalButtonDisabled: {
+      opacity: 0.5,
+    },
+    modalCancelText: {
+      color: c.text,
+      fontWeight: "700",
+      fontSize: 15,
+    },
+    modalAddText: {
+      color: c.background,
+      fontWeight: "700",
+      fontSize: 15,
+    },
+    selectionBar: {
+      marginBottom: 12,
+      padding: 12,
+      borderRadius: radius.md,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    selectionTitle: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: c.text,
+      marginBottom: 8,
+    },
+    selectionActions: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+    },
+    selectionActionButton: {
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: radius.md,
+      backgroundColor: c.elevated,
+    },
+    selectionActionText: {
+      color: c.text,
+      fontWeight: "700",
+      fontSize: 13,
+    },
+  });

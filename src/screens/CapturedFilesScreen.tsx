@@ -290,13 +290,14 @@ export function CapturedFilesScreen() {
 
 const getStyles = (c: any) =>
   StyleSheet.create({
-    screen: { 
-      flexGrow: 1, 
-      padding: 20, 
-      backgroundColor: c.background },
+    screen: {
+      flexGrow: 1,
+      padding: 20,
+      backgroundColor: c.background,
+    },
 
-    list: { 
-      overflow: "hidden" 
+    list: {
+      overflow: "hidden",
     },
     emptyStateContainer: {
       flex: 1,
@@ -327,4 +328,3 @@ const getStyles = (c: any) =>
     },
     selectionActionText: { color: c.text, fontWeight: "700", fontSize: 13 },
   });
-

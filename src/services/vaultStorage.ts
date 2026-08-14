@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 import { Folder, VaultFile } from "../types";
@@ -114,7 +114,7 @@ const writeDurableBackup = async (encrypted: string) => {
     try {
       await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
       const fileUri = `${dir.replace(/\/$/, "")}/${BACKUP_FILE}`;
-      await FileSystem.writeAsStringAsync(fileUri, encrypted, { encoding: "utf8" });
+      await FileSystem.writeAsStringAsync(fileUri, encrypted, { encoding: FileSystem.EncodingType.UTF8 });
     } catch (error) {
       console.warn("durable vault backup failed", error);
     }
@@ -131,7 +131,7 @@ const readDurableBackup = async (): Promise<{ files: VaultFile[]; folders: Folde
       const info = await FileSystem.getInfoAsync(fileUri);
       if (!info.exists) continue;
 
-      const raw = await FileSystem.readAsStringAsync(fileUri, { encoding: "utf8" });
+      const raw = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.UTF8 });
       return await decryptVault(raw);
     } catch (error) {
       console.warn("durable vault read failed", error);
@@ -162,7 +162,7 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
     return file.uri;
   }
 
-  const encryptedBase64 = await FileSystem.readAsStringAsync(file.uri, { encoding: "base64" });
+  const encryptedBase64 = await FileSystem.readAsStringAsync(file.uri, { encoding: FileSystem.EncodingType.Base64 });
   const encryptedBytes = base64ToBytes(encryptedBase64);
   const iv = encryptedBytes.slice(0, 12);
   const payload = encryptedBytes.slice(12);
@@ -171,7 +171,7 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
 
   const destination = `${(FileSystem as any).cacheDirectory ?? ""}${Date.now()}-${Math.random().toString(36).slice(2)}.${file.extension || "bin"}`;
   const plainBase64 = bytesToBase64(new Uint8Array(decrypted));
-  await FileSystem.writeAsStringAsync(destination, plainBase64, { encoding: "base64" });
+  await FileSystem.writeAsStringAsync(destination, plainBase64, { encoding: FileSystem.EncodingType.Base64 });
   return destination;
 }
 
@@ -185,7 +185,7 @@ export async function persistVaultFile(sourceUri: string, nameHint: string, exte
   await FileSystem.makeDirectoryAsync(PERSISTENT_VAULT_DIR, { intermediates: true });
 
   try {
-    const rawBase64 = await FileSystem.readAsStringAsync(sourceUri, { encoding: "base64" });
+    const rawBase64 = await FileSystem.readAsStringAsync(sourceUri, { encoding: FileSystem.EncodingType.Base64 });
     const rawBytes = base64ToBytes(rawBase64);
     const key = await getVaultKey();
     const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -193,7 +193,7 @@ export async function persistVaultFile(sourceUri: string, nameHint: string, exte
     const payload = new Uint8Array(iv.length + new Uint8Array(ciphertext).length);
     payload.set(iv, 0);
     payload.set(new Uint8Array(ciphertext), iv.length);
-    await FileSystem.writeAsStringAsync(destinationUri, bytesToBase64(payload), { encoding: "base64" });
+    await FileSystem.writeAsStringAsync(destinationUri, bytesToBase64(payload), { encoding: FileSystem.EncodingType.Base64 });
   } catch (error) {
     console.warn("persistVaultFile encryption failed", error);
     return sourceUri;
