@@ -223,19 +223,56 @@ export function CameraScreen() {
 
   const normalizeUri = (value?: string) => {
     if (!value) return "";
-    return value.startsWith("file://") ? value : `file://${value}`;
+    return value.startsWith("file://") || value.startsWith("content://") ? value : `file://${value}`;
   };
+
+  const showRetrySaveDialog = (message: string) =>
+    new Promise<boolean>((resolve) => {
+      Alert.alert(
+        "Save failed",
+        message,
+        [
+          { text: "Retry", onPress: () => resolve(true) },
+          { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+        ],
+        { cancelable: false },
+      );
+    });
 
   const saveImageToVault = async (uri: string) => {
     const normalizedUri = normalizeUri(uri);
+    try { console.debug('CameraScreen: saveImageToVault input uri', { uri, normalizedUri }); } catch(e){}
     const filename = `Scan-${Date.now()}.jpg`;
     const extension = extensionOf(normalizedUri) || "jpg";
     const fileId = `${Date.now()}-${Math.random()}`;
-    const durableUri = await persistVaultFile(
-      normalizedUri,
-      `${fileId}-scan`,
-      extension,
-    );
+
+    // Try to persist and offer a retry prompt if encryption fails. Do not silently write plaintext.
+    let durableUri: string | null = null;
+    let attempts = 0;
+    while (true) {
+      try {
+        durableUri = await persistVaultFile(
+          normalizedUri,
+          `${fileId}-scan`,
+          extension,
+        );
+        break;
+      } catch (err: any) {
+        attempts += 1;
+        console.debug('CameraScreen: persistVaultFile error', err);
+        const retry = await showRetrySaveDialog(
+          `Unable to save encrypted file. ${err?.message || String(err)}. Retry?`,
+        );
+        if (!retry || attempts >= 3) {
+          // Bubble up an error so the caller (scanFromCamera) can show its message
+          throw new Error(`Failed to save vault file: ${err?.message || String(err)}`);
+        }
+      }
+    }
+
+    if (!durableUri) throw new Error('Failed to obtain destination URI for saved file');
+
+    try { console.debug('CameraScreen: persistVaultFile returned', durableUri); } catch(e){}
     const fileInfo = await FileSystem.getInfoAsync(durableUri);
     const file: VaultFile = {
       id: fileId,

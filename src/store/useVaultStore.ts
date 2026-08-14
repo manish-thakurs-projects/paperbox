@@ -47,6 +47,15 @@ export const useVaultStore = create<State>((set, get) => ({
  folders: [],
  ready: false,
  hydrate: async () => {
+   // Migrate any files that were accidentally persisted in cache into the vault first
+   try {
+     const { migrateCacheFilesToVault } = await import("../services/vaultStorage");
+     await migrateCacheFilesToVault();
+   } catch (err) {
+     // Migration is best-effort; log and continue
+     console.warn("vault migration failed", err);
+   }
+
    const data = await loadVault();
    const files = normalizeFiles(data.files ?? []);
    set({ files, folders: data.folders ?? [], ready: true });

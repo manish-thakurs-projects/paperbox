@@ -1,7 +1,21 @@
 import * as DocumentPicker from "expo-document-picker";
 import { VaultFile } from "../types";
 import { extensionOf, kindOf } from "../utils/files";
+import { Alert } from "react-native";
 import { persistVaultFile } from "./vaultStorage";
+
+const showRetrySaveDialog = (message: string) =>
+  new Promise<boolean>((resolve) => {
+    Alert.alert(
+      "Save failed",
+      message,
+      [
+        { text: "Retry", onPress: () => resolve(true) },
+        { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+      ],
+      { cancelable: false },
+    );
+  });
 
 export async function pickFiles(): Promise<VaultFile[]> {
   const result = await DocumentPicker.getDocumentAsync({
@@ -15,12 +29,28 @@ export async function pickFiles(): Promise<VaultFile[]> {
     result.assets.map(async (a) => {
       const extension = extensionOf(a.name) || "bin";
       const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const durableUri = await persistVaultFile(a.uri, `${id}-${a.name.replace(/\.[^/.]+$/, "")}`, extension);
+
+      let durableUri: string | null = null;
+      let attempts = 0;
+      while (true) {
+        try {
+          durableUri = await persistVaultFile(a.uri, `${id}-${a.name.replace(/\.[^/.]+$/, "")}`, extension);
+          break;
+        } catch (err: any) {
+          attempts += 1;
+          const retry = await showRetrySaveDialog(
+            `Unable to save encrypted file ${a.name}. ${err?.message || String(err)}. Retry?`,
+          );
+          if (!retry || attempts >= 3) {
+            throw new Error(`Failed to save imported file: ${err?.message || String(err)}`);
+          }
+        }
+      }
 
       return {
         id,
         name: a.name,
-        uri: durableUri,
+        uri: durableUri ?? a.uri,
         mimeType: a.mimeType,
         size: a.size ?? 0,
         extension,

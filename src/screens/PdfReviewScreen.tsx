@@ -22,6 +22,7 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as Print from "expo-print";
+import { PDFDocument } from "pdf-lib";
 import DocumentScanner, {
   ResponseType,
   ScanDocumentResponseStatus,
@@ -35,6 +36,19 @@ import { useVaultStore } from "../store/useVaultStore";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { RootStackParams } from "../navigation/types";
 import { persistVaultFile } from "../services/vaultStorage";
+
+const showRetrySaveDialog = (message: string) =>
+  new Promise<boolean>((resolve) => {
+    Alert.alert(
+      "Save failed",
+      message,
+      [
+        { text: "Retry", onPress: () => resolve(true) },
+        { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+      ],
+      { cancelable: false },
+    );
+  });
 
 type Props = NativeStackScreenProps<RootStackParams, "PdfReview">;
 
@@ -203,7 +217,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
 
   const normalizeUri = (uri: string) => {
     if (!uri) return uri;
-    return uri.startsWith("file://") ? uri : `file://${uri}`;
+    return uri.startsWith("file://") || uri.startsWith("content://") ? uri : `file://${uri}`;
   };
 
   useEffect(() => {
@@ -215,7 +229,10 @@ export function PdfReviewScreen({ navigation, route }: Props) {
       const hydrated = await Promise.all(
         pages.map(async (page) => {
           if (page.previewUri) return page;
-          return { ...page, previewUri: await createPreviewUri(page.uri) };
+          try { console.debug('PdfReview: creating preview for page', page.uri); } catch(e){}
+          const pv = await createPreviewUri(page.uri);
+          try { console.debug('PdfReview: createPreviewUri returned', pv); } catch(e){}
+          return { ...page, previewUri: pv };
         }),
       );
 
@@ -343,54 +360,124 @@ export function PdfReviewScreen({ navigation, route }: Props) {
     }
   };
 
+  // Helpers for per-image page PDF generation and merging
+  const getImageDimensions = (uri: string): Promise<{ width: number; height: number }> =>
+    new Promise((resolve, reject) => {
+      Image.getSize(
+        uri,
+        (width, height) => resolve({ width, height }),
+        (error) => reject(error),
+      );
+    });
+
+  const computePageSizePt = (width: number, height: number) => {
+    // Keep pages to a reasonable maximum long edge in points (~A4 long edge = 842pt)
+    const MAX_PAGE_DIMENSION_PT = 842;
+    const scale = MAX_PAGE_DIMENSION_PT / Math.max(width, height);
+    return { widthPt: Math.max(1, Math.round(width * scale)), heightPt: Math.max(1, Math.round(height * scale)) };
+  };
+
+  const generateImagePagePdf = async (photoUri: string) => {
+    const { width, height } = await getImageDimensions(photoUri);
+    const { widthPt, heightPt } = computePageSizePt(width, height);
+
+    const extMatch = (photoUri || "").split("?")[0].split(".");
+    const ext = extMatch.length > 1 ? extMatch.pop()!.toLowerCase() : "jpg";
+    const mime = ext === "png" ? "image/png" : ext === "gif" ? "image/gif" : "image/jpeg";
+
+    const base64 = await FileSystem.readAsStringAsync(photoUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    if (!base64) throw new Error("Unable to read image for PDF generation");
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><style>@page{size:${widthPt}pt ${heightPt}pt;margin:0;}html,body{margin:0;padding:0;}img{display:block;width:${widthPt}pt;height:${heightPt}pt;margin:0;padding:0;border:none;}</style></head><body><img src="data:${mime};base64,${base64}" /></body></html>`;
+
+    const { uri: pagePdfUri } = await Print.printToFileAsync({ html, width: widthPt, height: heightPt });
+    if (!pagePdfUri) throw new Error("Unable to generate page PDF");
+    return pagePdfUri;
+  };
+
+  const uint8ArrayToBase64 = (u8: Uint8Array) => {
+    if (typeof Buffer !== "undefined" && typeof Buffer.from === "function") {
+      return Buffer.from(u8).toString("base64");
+    }
+    let CHUNK_SZ = 0x8000;
+    let index = 0;
+    let length = u8.length;
+    let result = "";
+    while (index < length) {
+      const chunk = u8.subarray(index, Math.min(index + CHUNK_SZ, length));
+      result += String.fromCharCode.apply(null, Array.from(chunk));
+      index += CHUNK_SZ;
+    }
+    if (typeof btoa === "function") return btoa(result);
+    return "";
+  };
+
   const createPdf = async () => {
     if (!pageUris.length) {
-      Alert.alert(
-        "No pages",
-        "Capture at least one page before creating a PDF.",
-      );
+      Alert.alert("No pages", "Capture at least one page before creating a PDF.");
       return;
     }
 
     try {
       setIsSaving(true);
 
-      const imagesHtml = await Promise.all(
-        pageUris.map(async (photoUri) => {
-          const resized = await ImageManipulator.manipulateAsync(
-            photoUri,
-            [{ resize: { width: 800 } }],
-            {
-              compress: 0.7,
-              format: ImageManipulator.SaveFormat.JPEG,
-              base64: true,
-            },
-          );
+      // Generate a one-page PDF per image sized to the image's own aspect ratio
+      const pagePdfUris = await Promise.all(pageUris.map((uri) => generateImagePagePdf(uri)));
 
-          if (!resized.base64) {
-            throw new Error("Unable to resize image for PDF generation");
-          }
+      // Merge all single-page PDFs into a single document, preserving page sizes
+      const mergedPdf = await PDFDocument.create();
+      const base64ToUint8Array = (base64: string) => {
+        const binaryString = typeof atob === 'function' ? atob(base64) : Buffer.from(base64, 'base64').toString('binary');
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes;
+      };
 
-          return `<div class="page"><img src="data:image/jpeg;base64,${resized.base64}" /></div>`;
-        }),
-      );
-
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=210mm, height=297mm, initial-scale=1.0" /><style>@page{size:210mm 297mm;margin:0;}html,body{margin:0;padding:0;background:#ffffff;width:210mm;height:297mm;}body{padding:0;} .page{width:210mm;height:297mm;display:flex;justify-content:center;align-items:center;overflow:hidden;page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid;} .page:last-child{page-break-after:auto;break-after:auto;} img{width:210mm;height:297mm;object-fit:cover;display:block;margin:0;padding:0;border:none;}</style></head><body>${imagesHtml.join("")}</body></html>`;
-      const { uri: generatedPdfUri } = await Print.printToFileAsync({ html });
-
-      if (!generatedPdfUri) {
-        throw new Error("Unable to generate PDF file");
+      for (const pagePdfUri of pagePdfUris) {
+        const pageBase64 = await FileSystem.readAsStringAsync(pagePdfUri, { encoding: FileSystem.EncodingType.Base64 });
+        const pageBytes = base64ToUint8Array(pageBase64);
+        const srcDoc = await PDFDocument.load(pageBytes);
+        const [copiedPage] = await mergedPdf.copyPages(srcDoc, [0]);
+        mergedPdf.addPage(copiedPage);
       }
 
+      const mergedBytes = await mergedPdf.save();
+      const mergedBase64 = uint8ArrayToBase64(mergedBytes);
       const filename = `Scan-${Date.now()}.pdf`;
+      const tempPdfUri = `${FileSystem.cacheDirectory}${filename}`;
+      await FileSystem.writeAsStringAsync(tempPdfUri, mergedBase64, { encoding: FileSystem.EncodingType.Base64 });
+
+      // Best-effort cleanup of intermediate per-page PDFs
+      pagePdfUris.forEach((u) => FileSystem.deleteAsync(u, { idempotent: true }).catch(() => {}));
+
       const fileId = `${Date.now()}-${Math.random()}`;
 
-      // Encrypt and persist the PDF to vault storage using the same method as photos
-      const encryptedUri = await persistVaultFile(
-        generatedPdfUri,
-        fileId,
-        "pdf",
-      );
+      // Persist the PDF with retry prompt on errors. Do not silently fall back to plaintext.
+      let encryptedUri: string | null = null;
+      let attempts = 0;
+      while (true) {
+        try {
+          encryptedUri = await persistVaultFile(tempPdfUri, fileId, "pdf");
+          break;
+        } catch (err: any) {
+          attempts += 1;
+          console.debug('PdfReview: persistVaultFile error', err);
+          const retry = await showRetrySaveDialog(
+            `Unable to save encrypted PDF. ${err?.message || String(err)}. Retry?`,
+          );
+          if (!retry || attempts >= 3) {
+            throw new Error(`Failed to save PDF to vault: ${err?.message || String(err)}`);
+          }
+        }
+      }
+
+      if (!encryptedUri) throw new Error('Failed to persist PDF');
+
       const fileSize = await getFileSize(encryptedUri);
 
       addFiles([

@@ -8,6 +8,7 @@ import { LockScreen } from "@/screens/LockScreen";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { useVaultStore } from "@/store/useVaultStore";
 import { checkLocalAuthenticationAvailable } from "@/utils/localAuthentication";
+import { clearDecryptedCache } from "@/services/vaultStorage";
 
 export default function App() {
   const theme = useSettingsStore((s) => s.theme);
@@ -20,7 +21,17 @@ export default function App() {
   const appState = useRef(AppState.currentState);
 
   useEffect(() => {
-    hydrate();
+    // Clear any leftover decrypted cache from prior runs before hydrating the vault
+    // to minimize risk of plaintext remnants on disk.
+    (async () => {
+      try {
+        await clearDecryptedCache();
+      } catch (e) {
+        try { console.debug('clearDecryptedCache failed on startup', e); } catch (_) {}
+      }
+      // Now hydrate the in-memory vault/index.
+      hydrate();
+    })();
   }, [hydrate]);
 
   useEffect(() => {
@@ -44,6 +55,30 @@ export default function App() {
 
   useEffect(() => {
     appState.current = AppState.currentState;
+  }, []);
+
+  // Clear decrypted cache on app lifecycle changes: when app backgrounds or resumes
+  // this reduces the window where plaintext temp files can remain on disk.
+  useEffect(() => {
+    const handler = (nextState: string) => {
+      try {
+        // Clear on background and on resume (active) to cover both transitions.
+        if (nextState === 'background' || nextState === 'inactive' || nextState === 'active') {
+          void clearDecryptedCache();
+        }
+      } catch (e) {
+        try { console.debug('clearDecryptedCache AppState handler failed', e); } catch(_){}
+      }
+    };
+
+    const sub = AppState.addEventListener ? AppState.addEventListener('change', handler) : null;
+    return () => {
+      try {
+        if (sub && typeof (sub as any).remove === 'function') (sub as any).remove();
+      } catch (e) {
+        // ignore
+      }
+    };
   }, []);
 
   return (

@@ -11,6 +11,8 @@ import {
   Modal,
   Alert,
   Linking,
+  AppState,
+  PermissionsAndroid,
 } from "react-native";
 import { Video, ResizeMode } from "expo-av";
 import { Feather } from "@expo/vector-icons";
@@ -24,8 +26,9 @@ import { withAlpha } from "../theme/utils";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as IntentLauncher from "expo-intent-launcher";
+import RNFS from 'react-native-fs';
 import * as ScreenCapture from "expo-screen-capture";
-import { decryptVaultFileForUse } from "../services/vaultStorage";
+import { decryptVaultFileForUse, clearDecryptedCache } from "../services/vaultStorage";
 
 type Props = NativeStackScreenProps<RootStackParams, "Preview">;
 
@@ -152,7 +155,7 @@ const saveUriToCache = async (
       uri,
       destination,
     );
-    return downloadedUri;
+    return normalizeFileUri(downloadedUri);
   }
 
   if (uri.endsWith(".enc") || uri.includes(".enc?")) {
@@ -170,13 +173,13 @@ const saveUriToCache = async (
       isPinned: false,
       tags: [],
     });
-    return decryptedUri;
+    return normalizeFileUri(decryptedUri);
   }
 
   if (uri.startsWith("content://") || uri.startsWith("file://")) {
     try {
       await FileSystem.copyAsync({ from: uri, to: destination });
-      return destination;
+      return normalizeFileUri(destination);
     } catch (e) {
       // Ignore copy failures and fall back to reading the file directly.
     }
@@ -188,14 +191,14 @@ const saveUriToCache = async (
       await fsAny.writeAsStringAsync(destination, base64, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      return destination;
+      return normalizeFileUri(destination);
     } catch (e) {
       // Ignore fallback cache write errors.
-      return uri;
+      return normalizeFileUri(uri);
     }
   }
 
-  return uri;
+  return normalizeFileUri(uri);
 };
 
 export function PreviewScreen({ route }: Props) {
@@ -219,30 +222,85 @@ export function PreviewScreen({ route }: Props) {
   const uri = file.uri;
   const name = file.name || "preview";
 
-  useEffect(() => {
-    void ScreenCapture.preventScreenCaptureAsync();
-    return () => {
-      void ScreenCapture.allowScreenCaptureAsync();
-    };
-  }, []);
-  const extension = file.extension?.toLowerCase() || "";
-  const mimeExtension = extensionFromMimeType(file.mimeType);
-  const ext =
-    extFromUri(uri) ||
-    extension ||
-    mimeExtension ||
-    (file.kind === "pdf" ? "pdf" : "");
-  const filename = ensureFilename(
-    name,
-    ext || extension || mimeExtension || "bin",
-  );
-
   const [loading, setLoading] = useState<boolean>(false);
   const [localUri, setLocalUri] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [zoomVisible, setZoomVisible] = useState<boolean>(false);
   const [pdfOpened, setPdfOpened] = useState(false);
   const videoRef = useRef<Video | null>(null);
+
+  useEffect(() => {
+    void ScreenCapture.preventScreenCaptureAsync();
+    return () => {
+      void ScreenCapture.allowScreenCaptureAsync();
+    };
+  }, []);
+
+  // Clear decrypted cache on background to minimize risk of plaintext remnants. Also try
+  // to delete any single-file preview currently in use.
+  // Keep decrypted file available when launching external viewers. When the app backgrounds
+  // because an external viewer was opened, skip immediate deletion so the viewer can read the
+  // file. Clear decrypted cache on resume instead.
+  const openedExternallyRef = useRef(false);
+
+  useEffect(() => {
+    const handler = (nextState: string) => {
+      try {
+        // If the app resumes, always clear decrypted cache (we no longer need the temp files).
+        if (nextState === 'active') {
+          openedExternallyRef.current = false;
+          void clearDecryptedCache();
+          return;
+        }
+
+        // If app goes to background/inactive and we specifically opened an external viewer,
+        // leave the decrypted file in place so the external app can read it. Otherwise purge.
+        if (nextState === 'background' || nextState === 'inactive') {
+          if (openedExternallyRef.current) {
+            try { console.debug('PreviewScreen: skipping clear on background because file opened externally'); } catch(e){}
+            return;
+          }
+
+          try {
+            void clearDecryptedCache();
+          } catch (e) {
+            try { console.debug('clearDecryptedCache call failed', e); } catch(_){ }
+          }
+
+          if (localUri && localUri !== uri) {
+            void (FileSystem as any)
+              .deleteAsync(localUri, { idempotent: true })
+              .catch((err: any) => { try { console.debug('PreviewScreen: background deleteAsync failed', err); } catch(e){} });
+            // remove reference so we don't attempt to double-delete on unmount
+            setLocalUri(null);
+          }
+        }
+      } catch (e) {
+        try { console.debug('PreviewScreen: AppState handler error', e); } catch(e){}
+      }
+    };
+
+    const sub = AppState.addEventListener ? AppState.addEventListener('change', handler) : null;
+    return () => {
+      try {
+        if (sub && typeof sub.remove === 'function') sub.remove();
+      } catch (e) {
+        // ignore cleanup errors
+      }
+    };
+  }, [localUri, uri]);
+  const extension = file.extension?.toLowerCase() || "";
+  const mimeExtension = extensionFromMimeType(file.mimeType);
+  const ext =
+    extension ||
+    mimeExtension ||
+    (file.kind === "pdf" ? "pdf" : "") ||
+    extFromUri(uri);
+  const filename = ensureFilename(
+    name,
+    ext || extension || mimeExtension || "bin",
+  );
+
 
   const isImage =
     file.kind === "image" ||
@@ -257,18 +315,43 @@ export function PreviewScreen({ route }: Props) {
     let mounted = true;
 
     async function maybeDownload() {
+      // If the stored URI points to an encrypted blob, always decrypt it first regardless of kind
+      try {
+        if (uri.endsWith('.enc') || uri.includes('.enc?')) {
+          setLoading(true);
+          try {
+            try { console.debug('PreviewScreen: encrypted uri detected, decrypting before preview', { uri }); } catch(e){}
+            const savedUri = await saveUriToCache(uri, filename);
+            try { console.debug('PreviewScreen: saveUriToCache (for encrypted) returned', savedUri); } catch(e){}
+            if (mounted) setLocalUri(savedUri);
+          } catch (e) {
+            console.debug('PreviewScreen: decrypting encrypted uri failed', e);
+            if (mounted) setError('Unable to prepare encrypted file for preview.');
+          } finally {
+            if (mounted) setLoading(false);
+          }
+          return;
+        }
+      } catch (e) {
+        // ignore URI helper errors
+      }
+
       if (isPdf || (!isImage && !isVideo && !isAudio)) {
         setLoading(true);
         try {
+          try { console.debug('PreviewScreen: preparing preview', { uri, filename, ext, isPdf, isImage, isVideo, isAudio }); } catch(e){}
           const savedUri = await saveUriToCache(uri, filename);
+          try { console.debug('PreviewScreen: saveUriToCache returned', savedUri); } catch(e){}
           // Cached preview URI prepared.
           if (mounted) setLocalUri(savedUri);
         } catch (e) {
+          console.debug('PreviewScreen: prepare preview failed', e);
           if (mounted) setError("Unable to prepare file for preview.");
         } finally {
           if (mounted) setLoading(false);
         }
       } else {
+        try { console.debug('PreviewScreen: using direct uri for preview', uri); } catch(e){}
         setLocalUri(uri);
       }
     }
@@ -281,10 +364,17 @@ export function PreviewScreen({ route }: Props) {
 
   useEffect(() => {
     return () => {
+      try { console.debug('PreviewScreen: cleaning up localUri', { localUri, uri, openedExternally: openedExternallyRef.current }); } catch(e){}
       if (!localUri || localUri === uri) return;
+      // If we intentionally opened the file externally, preserve the decrypted temp so the external
+      // app can read it. It will be cleared on resume by the AppState handler.
+      if (openedExternallyRef.current) {
+        try { console.debug('PreviewScreen: preserving decrypted temp because file was opened externally'); } catch(e){}
+        return;
+      }
       void (FileSystem as any)
         .deleteAsync(localUri, { idempotent: true })
-        .catch(() => undefined);
+        .catch((err: any) => { try { console.debug('PreviewScreen: deleteAsync failed', err); } catch(e){} });
     };
   }, [localUri, uri]);
 
@@ -306,7 +396,61 @@ export function PreviewScreen({ route }: Props) {
     };
   }, [localUri, isPdf, pdfOpened]);
 
+  const copyToDownloads = async (sourceUri: string, filename: string): Promise<string> => {
+    try {
+      // Normalize source path to a filesystem path for RNFS
+      const src = sourceUri.startsWith('file://') ? sourceUri.replace('file://', '') : sourceUri;
+      const rnfsAny = RNFS as any;
+      let downloadsDir = rnfsAny.DownloadDirectoryPath || (rnfsAny.ExternalStorageDirectoryPath ? `${rnfsAny.ExternalStorageDirectoryPath}/Download` : null);
+      if (!downloadsDir) {
+        throw new Error('No Downloads directory available on this device');
+      }
+ 
+      // Request write permission on Android if needed
+      try {
+        const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE);
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          throw new Error('WRITE_EXTERNAL_STORAGE permission denied');
+        }
+      } catch (permErr) {
+        // If permission request fails, log and continue; copying will likely fail.
+        try { console.debug('copyToDownloads: permission request failed', permErr); } catch(_){}
+      }
+ 
+     const destPath = `${downloadsDir}/${filename}`;
+     // If destination exists, overwrite
+     try {
+       const exists = await rnfsAny.exists(destPath);
+       if (exists) {
+         await rnfsAny.unlink(destPath).catch(() => {});
+       }
+     } catch (e) {
+       // ignore
+     }
+
+     // Use expo-file-system to read the source as base64 then write with RNFS to Downloads.
+     try {
+       // Ensure the source file exists according to expo-file-system
+       const fsAny = FileSystem as any;
+       const info = await fsAny.getInfoAsync(sourceUri, { size: true });
+       if (!info.exists) throw new Error('Source file does not exist for export');
+
+       const base64 = await fsAny.readAsStringAsync(sourceUri, { encoding: fsAny.EncodingType.Base64 });
+       // RNFS.writeFile expects path without file://
+       await rnfsAny.writeFile(destPath, base64, 'base64');
+       return `file://${destPath}`;
+     } catch (e) {
+       try { console.debug('copyToDownloads failed', e); } catch(_){ }
+       throw e;
+     }
+   } catch (e) {
+     try { console.debug('copyToDownloads failed', e); } catch(_){ }
+     throw e;
+   }
+  };
   const openExternally = async () => {
+    // Mark we're initiating an external handoff so AppState handler won't purge decrypted files during export/launch.
+    openedExternallyRef.current = true;
     try {
       let target = localUri;
       if (!target) {
@@ -326,6 +470,21 @@ export function PreviewScreen({ route }: Props) {
 
       if (Platform.OS === "android") {
         let dataUri = finalTarget;
+        // Copy permanent export into Downloads so external apps can access it indefinitely.
+        try {
+          const exported = await copyToDownloads(dataUri, filename);
+          if (exported) {
+            dataUri = exported;
+            try { console.debug('openExternally: exported to Downloads', dataUri); } catch(_){}
+          }
+        } catch (e) {
+          try { console.debug('openExternally: export to Downloads failed, falling back to temp file', e); } catch(_){}
+        }
+
+        // Normalize to file:// when necessary for downstream handlers
+        if (!dataUri.startsWith("file://") && !dataUri.startsWith("content://") && dataUri.startsWith("/")) {
+          dataUri = `file://${dataUri}`;
+        }
 
         if (dataUri.startsWith("file://")) {
           const fsAny = FileSystem as any;
@@ -344,35 +503,47 @@ export function PreviewScreen({ route }: Props) {
         }
 
         try {
+          // Launch Intent with GRANT_READ_URI_PERMISSION so the external app can read the content:// URI
+          // returned by getContentUriAsync. Use flag value 2 (FLAG_GRANT_READ_URI_PERMISSION).
           await IntentLauncher.startActivityAsync(
             "android.intent.action.VIEW",
             {
               data: dataUri,
               type: mimeType,
-              flags: 1,
+              flags: 2,
             },
           );
           return;
         } catch (e) {
+          // Revert flag — external launch didn't happen.
+          try { openedExternallyRef.current = false; } catch (_) {}
           // If IntentLauncher fails, we will try a generic open fallback.
         }
       }
 
       try {
+        // open with Linking; assume finalTarget is a file:// or content:// URI. The openedExternallyRef
+        // was set at the start of this function to prevent premature purges; only revert if this call fails.
         await Linking.openURL(finalTarget);
         return;
       } catch (e) {
+        try { openedExternallyRef.current = false; } catch(_){ }
         // Linking failed, continue to fallback sharing.
       }
 
       try {
         const shareTarget = target;
         if (shareTarget) {
-          // Fallback to sharing if external open was not available.
-          await Sharing.shareAsync(shareTarget);
-          return;
+          try {
+            // Fallback to sharing if external open was not available.
+            await Sharing.shareAsync(shareTarget);
+            return;
+          } finally {
+            // leave openedExternallyRef as true until resume so the decrypted cache isn't removed while the chooser is active.
+          }
         }
       } catch (e) {
+        try { openedExternallyRef.current = false; } catch(_){}
         // Share fallback failed, surface an error to the user.
       }
 
@@ -412,7 +583,8 @@ export function PreviewScreen({ route }: Props) {
 
   // IMAGE with zoom button
   if (isImage) {
-    const imageUri = localUri || uri;
+    const rawImageUri = localUri || uri;
+    const imageUri = normalizeFileUri(rawImageUri);
     return (
       <>
         <Screen style={styles.content}>
@@ -451,6 +623,7 @@ export function PreviewScreen({ route }: Props) {
   if (isVideo) {
     const windowWidth = Dimensions.get("window").width;
     const videoHeight = windowWidth * (9 / 16);
+    const videoUri = normalizeFileUri(localUri || uri);
     return (
       <Screen style={styles.content}>
         <View style={styles.mediaContainer}>
@@ -458,7 +631,7 @@ export function PreviewScreen({ route }: Props) {
             ref={(r) => {
               videoRef.current = r;
             }}
-            source={{ uri: localUri || uri }}
+            source={{ uri: videoUri }}
             style={[styles.video, { width: windowWidth, height: videoHeight }]}
             useNativeControls
             resizeMode={ResizeMode.CONTAIN}
