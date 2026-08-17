@@ -7,9 +7,10 @@ type Props = {
   filename?: string;
   onError?: (err: any) => void;
   onOpenExternal?: () => void;
+  showOpenExternal?: boolean; // if false, hide the footer "Open in other app" button
 };
 
-export default function PdfViewer({ uri, filename, onError, onOpenExternal }: Props) {
+export default function PdfViewer({ uri, filename, onError, onOpenExternal, showOpenExternal = true }: Props) {
   const [loading, setLoading] = useState<boolean>(true);
   const [page, setPage] = useState<number>(1);
   const [numberOfPages, setNumberOfPages] = useState<number>(0);
@@ -43,14 +44,6 @@ export default function PdfViewer({ uri, filename, onError, onOpenExternal }: Pr
         style={styles.pdf}
       />
 
-      <View style={styles.footer}>
-        <Text style={styles.pageLabel}>{page}/{numberOfPages || "?"}</Text>
-        {onOpenExternal ? (
-          <TouchableOpacity style={styles.openButton} onPress={onOpenExternal}>
-            <Text style={styles.openButtonText}>Open in other app</Text>
-          </TouchableOpacity>
-        ) : null}
-      </View>
     </View>
   );
 }

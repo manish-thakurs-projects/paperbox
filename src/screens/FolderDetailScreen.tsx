@@ -421,6 +421,7 @@ export function FolderDetailScreen({ route, navigation }: Props) {
         onDelete={deleteFile}
         onInfo={goToInfo}
         onRemoveFromFolder={removeFromFolder}
+        onDownload={() => { closeActions(); }}
       />
       <FolderMoveModal
         visible={selectionMoveVisible}

@@ -255,6 +255,7 @@ export function SearchScreen() {
         }}
         onRename={renameFileAction}
         onRemoveFromFolder={actionFile?.folderId ? removeFromFolder : undefined}
+        onDownload={() => { closeActions(); }}
       />
       <FolderMoveModal
         visible={moveVisible}

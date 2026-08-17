@@ -496,6 +496,7 @@ export function CameraScreen() {
         onShare={shareFile}
         onDelete={deleteFile}
         onInfo={goToInfo}
+        onDownload={() => { closeActions(); }}
       />
       <FolderMoveModal
         visible={moveVisible}

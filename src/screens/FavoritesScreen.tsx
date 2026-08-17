@@ -422,6 +422,7 @@ export function FavoritesScreen() {
         onShare={shareFile}
         onDelete={deleteFile}
         onInfo={goToInfo}
+        onDownload={() => { closeActions(); }}
       />
       <FolderMoveModal
         visible={moveVisible}

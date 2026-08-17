@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useLayoutEffect } from "react";
 import {
   Image,
   StyleSheet,
@@ -13,6 +13,7 @@ import {
   Linking,
   AppState,
   PermissionsAndroid,
+  Pressable,
 } from "react-native";
 import { Video, ResizeMode } from "expo-av";
 import { Feather } from "@expo/vector-icons";
@@ -33,6 +34,13 @@ import PdfViewer from "../components/PdfViewer";
 
 type Props = NativeStackScreenProps<RootStackParams, "Preview">;
 
+// Ignore AppState "active" transitions that happen within this window of a backgrounding event
+// that was caused by us launching an external viewer/chooser. Android frequently flickers the
+// host app through background -> active -> background again while a chooser sheet or a
+// permission dialog is shown; treating every one of those blips as "the user came back" causes
+// us to clear the decrypted cache out from under a file that's still being read.
+const EXTERNAL_HANDOFF_GRACE_MS = 1500;
+
 const extFromUri = (uri: string) => {
   try {
     const last = uri.split("?")[0].split("/").pop() || "";
@@ -52,6 +60,9 @@ const normalizeFileUri = (uri: string) =>
   uri.startsWith("file://") || uri.startsWith("content://")
     ? uri
     : `file://${uri}`;
+
+const isEncryptedUri = (uri?: string | null) =>
+  !!uri && (uri.endsWith(".enc") || uri.includes(".enc?"));
 
 const ensureFilename = (name: string, ext: string) => {
   const cleaned = name.replace(/[^a-z0-9\-_.]/gi, "_");
@@ -159,7 +170,7 @@ const saveUriToCache = async (
     return normalizeFileUri(downloadedUri);
   }
 
-  if (uri.endsWith(".enc") || uri.includes(".enc?")) {
+  if (isEncryptedUri(uri)) {
     const decryptedUri = await decryptVaultFileForUse({
       id: "preview",
       name: filename,
@@ -202,7 +213,7 @@ const saveUriToCache = async (
   return normalizeFileUri(uri);
 };
 
-export function PreviewScreen({ route }: Props) {
+export function PreviewScreen({ route, navigation }: Props) {
   const { colors } = usePaperTheme();
   const styles = getStyles(colors);
   const file = useVaultStore((s) =>
@@ -228,9 +239,31 @@ export function PreviewScreen({ route }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [zoomVisible, setZoomVisible] = useState<boolean>(false);
   const [pdfOpened, setPdfOpened] = useState(false);
-  const [shareLoading, setShareLoading] = useState<boolean>(false);
-  const [shareMessage, setShareMessage] = useState<string>("");
   const videoRef = useRef<Video | null>(null);
+  
+  // reloadKey forces re-run of preview preparation
+  const [reloadKey, setReloadKey] = useState(0);
+
+  // Keep a ref mirror of localUri so background/AppState handlers and async callbacks always see
+  // the latest value without needing to be re-subscribed on every state change.
+  const localUriRef = useRef<string | null>(null);
+  useEffect(() => {
+    localUriRef.current = localUri;
+  }, [localUri]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      title: name,
+      headerRight: () => (
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Pressable onPress={() => { setLocalUri(null); setError(null); setReloadKey((k) => k + 1); }} style={{ paddingHorizontal: 12 }}>
+            <Feather name="refresh-ccw" size={20} color={colors.text} />
+          </Pressable>
+        </View>
+      ),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigation, colors.text, file]);
 
   useEffect(() => {
     void ScreenCapture.preventScreenCaptureAsync();
@@ -243,14 +276,27 @@ export function PreviewScreen({ route }: Props) {
   // to delete any single-file preview currently in use.
   // Keep decrypted file available when launching external viewers. When the app backgrounds
   // because an external viewer was opened, skip immediate deletion so the viewer can read the
-  // file. Clear decrypted cache on resume instead.
+  // file. Clear decrypted cache on resume instead — but only on a "real" resume, not on the
+  // background/active flicker that chooser sheets and permission dialogs cause.
   const openedExternallyRef = useRef(false);
+  const lastBackgroundedAtRef = useRef<number | null>(null);
 
   useEffect(() => {
     const handler = (nextState: string) => {
       try {
-        // If the app resumes, always clear decrypted cache (we no longer need the temp files).
         if (nextState === 'active') {
+          const backgroundedAt = lastBackgroundedAtRef.current;
+          const elapsed = backgroundedAt ? Date.now() - backgroundedAt : null;
+          const isLikelyHandoffFlicker =
+            openedExternallyRef.current &&
+            elapsed !== null &&
+            elapsed < EXTERNAL_HANDOFF_GRACE_MS;
+
+          if (isLikelyHandoffFlicker) {
+            try { console.debug('PreviewScreen: ignoring transient active flicker during external handoff', { elapsed }); } catch(e){}
+            return;
+          }
+
           openedExternallyRef.current = false;
           void clearDecryptedCache();
           return;
@@ -259,6 +305,8 @@ export function PreviewScreen({ route }: Props) {
         // If app goes to background/inactive and we specifically opened an external viewer,
         // leave the decrypted file in place so the external app can read it. Otherwise purge.
         if (nextState === 'background' || nextState === 'inactive') {
+          lastBackgroundedAtRef.current = Date.now();
+
           if (openedExternallyRef.current) {
             try { console.debug('PreviewScreen: skipping clear on background because file opened externally'); } catch(e){}
             return;
@@ -270,9 +318,10 @@ export function PreviewScreen({ route }: Props) {
             try { console.debug('clearDecryptedCache call failed', e); } catch(_){ }
           }
 
-          if (localUri && localUri !== uri) {
+          const currentLocalUri = localUriRef.current;
+          if (currentLocalUri && currentLocalUri !== uri && currentLocalUri.startsWith('file://')) {
             void (FileSystem as any)
-              .deleteAsync(localUri, { idempotent: true })
+              .deleteAsync(currentLocalUri, { idempotent: true })
               .catch((err: any) => { try { console.debug('PreviewScreen: background deleteAsync failed', err); } catch(e){} });
             // remove reference so we don't attempt to double-delete on unmount
             setLocalUri(null);
@@ -291,7 +340,7 @@ export function PreviewScreen({ route }: Props) {
         // ignore cleanup errors
       }
     };
-  }, [localUri, uri]);
+  }, [uri]);
   const extension = file.extension?.toLowerCase() || "";
   const mimeExtension = extensionFromMimeType(file.mimeType);
   const ext =
@@ -320,7 +369,7 @@ export function PreviewScreen({ route }: Props) {
     async function maybeDownload() {
       // If the stored URI points to an encrypted blob, always decrypt it first regardless of kind
       try {
-        if (uri.endsWith('.enc') || uri.includes('.enc?')) {
+        if (isEncryptedUri(uri)) {
           setLoading(true);
           try {
             try { console.debug('PreviewScreen: encrypted uri detected, decrypting before preview', { uri }); } catch(e){}
@@ -363,7 +412,7 @@ export function PreviewScreen({ route }: Props) {
     return () => {
       mounted = false;
     };
-  }, [uri]);
+  }, [uri, reloadKey]);
 
   useEffect(() => {
     return () => {
@@ -375,6 +424,7 @@ export function PreviewScreen({ route }: Props) {
         try { console.debug('PreviewScreen: preserving decrypted temp because file was opened externally'); } catch(e){}
         return;
       }
+      if (!localUri.startsWith('file://')) return;
       void (FileSystem as any)
         .deleteAsync(localUri, { idempotent: true })
         .catch((err: any) => { try { console.debug('PreviewScreen: deleteAsync failed', err); } catch(e){} });
@@ -453,8 +503,9 @@ export function PreviewScreen({ route }: Props) {
   const openExternally = async () => {
     // Mark we're initiating an external handoff so AppState handler won't purge decrypted files during export/launch.
     openedExternallyRef.current = true;
+    lastBackgroundedAtRef.current = null;
     try {
-      let target = localUri;
+      let target = localUriRef.current;
       if (!target) {
         target = await saveUriToCache(uri, filename);
         if (target) {
@@ -473,14 +524,35 @@ export function PreviewScreen({ route }: Props) {
 
       let dataUri = finalTarget;
       try {
-        if (dataUri && (dataUri.endsWith('.enc') || dataUri.includes('.enc?'))) {
+        if (isEncryptedUri(dataUri)) {
           try {
             // Keep decrypted temp available for external app to read; mark openedExternallyRef
             openedExternallyRef.current = true;
+            // If dataUri is a content:// URI (converted earlier), copy it to app cache so
+            // decryptVaultFileForUse can read it (expo FileSystem.readAsStringAsync doesn't support content://).
+            const fsAny = FileSystem as any;
+            let decryptSource = dataUri;
+            if (decryptSource.startsWith('content://')) {
+              try {
+                const cacheDir = getCacheDirectory();
+                const tmpName = `tmp-decrypt-${Date.now()}-${Math.random().toString(36).slice(2)}.${(filename.includes('.') ? filename.split('.').pop() : 'enc')}`;
+                const tmpDest = `${cacheDir}${tmpName}`;
+                try {
+                  await fsAny.copyAsync({ from: decryptSource, to: tmpDest });
+                  decryptSource = tmpDest;
+                  try { console.debug('openExternally: copied content:// to cache for decrypt', { decryptSource }); } catch(_){ }
+                } catch (copyErr) {
+                  try { console.debug('openExternally: copyAsync from content:// for decrypt failed', copyErr); } catch(_){ }
+                }
+              } catch (copyErr2) {
+                try { console.debug('openExternally: copying content:// for decrypt failed', copyErr2); } catch(_){ }
+              }
+            }
+
             const decrypted = await decryptVaultFileForUse({
               id: 'external',
               name: filename,
-              uri: dataUri,
+              uri: decryptSource,
               size: 0,
               extension: filename.includes('.') ? filename.split('.').pop() || 'bin' : 'bin',
               kind: 'other',
@@ -513,10 +585,10 @@ export function PreviewScreen({ route }: Props) {
           // Verify the file exists and is non-empty before attempting an external handoff.
           try {
             const fsAny = FileSystem as any;
-            const infoCheck = await fsAny.getInfoAsync(normalizeFileUri(finalTarget), { size: true });
+            const infoCheck = await fsAny.getInfoAsync(normalizeFileUri(dataUri), { size: true });
             if (!infoCheck.exists || (infoCheck.size !== undefined && infoCheck.size === 0)) {
               // If the prepared local file is missing/empty, surface an error instead of launching a blank viewer.
-              try { console.debug('openExternally: file missing or empty', { finalTarget, infoCheck }); } catch (_) {}
+              try { console.debug('openExternally: file missing or empty', { dataUri, infoCheck }); } catch (_) {}
               setError('File not available to open externally.');
               openedExternallyRef.current = false;
               return;
@@ -550,7 +622,9 @@ export function PreviewScreen({ route }: Props) {
           // If conversion to content:// succeeded, try launching intent directly (preferred).
           if (dataUri.startsWith("content://")) {
             try {
-              // Add FLAG_GRANT_READ_URI_PERMISSION (2) and FLAG_ACTIVITY_NEW_TASK to be robust across viewers.
+              // FLAG_GRANT_READ_URI_PERMISSION (1) | FLAG_ACTIVITY_NEW_TASK (0x10000000).
+              // NOTE: 2 is FLAG_GRANT_WRITE_URI_PERMISSION, not read — using it here was the
+              // original bug that made every external viewer fail to read the handed-off file.
               const INTENT_FLAGS = 1 | 0x10000000;
               await IntentLauncher.startActivityAsync(
                 "android.intent.action.VIEW",
@@ -622,9 +696,9 @@ try {
       }
 
       try {
-        // open with Linking; assume finalTarget is a file:// or content:// URI. The openedExternallyRef
+        // open with Linking; assume dataUri is a file:// or content:// URI. The openedExternallyRef
         // was set at the start of this function to prevent premature purges; only revert if this call fails.
-        await Linking.openURL(finalTarget);
+        await Linking.openURL(dataUri);
         return;
       } catch (e) {
         try { openedExternallyRef.current = false; } catch(_){ }
@@ -632,7 +706,7 @@ try {
       }
 
       try {
-        const shareTarget = target;
+        const shareTarget = dataUri || target;
         if (shareTarget) {
           try {
             // Fallback to sharing if external open was not available.
@@ -671,12 +745,6 @@ try {
         <View style={styles.center}>
           <Feather name="alert-circle" size={48} color={colors.secondary} />
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity
-            onPress={openExternally}
-            style={styles.primaryButton}
-          >
-            <Text style={styles.primaryButtonText}>Open in other app</Text>
-          </TouchableOpacity>
         </View>
       </Screen>
     );
@@ -750,12 +818,6 @@ try {
         <View style={styles.center}>
           <Feather name="volume-2" size={64} color={colors.text} />
           <Text style={styles.audioLabel}>Audio file</Text>
-          <TouchableOpacity
-            onPress={openExternally}
-            style={styles.primaryButton}
-          >
-            <Text style={styles.primaryButtonText}>Open / Share</Text>
-          </TouchableOpacity>
         </View>
       </Screen>
     );
@@ -775,6 +837,29 @@ try {
             filename={filename}
           onError={async (e) => {
               try { console.debug('PdfViewer reported error', e); } catch(_){ }
+
+            // Guard: only attempt a content:// retry if we still have a genuinely decrypted
+            // local file. If localUri has been cleared or somehow points back at the encrypted
+            // .enc blob (e.g. a background/active flicker purged the decrypted cache mid-read),
+            // retrying will just hand react-native-pdf ciphertext again and it will fail the
+            // same way. In that case, re-decrypt from scratch instead of retrying blindly.
+            const currentLocalUri = localUriRef.current;
+            if (!currentLocalUri || isEncryptedUri(currentLocalUri)) {
+              try { console.debug('PdfViewer onError: no valid decrypted file to retry with, re-preparing preview', { currentLocalUri }); } catch(_){ }
+              try {
+                setLoading(true);
+                const savedUri = await saveUriToCache(uri, filename);
+                setLocalUri(savedUri);
+              } catch (reErr) {
+                try { console.debug('PdfViewer onError: re-decrypt failed', reErr); } catch(_){ }
+                setError('Unable to render PDF in-app. Opening in default viewer...');
+                void openExternally();
+              } finally {
+                setLoading(false);
+              }
+              return;
+            }
+
             // Try to convert local file:// path to a content:// URI and retry in-app render once.
             try {
               const fsAny = FileSystem as any;
@@ -819,84 +904,8 @@ try {
             PDFs open in your device's default viewer.
           </Text>
 
-          <TouchableOpacity
-            onPress={openExternally}
-            style={styles.primaryButton}
-          >
-            <Text style={styles.primaryButtonText}>Open PDF</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={async () => {
-              setShareLoading(true);
-              setShareMessage('Decrypting file...');
-              try {
-                let shareTarget = target;
-                if (!shareTarget) {
-                  setError('No file available to share.');
-                  return;
-                }
-
-                // If encrypted, decrypt first
-                try {
-                  if (shareTarget.endsWith('.enc') || shareTarget.includes('.enc?')) {
-                    setShareMessage('Decrypting file...');
-                    const decrypted = await decryptVaultFileForUse({
-                      id: 'share',
-                      name: filename,
-                      uri: shareTarget,
-                      size: 0,
-                      extension: filename.includes('.') ? filename.split('.').pop() || 'bin' : 'bin',
-                      kind: 'other',
-                      createdAt: new Date().toISOString(),
-                      isFavorite: false,
-                      isPinned: false,
-                      tags: [],
-                    });
-                    shareTarget = decrypted;
-                  }
-                } catch (e) {
-                  console.debug('PreviewScreen: decrypt for share failed', e);
-                  setError('Unable to decrypt file for sharing.');
-                  return;
-                }
-
-                // Convert file:// to content:// on Android when possible so external apps can read it
-                try {
-                  const fsAny = FileSystem as any;
-                  if (Platform.OS === 'android' && typeof fsAny.getContentUriAsync === 'function' && shareTarget.startsWith('file://')) {
-                    setShareMessage('Preparing file for sharing...');
-                    const content = await fsAny.getContentUriAsync(shareTarget);
-                    const contentUri = typeof content === 'string' ? content : content?.uri;
-                    if (contentUri) shareTarget = contentUri;
-                  }
-                } catch (e) {
-                  // ignore content uri conversion failures and continue with original path
-                }
-
-                // Finally share
-                try {
-                  await Sharing.shareAsync(shareTarget);
-                } catch (e) {
-                  console.debug('PreviewScreen: shareAsync failed', e);
-                  setError('Share failed. Please try again.');
-                }
-              } finally {
-                setShareLoading(false);
-                setShareMessage('');
-              }
-            }}
-            style={[styles.primaryButton, { marginTop: 10 }]}
-          >
-            <Text style={styles.primaryButtonText}>Share / Open with…</Text>
-          </TouchableOpacity>
+          <Text style={[styles.copy, { marginTop: 10 }]}>Use the Refresh action in the header to re-prepare this preview.</Text>
         </View>
-        {shareLoading ? (
-          <View style={styles.pdfLoader} pointerEvents="none">
-            <ActivityIndicator size="large" color={colors.text} />
-            <Text style={styles.loadingText}>{shareMessage || 'Preparing file...'}</Text>
-          </View>
-        ) : null}
       </Screen>
     );
   }
@@ -910,9 +919,6 @@ try {
         <Text style={styles.copy}>
           Preview is not available for this file type.
         </Text>
-        <TouchableOpacity onPress={openExternally} style={styles.primaryButton}>
-          <Text style={styles.primaryButtonText}>Open in other app</Text>
-        </TouchableOpacity>
       </View>
     </Screen>
   );
