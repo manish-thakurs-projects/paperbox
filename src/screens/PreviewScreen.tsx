@@ -594,6 +594,7 @@ try {
 
       setError("Unable to open file in another app.");
     } catch (_e) {
+      try { openedExternallyRef.current = false; } catch(_) {}
       setError("Unable to open file in another app.");
     }
   };
