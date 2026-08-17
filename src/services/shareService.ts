@@ -77,14 +77,21 @@ async function prepareFileForSharing(file: VaultFile): Promise<string> {
   return downloadIfNeeded(file);
 }
 
+let _shareLock = false;
 export async function shareVaultFile(file: VaultFile): Promise<void> {
-  const targetUri = await prepareFileForSharing(file);
+  if (_shareLock) throw new Error('Another share request is being processed now.');
+  _shareLock = true;
+  try {
+    const targetUri = await prepareFileForSharing(file);
 
-  if (!(await Sharing.isAvailableAsync())) {
-    throw new Error("Sharing not available on this device");
+    if (!(await Sharing.isAvailableAsync())) {
+      throw new Error("Sharing not available on this device");
+    }
+
+    await Sharing.shareAsync(targetUri, { dialogTitle: file.name });
+  } finally {
+    _shareLock = false;
   }
-
-  await Sharing.shareAsync(targetUri, { dialogTitle: file.name });
 }
 
 export async function shareVaultFiles(files: VaultFile[]): Promise<void> {

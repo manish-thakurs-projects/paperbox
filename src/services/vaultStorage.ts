@@ -460,11 +460,42 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
     throw checkErr;
   }
 
-  // Ensure dedicated decrypted cache directory exists, then write file there.
-  try {
-    await FileSystem.makeDirectoryAsync(DECRYPTED_CACHE_DIR, { intermediates: true });
-  } catch (e) {
-    // Ignore failures to create; write will likely fail later if directory truly unavailable.
+  // Ensure dedicated decrypted cache directory exists and is writable, then write file there.
+  const ensureDir = async (dir: string) => {
+    try {
+      await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+    } catch (e) {
+      try { console.debug('decryptVaultFileForUse: makeDirectoryAsync failed for', dir, e); } catch(_) {}
+    }
+
+    try {
+      const info = await (FileSystem as any).getInfoAsync(dir);
+      if (info.exists && info.isDirectory) return true;
+    } catch (e) {
+      try { console.debug('decryptVaultFileForUse: getInfoAsync failed for dir', dir, e); } catch(_) {}
+    }
+    return false;
+  };
+
+  // Try with configured DECRYPTED_CACHE_DIR, then without file:// prefix as fallback, then fallback to cacheDirectory root.
+  let writableDir = DECRYPTED_CACHE_DIR;
+  let dirOk = await ensureDir(writableDir);
+  if (!dirOk) {
+    // try alternate form without file://
+    const alt = writableDir.startsWith('file://') ? writableDir.replace('file://', '') : `file://${writableDir}`;
+    dirOk = await ensureDir(alt);
+    if (dirOk) writableDir = alt;
+  }
+  if (!dirOk) {
+    // last resort: use FileSystem.cacheDirectory root (may be with file:// already)
+    const root = (FileSystem as any).cacheDirectory || (FileSystem as any).documentDirectory || '';
+    if (root) {
+      writableDir = root.endsWith('/') ? `${root}` : `${root}/`;
+      dirOk = await ensureDir(writableDir);
+    }
+  }
+  if (!dirOk) {
+    try { console.debug('decryptVaultFileForUse: no writable decrypted cache directory available; will attempt write and likely fail'); } catch(_) {}
   }
 
   const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${file.extension || "bin"}`;
