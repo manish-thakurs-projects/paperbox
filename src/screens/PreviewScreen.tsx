@@ -228,6 +228,8 @@ export function PreviewScreen({ route }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [zoomVisible, setZoomVisible] = useState<boolean>(false);
   const [pdfOpened, setPdfOpened] = useState(false);
+  const [shareLoading, setShareLoading] = useState<boolean>(false);
+  const [shareMessage, setShareMessage] = useState<string>("");
   const videoRef = useRef<Video | null>(null);
 
   useEffect(() => {
@@ -748,10 +750,62 @@ try {
 
           <TouchableOpacity
             onPress={async () => {
+              setShareLoading(true);
+              setShareMessage('Decrypting file...');
               try {
-                if (target) await Sharing.shareAsync(target);
-              } catch (_e) {
-                setError("Share failed. Please try again.");
+                let shareTarget = target;
+                if (!shareTarget) {
+                  setError('No file available to share.');
+                  return;
+                }
+
+                // If encrypted, decrypt first
+                try {
+                  if (shareTarget.endsWith('.enc') || shareTarget.includes('.enc?')) {
+                    setShareMessage('Decrypting file...');
+                    const decrypted = await decryptVaultFileForUse({
+                      id: 'share',
+                      name: filename,
+                      uri: shareTarget,
+                      size: 0,
+                      extension: filename.includes('.') ? filename.split('.').pop() || 'bin' : 'bin',
+                      kind: 'other',
+                      createdAt: new Date().toISOString(),
+                      isFavorite: false,
+                      isPinned: false,
+                      tags: [],
+                    });
+                    shareTarget = decrypted;
+                  }
+                } catch (e) {
+                  console.debug('PreviewScreen: decrypt for share failed', e);
+                  setError('Unable to decrypt file for sharing.');
+                  return;
+                }
+
+                // Convert file:// to content:// on Android when possible so external apps can read it
+                try {
+                  const fsAny = FileSystem as any;
+                  if (Platform.OS === 'android' && typeof fsAny.getContentUriAsync === 'function' && shareTarget.startsWith('file://')) {
+                    setShareMessage('Preparing file for sharing...');
+                    const content = await fsAny.getContentUriAsync(shareTarget);
+                    const contentUri = typeof content === 'string' ? content : content?.uri;
+                    if (contentUri) shareTarget = contentUri;
+                  }
+                } catch (e) {
+                  // ignore content uri conversion failures and continue with original path
+                }
+
+                // Finally share
+                try {
+                  await Sharing.shareAsync(shareTarget);
+                } catch (e) {
+                  console.debug('PreviewScreen: shareAsync failed', e);
+                  setError('Share failed. Please try again.');
+                }
+              } finally {
+                setShareLoading(false);
+                setShareMessage('');
               }
             }}
             style={[styles.primaryButton, { marginTop: 10 }]}
@@ -759,6 +813,12 @@ try {
             <Text style={styles.primaryButtonText}>Share / Open with…</Text>
           </TouchableOpacity>
         </View>
+        {shareLoading ? (
+          <View style={styles.pdfLoader} pointerEvents="none">
+            <ActivityIndicator size="large" color={colors.text} />
+            <Text style={styles.loadingText}>{shareMessage || 'Preparing file...'}</Text>
+          </View>
+        ) : null}
       </Screen>
     );
   }
