@@ -1,0 +1,103 @@
+import React, { useState } from "react";
+import { View, ActivityIndicator, StyleSheet, Text, TouchableOpacity, Platform } from "react-native";
+import { WebView } from "react-native-webview";
+
+type Props = {
+  uri: string;
+  filename?: string;
+  onError?: (err: any) => void;
+  onOpenExternal?: () => void;
+};
+
+export default function PdfViewer({ uri, filename, onError, onOpenExternal }: Props) {
+  const [loading, setLoading] = useState<boolean>(true);
+  const [page, setPage] = useState<number>(1);
+  const [numberOfPages, setNumberOfPages] = useState<number>(0);
+
+  const source = { uri, cache: true } as any;
+
+  const handleLoadComplete = (pageCount: number) => {
+    setNumberOfPages(pageCount);
+    setLoading(false);
+  };
+
+  const handleError = (e: any) => {
+    setLoading(false);
+    if (onError) onError(e);
+  };
+
+  return (
+    <View style={styles.container}>
+      {loading && (
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="large" />
+          <Text style={styles.loadingText}>Loading PDF…</Text>
+        </View>
+      )}
+
+      <WebView
+        source={{ uri: `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(uri)}` }}
+        onLoadEnd={() => setLoading(false)}
+        onError={(syntheticEvent) => {
+          const { nativeEvent } = syntheticEvent as any;
+          handleError(nativeEvent);
+        }}
+        style={styles.pdf}
+      />
+
+      <View style={styles.footer}>
+        <Text style={styles.pageLabel}>{page}/{numberOfPages || "?"}</Text>
+        {onOpenExternal ? (
+          <TouchableOpacity style={styles.openButton} onPress={onOpenExternal}>
+            <Text style={styles.openButtonText}>Open in other app</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+  pdf: {
+    flex: 1,
+    width: "100%",
+  },
+  loaderContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  loadingText: {
+    marginTop: 8,
+  },
+  footer: {
+    height: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: "#ddd",
+  },
+  pageLabel: {
+    fontSize: 14,
+  },
+  openButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: "#eee",
+    borderRadius: 6,
+  },
+  openButtonText: {
+    fontSize: 14,
+  },
+});

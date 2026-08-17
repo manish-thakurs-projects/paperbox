@@ -29,6 +29,7 @@ import * as IntentLauncher from "expo-intent-launcher";
 import RNFS from 'react-native-fs';
 import * as ScreenCapture from "expo-screen-capture";
 import { decryptVaultFileForUse, clearDecryptedCache } from "../services/vaultStorage";
+import PdfViewer from "../components/PdfViewer";
 
 type Props = NativeStackScreenProps<RootStackParams, "Preview">;
 
@@ -378,28 +379,15 @@ export function PreviewScreen({ route }: Props) {
     };
   }, [localUri, uri]);
 
-  useEffect(() => {
-    let mounted = true;
-    async function openPdfInDefaultViewer() {
-      if (isPdf && localUri && !pdfOpened) {
-        try {
-          await openExternally();
-          if (mounted) setPdfOpened(true);
-        } catch (e) {
-          if (mounted) setError("Unable to open PDF in default viewer.");
-        }
-      }
-    }
-    openPdfInDefaultViewer();
-    return () => {
-      mounted = false;
-    };
-  }, [localUri, isPdf, pdfOpened]);
+  // In-app PDF rendering will be used for PDFs (react-native-pdf). The previous behavior
+  // automatically opened PDFs in an external viewer; that auto-open is disabled so the in-app
+  // viewer can be shown instead. Falling back to external viewer is still supported via UI.
+  // (Effect intentionally removed.)
 
   const copyToDownloads = async (sourceUri: string, filename: string): Promise<string> => {
     try {
       // Normalize source path to a filesystem path for RNFS
-      const src = sourceUri.startsWith('file://') ? sourceUri.replace('file://', '') : sourceUri;
+      const srcPath = sourceUri.startsWith('file://') ? sourceUri.replace('file://', '') : sourceUri;
       const rnfsAny = RNFS as any;
       let downloadsDir = rnfsAny.DownloadDirectoryPath || (rnfsAny.ExternalStorageDirectoryPath ? `${rnfsAny.ExternalStorageDirectoryPath}/Download` : null);
       if (!downloadsDir) {
@@ -410,43 +398,55 @@ export function PreviewScreen({ route }: Props) {
       try {
         const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE);
         if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          // Still attempt copy; caller will receive an error if it truly fails due to permission.
           throw new Error('WRITE_EXTERNAL_STORAGE permission denied');
         }
       } catch (permErr) {
-        // If permission request fails, log and continue; copying will likely fail.
-        try { console.debug('copyToDownloads: permission request failed', permErr); } catch(_){}
+        // Log and continue; copying will likely fail, but we'll attempt other strategies.
+        try { console.debug('copyToDownloads: permission request failed', permErr); } catch(_){ }
       }
  
-     const destPath = `${downloadsDir}/${filename}`;
-     // If destination exists, overwrite
-     try {
-       const exists = await rnfsAny.exists(destPath);
-       if (exists) {
-         await rnfsAny.unlink(destPath).catch(() => {});
-       }
-     } catch (e) {
-       // ignore
-     }
+      const destPath = `${downloadsDir}/${filename}`;
 
-     // Use expo-file-system to read the source as base64 then write with RNFS to Downloads.
-     try {
-       // Ensure the source file exists according to expo-file-system
-       const fsAny = FileSystem as any;
-       const info = await fsAny.getInfoAsync(sourceUri, { size: true });
-       if (!info.exists) throw new Error('Source file does not exist for export');
+      // If destination exists, overwrite
+      try {
+        const exists = await rnfsAny.exists(destPath);
+        if (exists) {
+          await rnfsAny.unlink(destPath).catch(() => {});
+        }
+      } catch (e) {
+        // ignore
+      }
 
-       const base64 = await fsAny.readAsStringAsync(sourceUri, { encoding: fsAny.EncodingType.Base64 });
-       // RNFS.writeFile expects path without file://
-       await rnfsAny.writeFile(destPath, base64, 'base64');
-       return `file://${destPath}`;
-     } catch (e) {
-       try { console.debug('copyToDownloads failed', e); } catch(_){ }
-       throw e;
-     }
-   } catch (e) {
-     try { console.debug('copyToDownloads failed', e); } catch(_){ }
-     throw e;
-   }
+      // First try a direct RNFS copy from the app file path (no base64 roundtrip).
+      try {
+        const srcExists = await rnfsAny.exists(srcPath);
+        if (srcExists) {
+          await rnfsAny.copyFile(srcPath, destPath);
+          return `file://${destPath}`;
+        }
+      } catch (e) {
+        // Ignore and fall back to reading via expo-file-system
+        try { console.debug('copyToDownloads: RNFS.copyFile failed, falling back to base64 method', e); } catch(_){ }
+      }
+
+      // Fallback: use expo-file-system to read base64 and write with RNFS
+      try {
+        const fsAny = FileSystem as any;
+        const info = await fsAny.getInfoAsync(sourceUri, { size: true });
+        if (!info.exists) throw new Error('Source file does not exist for export');
+
+        const base64 = await fsAny.readAsStringAsync(sourceUri, { encoding: fsAny.EncodingType.Base64 });
+        await rnfsAny.writeFile(destPath, base64, 'base64');
+        return `file://${destPath}`;
+      } catch (e) {
+        try { console.debug('copyToDownloads failed', e); } catch(_){ }
+        throw e;
+      }
+    } catch (e) {
+      try { console.debug('copyToDownloads failed', e); } catch(_){ }
+      throw e;
+    }
   };
   const openExternally = async () => {
     // Mark we're initiating an external handoff so AppState handler won't purge decrypted files during export/launch.
@@ -470,55 +470,98 @@ export function PreviewScreen({ route }: Props) {
 
       if (Platform.OS === "android") {
         let dataUri = finalTarget;
-        // Copy permanent export into Downloads so external apps can access it indefinitely.
-        try {
-          const exported = await copyToDownloads(dataUri, filename);
-          if (exported) {
-            dataUri = exported;
-            try { console.debug('openExternally: exported to Downloads', dataUri); } catch(_){}
-          }
-        } catch (e) {
-          try { console.debug('openExternally: export to Downloads failed, falling back to temp file', e); } catch(_){}
-        }
 
-        // Normalize to file:// when necessary for downstream handlers
-        if (!dataUri.startsWith("file://") && !dataUri.startsWith("content://") && dataUri.startsWith("/")) {
-          dataUri = `file://${dataUri}`;
-        }
+// Prefer converting an app-private file:// URI to a content:// URI so external apps can read it
+// without requiring WRITE_EXTERNAL_STORAGE or copying into Downloads. This is supported by
+// expo-file-system.getContentUriAsync on Android.
+try {
+  const fsAny = FileSystem as any;
+  if (dataUri.startsWith("file://") && typeof fsAny.getContentUriAsync === "function") {
+    try {
+      const content = await fsAny.getContentUriAsync(dataUri);
+      const contentUri = typeof content === "string" ? content : content?.uri;
+      if (contentUri && contentUri.startsWith("content://")) {
+        dataUri = contentUri;
+        try { console.debug('openExternally: converted to content URI', dataUri); } catch(_){}
+      }
+    } catch (e) {
+      try { console.debug('openExternally: getContentUriAsync failed', e); } catch(_){}
+    }
+  }
+} catch (e) {
+  try { console.debug('openExternally: content URI conversion check failed', e); } catch(_){}
+}
 
-        if (dataUri.startsWith("file://")) {
-          const fsAny = FileSystem as any;
-          if (typeof fsAny.getContentUriAsync === "function") {
-            try {
-              const content = await fsAny.getContentUriAsync(dataUri);
-              const contentUri =
-                typeof content === "string" ? content : content?.uri;
-              if (contentUri && contentUri.startsWith("content://")) {
-                dataUri = contentUri;
-              }
-            } catch (e) {
-              // Ignore cache URI conversion failures and fall back to the original URI.
-            }
-          }
-        }
+// If conversion to content:// succeeded, try launching intent directly (preferred).
+if (dataUri.startsWith("content://")) {
+  try {
+    await IntentLauncher.startActivityAsync(
+      "android.intent.action.VIEW",
+      {
+        data: dataUri,
+        type: mimeType,
+        flags: 2,
+      },
+    );
+    return;
+  } catch (e) {
+    try { openedExternallyRef.current = false; } catch (_) {}
+    try { console.debug('openExternally: Intent launch with content:// failed', e); } catch(_){}
+    // Fall through to attempt other strategies
+  }
+}
 
-        try {
-          // Launch Intent with GRANT_READ_URI_PERMISSION so the external app can read the content:// URI
-          // returned by getContentUriAsync. Use flag value 2 (FLAG_GRANT_READ_URI_PERMISSION).
-          await IntentLauncher.startActivityAsync(
-            "android.intent.action.VIEW",
-            {
-              data: dataUri,
-              type: mimeType,
-              flags: 2,
-            },
-          );
-          return;
-        } catch (e) {
-          // Revert flag — external launch didn't happen.
-          try { openedExternallyRef.current = false; } catch (_) {}
-          // If IntentLauncher fails, we will try a generic open fallback.
-        }
+// If we were not able to obtain a content:// URI, fall back to copying into Downloads.
+try {
+  const exported = await copyToDownloads(dataUri, filename);
+  if (exported) {
+    dataUri = exported;
+    try { console.debug('openExternally: exported to Downloads', dataUri); } catch(_){ }
+  }
+} catch (e) {
+  try { console.debug('openExternally: export to Downloads failed, falling back to temp file', e); } catch(_){ }
+}
+
+// Normalize to file:// when necessary for downstream handlers
+if (!dataUri.startsWith("file://") && !dataUri.startsWith("content://") && dataUri.startsWith("/")) {
+  dataUri = `file://${dataUri}`;
+}
+
+// If we copied to Downloads and have a file:// path, try converting that to content:// too.
+if (dataUri.startsWith("file://")) {
+  const fsAny = FileSystem as any;
+  if (typeof fsAny.getContentUriAsync === "function") {
+    try {
+      const content = await fsAny.getContentUriAsync(dataUri);
+      const contentUri = typeof content === "string" ? content : content?.uri;
+      if (contentUri && contentUri.startsWith("content://")) {
+        dataUri = contentUri;
+        try { console.debug('openExternally: converted exported file to content URI', dataUri); } catch(_){ }
+      }
+    } catch (e) {
+      try { console.debug('openExternally: getContentUriAsync for exported file failed', e); } catch(_){ }
+    }
+  }
+}
+
+try {
+  // Launch Intent with GRANT_READ_URI_PERMISSION so the external app can read the content:// URI
+  // returned by getContentUriAsync. Use flag value 2 (FLAG_GRANT_READ_URI_PERMISSION).
+  await IntentLauncher.startActivityAsync(
+    "android.intent.action.VIEW",
+    {
+      data: dataUri,
+      type: mimeType,
+      flags: 2,
+    },
+  );
+  return;
+} catch (e) {
+  // Revert flag — external launch didn't happen.
+  try { openedExternallyRef.current = false; } catch (_) {}
+  // If IntentLauncher fails, we will try a generic open fallback.
+  try { console.debug('openExternally: final Intent launch failed', e); } catch(_){ }
+}
       }
 
       try {
@@ -663,6 +706,30 @@ export function PreviewScreen({ route }: Props) {
   // PDF
   if (isPdf) {
     const target = localUri || uri;
+    // If we have a local decrypted file, render it in-app using react-native-pdf. If rendering
+    // fails, fall back to the existing external open flow.
+    if (target) {
+      const pdfUri = normalizeFileUri(target);
+      return (
+        <Screen style={styles.content}>
+          <PdfViewer
+            uri={pdfUri}
+            filename={filename}
+            onError={(e) => {
+              try { console.debug('PdfViewer reported error', e); } catch(_){ }
+              setError('Unable to render PDF in-app. Opening in default viewer...');
+              // Attempt external open as fallback
+              void openExternally();
+            }}
+            onOpenExternal={() => {
+              void openExternally();
+            }}
+          />
+        </Screen>
+      );
+    }
+
+    // No target available — show fallback UI that allows external open / share
     return (
       <Screen style={styles.content}>
         <View style={styles.center}>
