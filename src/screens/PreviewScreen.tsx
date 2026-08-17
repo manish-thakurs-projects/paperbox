@@ -473,45 +473,63 @@ export function PreviewScreen({ route }: Props) {
       if (Platform.OS === "android") {
         let dataUri = finalTarget;
 
-// Prefer converting an app-private file:// URI to a content:// URI so external apps can read it
-// without requiring WRITE_EXTERNAL_STORAGE or copying into Downloads. This is supported by
-// expo-file-system.getContentUriAsync on Android.
-try {
-  const fsAny = FileSystem as any;
-  if (dataUri.startsWith("file://") && typeof fsAny.getContentUriAsync === "function") {
-    try {
-      const content = await fsAny.getContentUriAsync(dataUri);
-      const contentUri = typeof content === "string" ? content : content?.uri;
-      if (contentUri && contentUri.startsWith("content://")) {
-        dataUri = contentUri;
-        try { console.debug('openExternally: converted to content URI', dataUri); } catch(_){}
-      }
-    } catch (e) {
-      try { console.debug('openExternally: getContentUriAsync failed', e); } catch(_){}
-    }
-  }
-} catch (e) {
-  try { console.debug('openExternally: content URI conversion check failed', e); } catch(_){}
-}
+          // Verify the file exists and is non-empty before attempting an external handoff.
+          try {
+            const fsAny = FileSystem as any;
+            const infoCheck = await fsAny.getInfoAsync(normalizeFileUri(finalTarget), { size: true });
+            if (!infoCheck.exists || (infoCheck.size !== undefined && infoCheck.size === 0)) {
+              // If the prepared local file is missing/empty, surface an error instead of launching a blank viewer.
+              try { console.debug('openExternally: file missing or empty', { finalTarget, infoCheck }); } catch (_) {}
+              setError('File not available to open externally.');
+              openedExternallyRef.current = false;
+              return;
+            }
+          } catch (e) {
+            // getInfoAsync may fail for some content URIs; ignore and continue with other checks.
+            try { console.debug('openExternally: getInfoAsync check failed (continuing)', e); } catch(_){ }
+          }
 
-// If conversion to content:// succeeded, try launching intent directly (preferred).
-if (dataUri.startsWith("content://")) {
-  try {
-    await IntentLauncher.startActivityAsync(
-      "android.intent.action.VIEW",
-      {
-        data: dataUri,
-        type: mimeType,
-        flags: 2,
-      },
-    );
-    return;
-  } catch (e) {
-    try { openedExternallyRef.current = false; } catch (_) {}
-    try { console.debug('openExternally: Intent launch with content:// failed', e); } catch(_){}
-    // Fall through to attempt other strategies
-  }
-}
+          // Prefer converting an app-private file:// URI to a content:// URI so external apps can read it
+          // without requiring WRITE_EXTERNAL_STORAGE or copying into Downloads. This is supported by
+          // expo-file-system.getContentUriAsync on Android.
+          try {
+            const fsAny = FileSystem as any;
+            if (dataUri.startsWith("file://") && typeof fsAny.getContentUriAsync === "function") {
+              try {
+                const content = await fsAny.getContentUriAsync(dataUri);
+                const contentUri = typeof content === "string" ? content : content?.uri;
+                if (contentUri && contentUri.startsWith("content://")) {
+                  dataUri = contentUri;
+                  try { console.debug('openExternally: converted to content URI', dataUri); } catch(_){ }
+                }
+              } catch (e) {
+                try { console.debug('openExternally: getContentUriAsync failed', e); } catch(_){ }
+              }
+            }
+          } catch (e) {
+            try { console.debug('openExternally: content URI conversion check failed', e); } catch(_){ }
+          }
+
+          // If conversion to content:// succeeded, try launching intent directly (preferred).
+          if (dataUri.startsWith("content://")) {
+            try {
+              // Add FLAG_GRANT_READ_URI_PERMISSION (2) and FLAG_ACTIVITY_NEW_TASK to be robust across viewers.
+              const INTENT_FLAGS = 2 | 0x10000000;
+              await IntentLauncher.startActivityAsync(
+                "android.intent.action.VIEW",
+                {
+                  data: dataUri,
+                  type: mimeType,
+                  flags: INTENT_FLAGS,
+                },
+              );
+              return;
+            } catch (e) {
+              // Do not clear openedExternallyRef here yet; allow fallback strategies to preserve the file until failure is final.
+              try { console.debug('openExternally: Intent launch with content:// failed', e); } catch(_){ }
+              // Fall through to attempt other strategies
+            }
+          }
 
 // If we were not able to obtain a content:// URI, fall back to copying into Downloads.
 try {
@@ -548,20 +566,20 @@ if (dataUri.startsWith("file://")) {
 
 try {
   // Launch Intent with GRANT_READ_URI_PERMISSION so the external app can read the content:// URI
-  // returned by getContentUriAsync. Use flag value 2 (FLAG_GRANT_READ_URI_PERMISSION).
+  // returned by getContentUriAsync. Use FLAG_GRANT_READ_URI_PERMISSION and FLAG_ACTIVITY_NEW_TASK.
+  const INTENT_FLAGS = 2 | 0x10000000;
   await IntentLauncher.startActivityAsync(
     "android.intent.action.VIEW",
     {
       data: dataUri,
       type: mimeType,
-      flags: 2,
+      flags: INTENT_FLAGS,
     },
   );
   return;
 } catch (e) {
-  // Revert flag — external launch didn't happen.
-  try { openedExternallyRef.current = false; } catch (_) {}
-  // If IntentLauncher fails, we will try a generic open fallback.
+  // If IntentLauncher fails, we will try a generic open fallback. Do not clear openedExternallyRef here yet;
+  // allow the fallbacks to attempt an alternative that may still read the file.
   try { console.debug('openExternally: final Intent launch failed', e); } catch(_){ }
 }
       }
