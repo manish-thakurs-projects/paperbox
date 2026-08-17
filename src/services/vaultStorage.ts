@@ -113,14 +113,35 @@ const bytesToBase64 = (bytes: Uint8Array) => {
     // fallthrough
   }
 
-  // Fallback to btoa for small buffers
-  let binary = '';
-  for (let index = 0; index < bytes.length; index += 1) {
-    binary += String.fromCharCode(bytes[index]);
+  // If btoa is available, use a chunked String.fromCharCode approach to avoid call size limitsn  try {
+    if (typeof global.btoa === 'function') {
+      const chunkSize = 0x8000; // 32KB chunks
+      let binary = '';
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize);
+        binary += String.fromCharCode.apply(null, Array.prototype.slice.call(chunk));
+      }
+      return global.btoa(binary);
+    }
+  } catch (e) {
+    // fallthrough to pure-js encoder
   }
-  if (typeof global.btoa === 'function') return global.btoa(binary);
-  // Last resort: return an empty string (shouldn't happen)
-  return '';
+
+  // Pure JS base64 encoder as a last resort (works in all environments)
+  const base64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let result = '';
+  let i;
+  for (i = 0; i < bytes.length; i += 3) {
+    const b1 = bytes[i];
+    const b2 = i + 1 < bytes.length ? bytes[i + 1] : 0;
+    const b3 = i + 2 < bytes.length ? bytes[i + 2] : 0;
+    const triplet = (b1 << 16) | (b2 << 8) | b3;
+    result += base64chars[(triplet >> 18) & 0x3f];
+    result += base64chars[(triplet >> 12) & 0x3f];
+    result += i + 1 < bytes.length ? base64chars[(triplet >> 6) & 0x3f] : '=';
+    result += i + 2 < bytes.length ? base64chars[triplet & 0x3f] : '=';
+  }
+  return result;
 };
 
 const base64ToBytes = (value: string) => {
