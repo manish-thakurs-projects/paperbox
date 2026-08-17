@@ -470,18 +470,53 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
   const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${file.extension || "bin"}`;
   const destinationPath = `${DECRYPTED_CACHE_DIR}${filename}`;
   const plainBase64 = bytesToBase64(new Uint8Array(plain));
-  await FileSystem.writeAsStringAsync(destinationPath, plainBase64, { encoding: FileSystem.EncodingType.Base64 });
+
+  // Debug: log sizes to help diagnose write failures on device
+  try {
+    console.debug('decryptVaultFileForUse: about to write decrypted file', { destinationPath, base64Length: plainBase64 ? plainBase64.length : 0 });
+  } catch (e) { /* ignore logging failures */ }
+
+  // Attempt write, and if verification says file missing/empty, retry using alternate URI form (with/without file://)
+  let writeErr: any = null;
+  try {
+    await FileSystem.writeAsStringAsync(destinationPath, plainBase64, { encoding: (FileSystem as any).EncodingType?.Base64 ?? 'base64' });
+  } catch (e) {
+    writeErr = e;
+    try { console.debug('decryptVaultFileForUse: first write failed', e); } catch(_) {}
+  }
 
   // Verify written file exists and has expected size
   try {
-    const info = await (FileSystem as any).getInfoAsync(destinationPath);
+    let info = await (FileSystem as any).getInfoAsync(destinationPath);
     if (!info.exists || (info.size || 0) === 0) {
-      console.debug("decryptVaultFileForUse: written file missing or empty", { destinationPath, info });
-      throw new Error("Written decrypted file is missing or empty");
+      try { console.debug('decryptVaultFileForUse: written file missing or empty on first check', { destinationPath, info }); } catch(_) {}
+
+      // Try alternate path form: if path starts with file://, try without it, otherwise try adding it.
+      try {
+        const alt = destinationPath.startsWith('file://') ? destinationPath.replace('file://', '') : `file://${destinationPath}`;
+        try { console.debug('decryptVaultFileForUse: attempting retry write to alternate path', { alt }); } catch(_) {}
+        await FileSystem.writeAsStringAsync(alt, plainBase64, { encoding: (FileSystem as any).EncodingType?.Base64 ?? 'base64' });
+        info = await (FileSystem as any).getInfoAsync(alt);
+        if (info.exists && (info.size || 0) > 0) {
+          try { console.debug('decryptVaultFileForUse: retry write succeeded', { alt, info }); } catch(_) {}
+          // Use alt as destinationPath for return
+          if (alt.startsWith('file://')) {
+            // normalize to no-op; we'll return with file:// later
+          }
+          // Note: we do not change destinationPath variable here because it's const; instead we'll handle normalization later.
+        } else {
+          try { console.debug('decryptVaultFileForUse: retry write did not produce file', { alt, info }); } catch(_) {}
+          throw new Error('Retry write failed to produce file');
+        }
+      } catch (retryErr) {
+        console.debug('decryptVaultFileForUse: verification failed after retry', retryErr);
+        throw retryErr;
+      }
     }
   } catch (ioErr) {
-    console.debug("decryptVaultFileForUse: verification failed", ioErr);
-    // Not fatal for caller, but surface the problem
+    console.debug('decryptVaultFileForUse: verification failed', ioErr);
+    // Re-throw so caller can show an error instead of a blank page
+    throw ioErr;
   }
 
   // Normalize returned path to include file:// for consumers that expect URI format
