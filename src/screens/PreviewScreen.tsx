@@ -467,11 +467,48 @@ export function PreviewScreen({ route }: Props) {
       }
 
       const finalTarget = target || uri;
-      const mimeType = file.mimeType || mimeTypeFromExtension(ext);
+      let mimeType = file.mimeType || mimeTypeFromExtension(ext);
+      // Ensure we hand over a decrypted file to external apps. If finalTarget points to
+      // an encrypted blob (.enc), decrypt it first so external viewers receive the real PDF/image.
+
+      let dataUri = finalTarget;
+      try {
+        if (dataUri && (dataUri.endsWith('.enc') || dataUri.includes('.enc?'))) {
+          try {
+            // Keep decrypted temp available for external app to read; mark openedExternallyRef
+            openedExternallyRef.current = true;
+            const decrypted = await decryptVaultFileForUse({
+              id: 'external',
+              name: filename,
+              uri: dataUri,
+              size: 0,
+              extension: filename.includes('.') ? filename.split('.').pop() || 'bin' : 'bin',
+              kind: 'other',
+              createdAt: new Date().toISOString(),
+              isFavorite: false,
+              isPinned: false,
+              tags: [],
+            });
+            if (decrypted) {
+              dataUri = decrypted;
+              try { console.debug('openExternally: decrypted before handoff', { dataUri }); } catch(_){ }
+              // Preserve localUri so cleanup logic doesn't delete it while external app reads it
+              if (dataUri.startsWith('file://')) {
+                setLocalUri(dataUri);
+              }
+            }
+          } catch (decryptErr) {
+            try { console.debug('openExternally: decrypt for external handoff failed', decryptErr); } catch(_){ }
+            // continue — we'll attempt other fallbacks below
+          }
+        }
+      } catch (e) {
+        try { console.debug('openExternally: decrypt pre-check failed', e); } catch(_){ }
+      }
+
       // Open the file with the appropriate external handler.
 
       if (Platform.OS === "android") {
-        let dataUri = finalTarget;
 
           // Verify the file exists and is non-empty before attempting an external handoff.
           try {
@@ -514,7 +551,7 @@ export function PreviewScreen({ route }: Props) {
           if (dataUri.startsWith("content://")) {
             try {
               // Add FLAG_GRANT_READ_URI_PERMISSION (2) and FLAG_ACTIVITY_NEW_TASK to be robust across viewers.
-              const INTENT_FLAGS = 2 | 0x10000000;
+              const INTENT_FLAGS = 1 | 0x10000000;
               await IntentLauncher.startActivityAsync(
                 "android.intent.action.VIEW",
                 {
@@ -567,7 +604,7 @@ if (dataUri.startsWith("file://")) {
 try {
   // Launch Intent with GRANT_READ_URI_PERMISSION so the external app can read the content:// URI
   // returned by getContentUriAsync. Use FLAG_GRANT_READ_URI_PERMISSION and FLAG_ACTIVITY_NEW_TASK.
-  const INTENT_FLAGS = 2 | 0x10000000;
+  const INTENT_FLAGS = 1 | 0x10000000;
   await IntentLauncher.startActivityAsync(
     "android.intent.action.VIEW",
     {
@@ -736,15 +773,37 @@ try {
           <PdfViewer
             uri={pdfUri}
             filename={filename}
-            onError={(e) => {
+          onError={async (e) => {
               try { console.debug('PdfViewer reported error', e); } catch(_){ }
-              setError('Unable to render PDF in-app. Opening in default viewer...');
-              // Attempt external open as fallback
-              void openExternally();
-            }}
-            onOpenExternal={() => {
-              void openExternally();
-            }}
+            // Try to convert local file:// path to a content:// URI and retry in-app render once.
+            try {
+              const fsAny = FileSystem as any;
+              if (Platform.OS === 'android' && pdfUri.startsWith('file://') && typeof fsAny.getContentUriAsync === 'function') {
+                try {
+                  const content = await fsAny.getContentUriAsync(pdfUri);
+                  const contentUri = typeof content === 'string' ? content : content?.uri;
+                  if (contentUri) {
+                    try { console.debug('PdfViewer: retrying render with content URI', contentUri); } catch(_){ }
+                    // Update localUri so PdfViewer receives the content URI and re-renders
+                    setLocalUri(contentUri);
+                    return;
+                  }
+                } catch (convErr) {
+                  try { console.debug('PdfViewer: content URI conversion failed', convErr); } catch(_){ }
+                }
+              }
+            } catch (convErr2) {
+              try { console.debug('PdfViewer: conversion attempt failed', convErr2); } catch(_){ }
+            }
+
+            // If retry didn't work, surface an error and open externally as before
+            setError('Unable to render PDF in-app. Opening in default viewer...');
+            // Attempt external open as fallback
+            void openExternally();
+          }}
+          onOpenExternal={() => {
+            void openExternally();
+          }}
           />
         </Screen>
       );

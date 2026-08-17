@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, ActivityIndicator } from "react-native";
 import { usePaperTheme } from "../theme/usePaperTheme";
 import { withAlpha } from "../theme/utils";
 import { VaultFile } from "../types";
@@ -35,6 +35,7 @@ export function FileActionModal({
   const s = styles(colors);
   const [renameVisible, setRenameVisible] = useState(false);
   const [renameText, setRenameText] = useState("");
+  const [shareLoading, setShareLoading] = useState(false);
   const inputRef = useRef<TextInput | null>(null);
 
   useEffect(() => {
@@ -141,8 +142,28 @@ export function FileActionModal({
                         <Text style={s.actionLabel}>Remove from folder</Text>
                       </Pressable>
                     ) : null}
-                    <Pressable style={s.actionItem} onPress={onShare}>
-                      <Text style={s.actionLabel}>Share</Text>
+                    <Pressable
+                      style={s.actionItem}
+                      onPress={async () => {
+                        if (!onShare) return;
+                        try {
+                          setShareLoading(true);
+                          await onShare();
+                        } catch (e) {
+                          // caller handles errors
+                        } finally {
+                          setShareLoading(false);
+                        }
+                      }}
+                    >
+                      {shareLoading ? (
+                        <>
+                          <ActivityIndicator size="small" color={colors.text} />
+                          <Text style={[s.actionLabel, { marginLeft: 8 }]}>Decrypting...</Text>
+                        </>
+                      ) : (
+                        <Text style={s.actionLabel}>Share</Text>
+                      )}
                     </Pressable>
                     <Pressable style={s.actionItem} onPress={onDelete}>
                       <Text style={[s.actionLabel, s.destructiveAction]}>Delete from vault</Text>
