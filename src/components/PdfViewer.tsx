@@ -132,6 +132,9 @@ export default function PdfViewer({ uri, filename, onError, onOpenExternal }: Pr
               onError={(syntheticEvent) => { const { nativeEvent } = syntheticEvent as any; handleError(nativeEvent); }}
               style={styles.pdf}
               allowFileAccess={true}
+              javaScriptEnabled={true}
+              mixedContentMode="always"
+              allowUniversalAccessFromFileURLs={true}
             />
           );
         }
@@ -157,6 +160,9 @@ export default function PdfViewer({ uri, filename, onError, onOpenExternal }: Pr
             onError={(syntheticEvent) => { const { nativeEvent } = syntheticEvent as any; handleError(nativeEvent); }}
             style={styles.pdf}
             allowFileAccess={true}
+            javaScriptEnabled={true}
+            mixedContentMode="always"
+            allowUniversalAccessFromFileURLs={true}
           />
         );
       })()}
