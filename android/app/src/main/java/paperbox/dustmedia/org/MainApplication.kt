@@ -31,6 +31,12 @@ class MainApplication : Application(), ReactApplication {
                           } catch (e: Exception) {
                             // ignore if registration fails for some build variants
                           }
+                          try {
+                            // register react-native-pdf package if autolinking misses it for any reason
+                            add(org.wonday.pdf.RNPDFPackage())
+                          } catch (e: Exception) {
+                            // ignore if registration fails (package may already be autolinked)
+                          }
                         }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
