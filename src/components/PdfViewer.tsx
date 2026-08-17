@@ -36,39 +36,83 @@ export default function PdfViewer({ uri, filename, onError, onOpenExternal }: Pr
         </View>
       )}
 
-      {/* WebView source prepared depending on URI scheme: remote URLs use Google viewer, local files are loaded as base64 data URL */}
+      {/* Prepare WebView source depending on URI scheme. Remote URLs use Google viewer. Local PDFs are rendered with PDF.js inside an HTML blob so WebView can show them on Android/iOS. */}
       {(() => {
-        const [webUri, setWebUri] = React.useState<string | null>(null);
+        const [webHtml, setWebHtml] = React.useState<string | null>(null);
+        const [remoteUri, setRemoteUri] = React.useState<string | null>(null);
+
         React.useEffect(() => {
           let mounted = true;
+
           async function prepare() {
             setLoading(true);
             try {
               if (/^https?:\/\//i.test(uri)) {
-                // Remote URL: use Google Docs viewer which can render PDFs hosted on the web
-                if (mounted) setWebUri(`https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(uri)}`);
+                // Remote URL: use Google Docs viewer for web-hosted PDFs
+                if (mounted) setRemoteUri(`https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(uri)}`);
                 return;
               }
 
-              // Local file URIs: read as base64 and load as data URL so the WebView can render the PDF
-              try {
-                let path = uri;
-                if (!/^file:\/\//i.test(path) && !/^content:\/\//i.test(path)) {
-                  // Ensure file:// prefix when possible
-                  path = path.startsWith('/') ? `file://${path}` : path;
-                }
+              // Local file: ensure file:// prefix when appropriate and read as base64
+              let path = uri as string;
+              if (!/^file:\/\//i.test(path) && !/^content:\/\//i.test(path)) {
+                path = path.startsWith('/') ? `file://${path}` : path;
+              }
 
-                // Attempt to read local file as base64. This works for file:// URIs on Android/iOS.
-                // Use EncodingType when available (legacy API); otherwise fall back to string 'base64'
-                const encodingOpt: any = (FileSystem as any).EncodingType ? (FileSystem as any).EncodingType.Base64 : 'base64';
-                const base64 = await (FileSystem as any).readAsStringAsync(path, { encoding: encodingOpt });
-                if (mounted) setWebUri(`data:application/pdf;base64,${base64}`);
-              } catch (e) {
-                // If reading local file fails, surface the error and don't set a webUri so caller can fallback
-                if (mounted) {
-                  setWebUri(null);
-                  handleError(e);
-                }
+              const encodingOpt: any = (FileSystem as any).EncodingType ? (FileSystem as any).EncodingType.Base64 : 'base64';
+              const base64 = await (FileSystem as any).readAsStringAsync(path, { encoding: encodingOpt });
+
+              if (!mounted) return;
+
+              // Build an HTML viewer that uses PDF.js to render the base64 PDF into a canvas.
+              // Use CDN-hosted pdfjs; if offline support is required, bundle pdfjs locally.
+              const safeBase64 = base64.replace(/<\/script>/g, '<\\/script>');
+              const html = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>html,body{height:100%;margin:0;background:#fff}#canvas{display:block;margin:0 auto;max-width:100%;}</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script src="https://unpkg.com/pdfjs-dist/build/pdf.min.js"></script>
+<script>
+  pdfjsLib = window['pdfjs-dist/build/pdf'];
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist/build/pdf.worker.min.js';
+  function base64ToUint8Array(base64) {
+    var raw = atob(base64);
+    var rawLength = raw.length;
+    var array = new Uint8Array(new ArrayBuffer(rawLength));
+    for (var i = 0; i < rawLength; ++i) {
+      array[i] = raw.charCodeAt(i);
+    }
+    return array;
+  }
+  var pdfData = base64ToUint8Array('${safeBase64}');
+  pdfjsLib.getDocument({data: pdfData}).promise.then(function(pdf) {
+    return pdf.getPage(1).then(function(page) {
+      var scale = Math.max(1, window.devicePixelRatio || 1);
+      var viewport = page.getViewport({scale: scale});
+      var canvas = document.getElementById('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      var context = canvas.getContext('2d');
+      var renderContext = { canvasContext: context, viewport: viewport };
+      page.render(renderContext);
+    });
+  }).catch(function(err){
+    document.body.innerHTML = '<div style="padding:20px">PDF rendering error: ' + (err && err.toString ? err.toString() : 'unknown') + '</div>';
+  });
+</script>
+</body>
+</html>`;
+
+              setWebHtml(html);
+            } catch (e) {
+              if (mounted) {
+                setWebHtml(null);
+                handleError(e);
               }
             } finally {
               if (mounted) setLoading(false);
@@ -79,8 +123,20 @@ export default function PdfViewer({ uri, filename, onError, onOpenExternal }: Pr
           return () => { mounted = false; };
         }, [uri]);
 
-        if (!webUri) {
-          // No prepared URL -> show fallback UI that allows opening externally (PreviewScreen already provides a fallback too)
+        if (remoteUri) {
+          return (
+            <WebView
+              originWhitelist={["*"]}
+              source={{ uri: remoteUri }}
+              onLoadEnd={() => setLoading(false)}
+              onError={(syntheticEvent) => { const { nativeEvent } = syntheticEvent as any; handleError(nativeEvent); }}
+              style={styles.pdf}
+              allowFileAccess={true}
+            />
+          );
+        }
+
+        if (!webHtml) {
           return (
             <View style={[styles.pdf, { justifyContent: "center", alignItems: "center" }]}>
               <Text style={{ marginBottom: 8 }}>Unable to render PDF in-app.</Text>
@@ -96,12 +152,9 @@ export default function PdfViewer({ uri, filename, onError, onOpenExternal }: Pr
         return (
           <WebView
             originWhitelist={["*"]}
-            source={{ uri: webUri }}
+            source={{ html: webHtml }}
             onLoadEnd={() => setLoading(false)}
-            onError={(syntheticEvent) => {
-              const { nativeEvent } = syntheticEvent as any;
-              handleError(nativeEvent);
-            }}
+            onError={(syntheticEvent) => { const { nativeEvent } = syntheticEvent as any; handleError(nativeEvent); }}
             style={styles.pdf}
             allowFileAccess={true}
           />
