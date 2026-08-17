@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { View, ActivityIndicator, StyleSheet, Text, TouchableOpacity, Platform } from "react-native";
 import { WebView } from "react-native-webview";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 
 type Props = {
   uri: string;
@@ -59,7 +59,9 @@ export default function PdfViewer({ uri, filename, onError, onOpenExternal }: Pr
                 }
 
                 // Attempt to read local file as base64. This works for file:// URIs on Android/iOS.
-                const base64 = await (FileSystem as any).readAsStringAsync(path, { encoding: FileSystem.EncodingType.Base64 });
+                // Use EncodingType when available (legacy API); otherwise fall back to string 'base64'
+                const encodingOpt: any = (FileSystem as any).EncodingType ? (FileSystem as any).EncodingType.Base64 : 'base64';
+                const base64 = await (FileSystem as any).readAsStringAsync(path, { encoding: encodingOpt });
                 if (mounted) setWebUri(`data:application/pdf;base64,${base64}`);
               } catch (e) {
                 // If reading local file fails, surface the error and don't set a webUri so caller can fallback
