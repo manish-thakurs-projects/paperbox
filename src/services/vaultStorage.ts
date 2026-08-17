@@ -113,7 +113,8 @@ const bytesToBase64 = (bytes: Uint8Array) => {
     // fallthrough
   }
 
-  // If btoa is available, use a chunked String.fromCharCode approach to avoid call size limitsn  try {
+  // If btoa is available, use a chunked String.fromCharCode approach to avoid call size limits
+  try {
     if (typeof global.btoa === 'function') {
       const chunkSize = 0x8000; // 32KB chunks
       let binary = '';
