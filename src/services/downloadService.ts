@@ -6,7 +6,7 @@ import { decryptVaultFileForUse } from "./vaultStorage";
 import { getExternalTreeUri, pickAndSaveExternalVaultFolder, writeBytesToExternal } from "./vaultStorage";
 import saf from "../libs/saf";
 import * as IntentLauncher from 'expo-intent-launcher';
-import * as Application from 'expo-application';
+import Constants from 'expo-constants';
 
 const rnfsAny = RNFS as any;
 
@@ -81,7 +81,7 @@ export async function downloadFile(file: VaultFile): Promise<string> {
         // If SAF write fails, offer MANAGE_EXTERNAL_STORAGE settings flow as a fallback on Android 11+
         try { console.debug("downloadFile: SAF write failed, falling back to RNFS", e); } catch(_){}
 
-        if (Platform.OS === 'android' && (Application as any).androidId) {
+        if (Platform.OS === 'android') {
           try {
             const openSettings = await new Promise<boolean>((resolve) => {
               Alert.alert(
@@ -97,11 +97,11 @@ export async function downloadFile(file: VaultFile): Promise<string> {
 
             if (openSettings) {
               try {
-                const pkg = (Application as any).applicationId || (Application as any).expoId || `package:${(Application as any).applicationId}`;
+                        const pkgName = (Constants as any)?.manifest?.android?.package || (Constants as any)?.expoConfig?.android?.package || (Constants as any)?.manifest?.slug || 'paperbox.dustmedia.org';
                 // Launch the Manage All Files Access settings for this app
                 await IntentLauncher.startActivityAsync(
                   IntentLauncher.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION || 'android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION',
-                  { data: `package:${(Application as any).applicationId}` },
+                          { data: `package:${pkgName}` },
                 );
               } catch (launchErr) {
                 try { console.debug('downloadFile: opening MANAGE_EXTERNAL_STORAGE settings failed', launchErr); } catch(_){}
