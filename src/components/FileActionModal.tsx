@@ -7,7 +7,6 @@ import RNFS from 'react-native-fs';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decryptVaultFileForUse } from "../services/vaultStorage";
 import { downloadFile } from "../services/downloadService";
-import { Alert } from 'react-native';
 
 interface FileActionModalProps {
   visible: boolean;
