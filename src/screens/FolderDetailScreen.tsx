@@ -1,6 +1,5 @@
 import React, { useLayoutEffect } from "react";
 import {
-  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -9,6 +8,13 @@ import {
   View,
   Platform,
 } from "react-native";
+import { showAlert } from "../services/alertService";
+
+const Alert = {
+  alert: (title?: string, message?: string, buttons?: any[]) => {
+    showAlert(title, message, buttons);
+  },
+};
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { RootStackParams } from "../navigation/types";
@@ -421,7 +427,9 @@ export function FolderDetailScreen({ route, navigation }: Props) {
         onDelete={deleteFile}
         onInfo={goToInfo}
         onRemoveFromFolder={removeFromFolder}
-        onDownload={() => { closeActions(); }}
+        onDownload={() => {
+          closeActions();
+        }}
       />
       <FolderMoveModal
         visible={selectionMoveVisible}

@@ -1,21 +1,20 @@
 import * as DocumentPicker from "expo-document-picker";
 import { VaultFile } from "../types";
 import { extensionOf, kindOf } from "../utils/files";
-import { Alert } from "react-native";
+import { showAlert } from "./alertService";
 import { persistVaultFile } from "./vaultStorage";
 
-const showRetrySaveDialog = (message: string) =>
-  new Promise<boolean>((resolve) => {
-    Alert.alert(
-      "Save failed",
-      message,
-      [
-        { text: "Retry", onPress: () => resolve(true) },
-        { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
-      ],
-      { cancelable: false },
-    );
-  });
+const showRetrySaveDialog = async (message: string) => {
+  const idx = await showAlert(
+    "Save failed",
+    message,
+    [
+      { text: "Retry" },
+      { text: "Cancel", style: "cancel" },
+    ],
+  );
+  return idx === 0;
+};
 
 export async function pickFiles(): Promise<VaultFile[]> {
   const result = await DocumentPicker.getDocumentAsync({

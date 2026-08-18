@@ -12,7 +12,11 @@ import { Folder, VaultFile } from "../types";
 // this can be diagnosed and a proper native rebuild performed.
 const secureStoreAvailable = (() => {
   try {
-    return !!SecureStore && typeof (SecureStore as any).getItemAsync === "function" && typeof (SecureStore as any).setItemAsync === "function";
+    return (
+      !!SecureStore &&
+      typeof (SecureStore as any).getItemAsync === "function" &&
+      typeof (SecureStore as any).setItemAsync === "function"
+    );
   } catch (e) {
     return false;
   }
@@ -23,15 +27,27 @@ async function secureGetItem(key: string): Promise<string | null> {
     try {
       return await SecureStore.getItemAsync(key);
     } catch (e) {
-      try { console.debug('SecureStore.getItemAsync failed, falling back to AsyncStorage', e); } catch(_){}
+      try {
+        console.debug(
+          "SecureStore.getItemAsync failed, falling back to AsyncStorage",
+          e,
+        );
+      } catch (_) {}
     }
   } else {
-    try { console.debug('SecureStore not available, using AsyncStorage fallback for key', key); } catch(_){}
+    try {
+      console.debug(
+        "SecureStore not available, using AsyncStorage fallback for key",
+        key,
+      );
+    } catch (_) {}
   }
   try {
     return await AsyncStorage.getItem(key);
   } catch (e) {
-    try { console.debug('AsyncStorage.getItem fallback failed', e); } catch(_){}
+    try {
+      console.debug("AsyncStorage.getItem fallback failed", e);
+    } catch (_) {}
     return null;
   }
 }
@@ -42,15 +58,27 @@ async function secureSetItem(key: string, value: string): Promise<void> {
       await SecureStore.setItemAsync(key, value);
       return;
     } catch (e) {
-      try { console.debug('SecureStore.setItemAsync failed, falling back to AsyncStorage', e); } catch(_){}
+      try {
+        console.debug(
+          "SecureStore.setItemAsync failed, falling back to AsyncStorage",
+          e,
+        );
+      } catch (_) {}
     }
   } else {
-    try { console.debug('SecureStore not available, using AsyncStorage fallback for key set', key); } catch(_){}
+    try {
+      console.debug(
+        "SecureStore not available, using AsyncStorage fallback for key set",
+        key,
+      );
+    } catch (_) {}
   }
   try {
     await AsyncStorage.setItem(key, value);
   } catch (e) {
-    try { console.debug('AsyncStorage.setItem fallback failed', e); } catch(_){}
+    try {
+      console.debug("AsyncStorage.setItem fallback failed", e);
+    } catch (_) {}
     throw e;
   }
 }
@@ -58,13 +86,14 @@ async function secureSetItem(key: string, value: string): Promise<void> {
 const KEY = "@paper-box/v1";
 const KEY_ALIAS = "paperbox.vault.key";
 const BACKUP_FILE = ".paperbox-vault.enc";
-const BACKUP_DIRS = Platform.OS === "android"
-  ? [
-      "file:///storage/emulated/0/.paperbox",
-      "file:///storage/emulated/0/Android/data/paperbox.dustmedia.org/files/.paperbox",
-      "file:///storage/emulated/0/Documents/.paperbox",
-    ]
-  : [];
+const BACKUP_DIRS =
+  Platform.OS === "android"
+    ? [
+        "file:///storage/emulated/0/.paperbox",
+        "file:///storage/emulated/0/Android/data/paperbox.dustmedia.org/files/.paperbox",
+        "file:///storage/emulated/0/Documents/.paperbox",
+      ]
+    : [];
 const PERSISTENT_VAULT_DIR = `${(FileSystem as any).documentDirectory ?? ""}vault/`;
 
 // Dedicated decrypted cache subdirectory for temporary decrypted files. App will explicitly
@@ -73,12 +102,15 @@ const PERSISTENT_VAULT_DIR = `${(FileSystem as any).documentDirectory ?? ""}vaul
 const DECRYPTED_CACHE_DIR = `${(FileSystem as any).cacheDirectory ?? ""}vault-decrypted/`;
 
 // External vault directory (public external storage) - survives app uninstall on Android
-const EXTERNAL_VAULT_DIR = Platform.OS === "android" && (RNFS as any).ExternalStorageDirectoryPath
-  ? `file://${(RNFS as any).ExternalStorageDirectoryPath}/.paperbox/`
-  : PERSISTENT_VAULT_DIR;
+const EXTERNAL_VAULT_DIR =
+  Platform.OS === "android" && (RNFS as any).ExternalStorageDirectoryPath
+    ? `file://${(RNFS as any).ExternalStorageDirectoryPath}/.paperbox/`
+    : PERSISTENT_VAULT_DIR;
 
 const EXTERNAL_KEY_META = `${EXTERNAL_VAULT_DIR}key.meta.json`;
-const normalizeVault = (value: unknown): { files: VaultFile[]; folders: Folder[] } => {
+const normalizeVault = (
+  value: unknown,
+): { files: VaultFile[]; folders: Folder[] } => {
   if (!value || typeof value !== "object") {
     return { files: [], folders: [] };
   }
@@ -106,8 +138,8 @@ const normalizeVault = (value: unknown): { files: VaultFile[]; folders: Folder[]
 
 const bytesToBase64 = (bytes: Uint8Array) => {
   try {
-    if (typeof Buffer !== 'undefined') {
-      return Buffer.from(bytes).toString('base64');
+    if (typeof Buffer !== "undefined") {
+      return Buffer.from(bytes).toString("base64");
     }
   } catch {
     // fallthrough
@@ -115,12 +147,15 @@ const bytesToBase64 = (bytes: Uint8Array) => {
 
   // If btoa is available, use a chunked String.fromCharCode approach to avoid call size limits
   try {
-    if (typeof global.btoa === 'function') {
+    if (typeof global.btoa === "function") {
       const chunkSize = 0x8000; // 32KB chunks
-      let binary = '';
+      let binary = "";
       for (let i = 0; i < bytes.length; i += chunkSize) {
         const chunk = bytes.subarray(i, i + chunkSize);
-        binary += String.fromCharCode.apply(null, Array.prototype.slice.call(chunk));
+        binary += String.fromCharCode.apply(
+          null,
+          Array.prototype.slice.call(chunk),
+        );
       }
       return global.btoa(binary);
     }
@@ -129,8 +164,9 @@ const bytesToBase64 = (bytes: Uint8Array) => {
   }
 
   // Pure JS base64 encoder as a last resort (works in all environments)
-  const base64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-  let result = '';
+  const base64chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  let result = "";
   let i;
   for (i = 0; i < bytes.length; i += 3) {
     const b1 = bytes[i];
@@ -139,23 +175,23 @@ const bytesToBase64 = (bytes: Uint8Array) => {
     const triplet = (b1 << 16) | (b2 << 8) | b3;
     result += base64chars[(triplet >> 18) & 0x3f];
     result += base64chars[(triplet >> 12) & 0x3f];
-    result += i + 1 < bytes.length ? base64chars[(triplet >> 6) & 0x3f] : '=';
-    result += i + 2 < bytes.length ? base64chars[triplet & 0x3f] : '=';
+    result += i + 1 < bytes.length ? base64chars[(triplet >> 6) & 0x3f] : "=";
+    result += i + 2 < bytes.length ? base64chars[triplet & 0x3f] : "=";
   }
   return result;
 };
 
 const base64ToBytes = (value: string) => {
   try {
-    if (typeof Buffer !== 'undefined') {
-      const buf = Buffer.from(value, 'base64');
+    if (typeof Buffer !== "undefined") {
+      const buf = Buffer.from(value, "base64");
       return new Uint8Array(buf);
     }
   } catch {
     // fallthrough
   }
 
-  if (typeof global.atob === 'function') {
+  if (typeof global.atob === "function") {
     const binary = global.atob(value);
     const bytes = new Uint8Array(binary.length);
     for (let index = 0; index < binary.length; index += 1) {
@@ -172,14 +208,14 @@ let _forge: any = null;
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/ban-ts-comment
   // @ts-ignore
-  _forge = require('node-forge');
+  _forge = require("node-forge");
 } catch (e) {
   _forge = null;
 }
 
 // Helper: convert Uint8Array to forge byte string
 const u8ToForgeBytes = (u8: Uint8Array) => {
-  let s = '';
+  let s = "";
   for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]);
   return s;
 };
@@ -192,40 +228,48 @@ const forgeBytesToU8 = (s: string) => {
 };
 
 // Pure-JS AES-GCM encrypt/decrypt using node-forge
-const forgeEncrypt = async (keyRaw: Uint8Array, iv: Uint8Array, plaintext: Uint8Array) => {
-  if (!_forge) throw new Error('node-forge not available');
+const forgeEncrypt = async (
+  keyRaw: Uint8Array,
+  iv: Uint8Array,
+  plaintext: Uint8Array,
+) => {
+  if (!_forge) throw new Error("node-forge not available");
   const forgeKey = u8ToForgeBytes(keyRaw);
-  const cipher = _forge.cipher.createCipher('AES-GCM', forgeKey);
+  const cipher = _forge.cipher.createCipher("AES-GCM", forgeKey);
   cipher.start({ iv: u8ToForgeBytes(iv), tagLength: 128 });
   cipher.update(_forge.util.createBuffer(u8ToForgeBytes(plaintext)));
   const ok = cipher.finish();
-  if (!ok) throw new Error('forge encrypt failed');
+  if (!ok) throw new Error("forge encrypt failed");
   const ciphertext = cipher.output.getBytes();
   const tag = cipher.mode.tag.getBytes();
   const out = forgeBytesToU8(ciphertext + tag);
   return out;
 };
 
-const forgeDecrypt = async (keyRaw: Uint8Array, iv: Uint8Array, payload: Uint8Array) => {
-  if (!_forge) throw new Error('node-forge not available');
+const forgeDecrypt = async (
+  keyRaw: Uint8Array,
+  iv: Uint8Array,
+  payload: Uint8Array,
+) => {
+  if (!_forge) throw new Error("node-forge not available");
   // last 16 bytes are tag
   const tagLen = 16;
-  if (payload.length < tagLen) throw new Error('invalid payload');
+  if (payload.length < tagLen) throw new Error("invalid payload");
   const ct = payload.slice(0, payload.length - tagLen);
   const tag = payload.slice(payload.length - tagLen);
   const forgeKey = u8ToForgeBytes(keyRaw);
-  const decipher = _forge.cipher.createDecipher('AES-GCM', forgeKey);
+  const decipher = _forge.cipher.createDecipher("AES-GCM", forgeKey);
   decipher.start({ iv: u8ToForgeBytes(iv), tag: u8ToForgeBytes(tag) });
   decipher.update(_forge.util.createBuffer(u8ToForgeBytes(ct)));
   const ok = decipher.finish();
-  if (!ok) throw new Error('forge decrypt failed or auth tag mismatch');
+  if (!ok) throw new Error("forge decrypt failed or auth tag mismatch");
   const plain = decipher.output.getBytes();
   return forgeBytesToU8(plain);
 };
 
 // Polyfill crypto object for React Native if not available
 const getCrypto = () => {
-  if (typeof global.crypto !== 'undefined' && global.crypto.subtle) {
+  if (typeof global.crypto !== "undefined" && global.crypto.subtle) {
     return global.crypto;
   }
 
@@ -238,24 +282,36 @@ const getCrypto = () => {
         return arr;
       },
       subtle: {
-        importKey: async (format: any, keyData: any, algorithm: any, extractable: any, keyUsages: any) => {
+        importKey: async (
+          format: any,
+          keyData: any,
+          algorithm: any,
+          extractable: any,
+          keyUsages: any,
+        ) => {
           // For AES-GCM raw import: return the raw bytes in a format our forge wrappers can use
-          if (format === 'raw') {
+          if (format === "raw") {
             if (keyData instanceof Uint8Array) return keyData;
-            if (typeof keyData === 'string') return base64ToBytes(keyData);
+            if (typeof keyData === "string") return base64ToBytes(keyData);
             if (keyData.buffer) return new Uint8Array(keyData.buffer);
           }
-          throw new Error('importKey format unsupported in fallback');
+          throw new Error("importKey format unsupported in fallback");
         },
         encrypt: async (alg: any, key: any, data: any) => {
           // alg.iv expected as Uint8Array
-          const iv = alg.iv instanceof Uint8Array ? alg.iv : new Uint8Array(alg.iv || []);
+          const iv =
+            alg.iv instanceof Uint8Array
+              ? alg.iv
+              : new Uint8Array(alg.iv || []);
           const keyRaw = key as Uint8Array;
           const payload = await forgeEncrypt(keyRaw, iv, new Uint8Array(data));
           return payload.buffer;
         },
         decrypt: async (alg: any, key: any, data: any) => {
-          const iv = alg.iv instanceof Uint8Array ? alg.iv : new Uint8Array(alg.iv || []);
+          const iv =
+            alg.iv instanceof Uint8Array
+              ? alg.iv
+              : new Uint8Array(alg.iv || []);
           const keyRaw = key as Uint8Array;
           const plain = await forgeDecrypt(keyRaw, iv, new Uint8Array(data));
           return plain.buffer;
@@ -273,16 +329,21 @@ const getCrypto = () => {
       return arr;
     },
     subtle: {
-      encrypt: async () => { throw new Error('SubtleCrypto not available - WebCrypto API required'); },
-      decrypt: async () => { throw new Error('SubtleCrypto not available - WebCrypto API required'); },
-      importKey: async () => { throw new Error('SubtleCrypto not available - WebCrypto API required'); },
+      encrypt: async () => {
+        throw new Error("SubtleCrypto not available - WebCrypto API required");
+      },
+      decrypt: async () => {
+        throw new Error("SubtleCrypto not available - WebCrypto API required");
+      },
+      importKey: async () => {
+        throw new Error("SubtleCrypto not available - WebCrypto API required");
+      },
     },
   };
 };
 
 // No passphrase onboarding in this build. Use SecureStore-backed key (legacy) for encryption.
 let runtimeVaultKey: CryptoKey | null = null;
-
 
 const getVaultKey = async (): Promise<CryptoKey> => {
   const crypto = getCrypto();
@@ -311,7 +372,11 @@ const encryptVault = async (value: string): Promise<string> => {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encoded = new TextEncoder().encode(value);
 
-  const encrypted = await (crypto.subtle as any).encrypt({ name: "AES-GCM", iv }, key, encoded);
+  const encrypted = await (crypto.subtle as any).encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    encoded,
+  );
   return JSON.stringify({
     version: 1,
     iv: bytesToBase64(iv),
@@ -319,8 +384,14 @@ const encryptVault = async (value: string): Promise<string> => {
   });
 };
 
-const decryptVault = async (value: string): Promise<{ files: VaultFile[]; folders: Folder[] }> => {
-  const blob = JSON.parse(value) as { version?: number; iv?: string; payload?: string };
+const decryptVault = async (
+  value: string,
+): Promise<{ files: VaultFile[]; folders: Folder[] }> => {
+  const blob = JSON.parse(value) as {
+    version?: number;
+    iv?: string;
+    payload?: string;
+  };
   if (!blob.iv || !blob.payload) {
     return normalizeVault(JSON.parse(value));
   }
@@ -353,21 +424,28 @@ const writeDurableBackup = async (encrypted: string) => {
       return;
     }
   } catch (e) {
-    console.debug('durable vault backup (SAF) failed', e);
+    console.debug("durable vault backup (SAF) failed", e);
   }
 
   // Fallback: write into app documentDirectory/persistent vault dir which is writable
   try {
-    await FileSystem.makeDirectoryAsync(PERSISTENT_VAULT_DIR, { intermediates: true });
+    await FileSystem.makeDirectoryAsync(PERSISTENT_VAULT_DIR, {
+      intermediates: true,
+    });
     const fileUri = `${PERSISTENT_VAULT_DIR}${BACKUP_FILE}`;
-    await FileSystem.writeAsStringAsync(fileUri, encrypted, { encoding: FileSystem.EncodingType.UTF8 });
+    await FileSystem.writeAsStringAsync(fileUri, encrypted, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
     return;
   } catch (error) {
     console.debug("durable vault backup failed", error);
   }
 };
 
-const readDurableBackup = async (): Promise<{ files: VaultFile[]; folders: Folder[] } | null> => {
+const readDurableBackup = async (): Promise<{
+  files: VaultFile[];
+  folders: Folder[];
+} | null> => {
   if (Platform.OS !== "android") return null;
 
   // Prefer reading from SAF if available
@@ -382,7 +460,7 @@ const readDurableBackup = async (): Promise<{ files: VaultFile[]; folders: Folde
       }
     }
   } catch (e) {
-    console.debug('durable vault read (SAF) failed', e);
+    console.debug("durable vault read (SAF) failed", e);
   }
 
   // Fallback: look in app documentDirectory
@@ -390,7 +468,9 @@ const readDurableBackup = async (): Promise<{ files: VaultFile[]; folders: Folde
     const fileUri = `${PERSISTENT_VAULT_DIR}${BACKUP_FILE}`;
     const info = await FileSystem.getInfoAsync(fileUri);
     if (!info.exists) return null;
-    const raw = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.UTF8 });
+    const raw = await FileSystem.readAsStringAsync(fileUri, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
     return await decryptVault(raw);
   } catch (error) {
     console.debug("durable vault read failed", error);
@@ -399,15 +479,21 @@ const readDurableBackup = async (): Promise<{ files: VaultFile[]; folders: Folde
   return null;
 };
 
-
-const readStoredVault = async (raw: string | null): Promise<{ files: VaultFile[]; folders: Folder[] }> => {
+const readStoredVault = async (
+  raw: string | null,
+): Promise<{ files: VaultFile[]; folders: Folder[] }> => {
   if (!raw) {
     return { files: [], folders: [] };
   }
 
   try {
     const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object" && "payload" in parsed && "iv" in parsed) {
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      "payload" in parsed &&
+      "iv" in parsed
+    ) {
       return await decryptVault(raw);
     }
     return normalizeVault(parsed);
@@ -417,11 +503,17 @@ const readStoredVault = async (raw: string | null): Promise<{ files: VaultFile[]
 };
 
 export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
-  if (!file.uri || file.uri.startsWith("http://") || file.uri.startsWith("https://")) {
+  if (
+    !file.uri ||
+    file.uri.startsWith("http://") ||
+    file.uri.startsWith("https://")
+  ) {
     return file.uri;
   }
 
-  const encryptedBase64 = await FileSystem.readAsStringAsync(file.uri, { encoding: FileSystem.EncodingType.Base64 });
+  const encryptedBase64 = await FileSystem.readAsStringAsync(file.uri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
   const encryptedBytes = base64ToBytes(encryptedBase64);
   const iv = encryptedBytes.slice(0, 12);
   const payload = encryptedBytes.slice(12);
@@ -431,26 +523,44 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
   // Log which crypto path is used to help diagnose decryption problems
   try {
     // eslint-disable-next-line no-console
-    console.debug('decryptVaultFileForUse: using WebCrypto?', typeof (global as any).crypto !== 'undefined' && !!(global as any).crypto.subtle, 'forgeFallbackLoaded?', !!_forge);
+    console.debug(
+      "decryptVaultFileForUse: using WebCrypto?",
+      typeof (global as any).crypto !== "undefined" &&
+        !!(global as any).crypto.subtle,
+      "forgeFallbackLoaded?",
+      !!_forge,
+    );
   } catch (e) {
     // ignore
   }
-  const decrypted = await (crypto.subtle as any).decrypt({ name: "AES-GCM", iv }, key, payload);
+  const decrypted = await (crypto.subtle as any).decrypt(
+    { name: "AES-GCM", iv },
+    key,
+    payload,
+  );
   const plain = new Uint8Array(decrypted);
 
   // Basic integrity checks to avoid writing corrupted previews (helps diagnose blank previews)
   try {
     if (plain.length === 0) {
-      console.debug("decryptVaultFileForUse: decrypted payload is empty", { uri: file.uri });
+      console.debug("decryptVaultFileForUse: decrypted payload is empty", {
+        uri: file.uri,
+      });
       throw new Error("Decrypted payload is empty");
     }
 
     const ext = (file.extension || "").toLowerCase();
     // If PDF, ensure magic header starts with %PDF
     if (ext === "pdf") {
-      const header = String.fromCharCode.apply(null, Array.prototype.slice.call(plain.slice(0, 4)));
+      const header = String.fromCharCode.apply(
+        null,
+        Array.prototype.slice.call(plain.slice(0, 4)),
+      );
       if (!header.startsWith("%PDF")) {
-        console.debug("decryptVaultFileForUse: pdf magic header mismatch", { header, uri: file.uri });
+        console.debug("decryptVaultFileForUse: pdf magic header mismatch", {
+          header,
+          uri: file.uri,
+        });
         throw new Error("Decrypted PDF appears invalid");
       }
     }
@@ -465,14 +575,26 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
     try {
       await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
     } catch (e) {
-      try { console.debug('decryptVaultFileForUse: makeDirectoryAsync failed for', dir, e); } catch(_) {}
+      try {
+        console.debug(
+          "decryptVaultFileForUse: makeDirectoryAsync failed for",
+          dir,
+          e,
+        );
+      } catch (_) {}
     }
 
     try {
       const info = await (FileSystem as any).getInfoAsync(dir);
       if (info.exists && info.isDirectory) return true;
     } catch (e) {
-      try { console.debug('decryptVaultFileForUse: getInfoAsync failed for dir', dir, e); } catch(_) {}
+      try {
+        console.debug(
+          "decryptVaultFileForUse: getInfoAsync failed for dir",
+          dir,
+          e,
+        );
+      } catch (_) {}
     }
     return false;
   };
@@ -482,20 +604,29 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
   let dirOk = await ensureDir(writableDir);
   if (!dirOk) {
     // try alternate form without file://
-    const alt = writableDir.startsWith('file://') ? writableDir.replace('file://', '') : `file://${writableDir}`;
+    const alt = writableDir.startsWith("file://")
+      ? writableDir.replace("file://", "")
+      : `file://${writableDir}`;
     dirOk = await ensureDir(alt);
     if (dirOk) writableDir = alt;
   }
   if (!dirOk) {
     // last resort: use FileSystem.cacheDirectory root (may be with file:// already)
-    const root = (FileSystem as any).cacheDirectory || (FileSystem as any).documentDirectory || '';
+    const root =
+      (FileSystem as any).cacheDirectory ||
+      (FileSystem as any).documentDirectory ||
+      "";
     if (root) {
-      writableDir = root.endsWith('/') ? `${root}` : `${root}/`;
+      writableDir = root.endsWith("/") ? `${root}` : `${root}/`;
       dirOk = await ensureDir(writableDir);
     }
   }
   if (!dirOk) {
-    try { console.debug('decryptVaultFileForUse: no writable decrypted cache directory available; will attempt write and likely fail'); } catch(_) {}
+    try {
+      console.debug(
+        "decryptVaultFileForUse: no writable decrypted cache directory available; will attempt write and likely fail",
+      );
+    } catch (_) {}
   }
 
   const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${file.extension || "bin"}`;
@@ -504,89 +635,151 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
 
   // Debug: log sizes to help diagnose write failures on device
   try {
-    console.debug('decryptVaultFileForUse: about to write decrypted file', { destinationPath, base64Length: plainBase64 ? plainBase64.length : 0 });
-  } catch (e) { /* ignore logging failures */ }
+    console.debug("decryptVaultFileForUse: about to write decrypted file", {
+      destinationPath,
+      base64Length: plainBase64 ? plainBase64.length : 0,
+    });
+  } catch (e) {
+    /* ignore logging failures */
+  }
 
   // Attempt write, and if verification says file missing/empty, retry using alternate URI form (with/without file://)
   let writeErr: any = null;
   try {
-    await FileSystem.writeAsStringAsync(destinationPath, plainBase64, { encoding: (FileSystem as any).EncodingType?.Base64 ?? 'base64' });
+    await FileSystem.writeAsStringAsync(destinationPath, plainBase64, {
+      encoding: (FileSystem as any).EncodingType?.Base64 ?? "base64",
+    });
   } catch (e) {
     writeErr = e;
-    try { console.debug('decryptVaultFileForUse: first write failed', e); } catch(_) {}
+    try {
+      console.debug("decryptVaultFileForUse: first write failed", e);
+    } catch (_) {}
   }
 
   // Verify written file exists and has expected size
   try {
     let info = await (FileSystem as any).getInfoAsync(destinationPath);
     if (!info.exists || (info.size || 0) === 0) {
-      try { console.debug('decryptVaultFileForUse: written file missing or empty on first check', { destinationPath, info }); } catch(_) {}
+      try {
+        console.debug(
+          "decryptVaultFileForUse: written file missing or empty on first check",
+          { destinationPath, info },
+        );
+      } catch (_) {}
 
       // Try alternate path form: if path starts with file://, try without it, otherwise try adding it.
       try {
-        const alt = destinationPath.startsWith('file://') ? destinationPath.replace('file://', '') : `file://${destinationPath}`;
-        try { console.debug('decryptVaultFileForUse: attempting retry write to alternate path', { alt }); } catch(_) {}
-        await FileSystem.writeAsStringAsync(alt, plainBase64, { encoding: (FileSystem as any).EncodingType?.Base64 ?? 'base64' });
+        const alt = destinationPath.startsWith("file://")
+          ? destinationPath.replace("file://", "")
+          : `file://${destinationPath}`;
+        try {
+          console.debug(
+            "decryptVaultFileForUse: attempting retry write to alternate path",
+            { alt },
+          );
+        } catch (_) {}
+        await FileSystem.writeAsStringAsync(alt, plainBase64, {
+          encoding: (FileSystem as any).EncodingType?.Base64 ?? "base64",
+        });
         info = await (FileSystem as any).getInfoAsync(alt);
         if (info.exists && (info.size || 0) > 0) {
-          try { console.debug('decryptVaultFileForUse: retry write succeeded', { alt, info }); } catch(_) {}
+          try {
+            console.debug("decryptVaultFileForUse: retry write succeeded", {
+              alt,
+              info,
+            });
+          } catch (_) {}
           // Use alt as destinationPath for return
-          if (alt.startsWith('file://')) {
+          if (alt.startsWith("file://")) {
             // normalize to no-op; we'll return with file:// later
           }
           // Note: we do not change destinationPath variable here because it's const; instead we'll handle normalization later.
         } else {
-          try { console.debug('decryptVaultFileForUse: retry write did not produce file', { alt, info }); } catch(_) {}
-          throw new Error('Retry write failed to produce file');
+          try {
+            console.debug(
+              "decryptVaultFileForUse: retry write did not produce file",
+              { alt, info },
+            );
+          } catch (_) {}
+          throw new Error("Retry write failed to produce file");
         }
       } catch (retryErr) {
-        console.debug('decryptVaultFileForUse: verification failed after retry', retryErr);
+        console.debug(
+          "decryptVaultFileForUse: verification failed after retry",
+          retryErr,
+        );
         throw retryErr;
       }
     }
   } catch (ioErr) {
-    console.debug('decryptVaultFileForUse: verification failed', ioErr);
+    console.debug("decryptVaultFileForUse: verification failed", ioErr);
     // Re-throw so caller can show an error instead of a blank page
     throw ioErr;
   }
 
   // Normalize returned path to include file:// for consumers that expect URI format
   let normalized = destinationPath;
-  if (!normalized.startsWith('file://') && normalized.startsWith('/')) {
+  if (!normalized.startsWith("file://") && normalized.startsWith("/")) {
     normalized = `file://${normalized}`;
   }
   return normalized;
 }
 
-
-export async function persistVaultFile(sourceUri: string, nameHint: string, extension: string): Promise<string> {
-  const safeName = `${nameHint || "vault-item"}`.replace(/[^a-zA-Z0-9._-]/g, "_");
+export async function persistVaultFile(
+  sourceUri: string,
+  nameHint: string,
+  extension: string,
+): Promise<string> {
+  const safeName = `${nameHint || "vault-item"}`.replace(
+    /[^a-zA-Z0-9._-]/g,
+    "_",
+  );
   const cleanExt = extension.replace(/^\./, "");
-  const finalName = safeName.includes(".") ? safeName : `${safeName}${cleanExt ? `.${cleanExt}` : ""}`;
+  const finalName = safeName.includes(".")
+    ? safeName
+    : `${safeName}${cleanExt ? `.${cleanExt}` : ""}`;
   const encryptedName = `${finalName}.enc`;
   let destinationUri = `${PERSISTENT_VAULT_DIR}${encryptedName}`;
 
-  await FileSystem.makeDirectoryAsync(PERSISTENT_VAULT_DIR, { intermediates: true });
-
+  await FileSystem.makeDirectoryAsync(PERSISTENT_VAULT_DIR, {
+    intermediates: true,
+  });
 
   // Try to encrypt and write the file. If encryption fails we MUST NOT fall back to
   // unencrypted storage silently — this would leak user data. Instead surface an error
   // so the caller/UI can present the user with a retry/alert.
   let wroteEncrypted = false;
   try {
-    const rawBase64 = await FileSystem.readAsStringAsync(sourceUri, { encoding: FileSystem.EncodingType.Base64 });
+    const rawBase64 = await FileSystem.readAsStringAsync(sourceUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
     const rawBytes = base64ToBytes(rawBase64);
 
     const key = await getVaultKey();
     const crypto = getCrypto();
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const ciphertext = await (crypto.subtle as any).encrypt({ name: "AES-GCM", iv }, key, rawBytes);
-    const payload = new Uint8Array(iv.length + new Uint8Array(ciphertext).length);
+    const ciphertext = await (crypto.subtle as any).encrypt(
+      { name: "AES-GCM", iv },
+      key,
+      rawBytes,
+    );
+    const payload = new Uint8Array(
+      iv.length + new Uint8Array(ciphertext).length,
+    );
     payload.set(iv, 0);
     payload.set(new Uint8Array(ciphertext), iv.length);
-    await FileSystem.writeAsStringAsync(destinationUri, bytesToBase64(payload), { encoding: FileSystem.EncodingType.Base64 });
+    await FileSystem.writeAsStringAsync(
+      destinationUri,
+      bytesToBase64(payload),
+      { encoding: FileSystem.EncodingType.Base64 },
+    );
     wroteEncrypted = true;
-    try { console.debug('persistVaultFile: wrote encrypted file', { sourceUri, destinationUri }); } catch(e) {}
+    try {
+      console.debug("persistVaultFile: wrote encrypted file", {
+        sourceUri,
+        destinationUri,
+      });
+    } catch (e) {}
   } catch (error) {
     // Do not silently fall back to plaintext — surface the error to callers so they can
     // show an explicit warning and the user can choose to retry or cancel the save.
@@ -598,14 +791,20 @@ export async function persistVaultFile(sourceUri: string, nameHint: string, exte
   // now points at the unencrypted fallback file.
 
   try {
-    if (sourceUri && sourceUri !== destinationUri && sourceUri.startsWith("file://")) {
+    if (
+      sourceUri &&
+      sourceUri !== destinationUri &&
+      sourceUri.startsWith("file://")
+    ) {
       await FileSystem.deleteAsync(sourceUri, { idempotent: true });
     }
   } catch (error) {
     console.debug("persistVaultFile cleanup failed", error);
   }
 
-  try { console.debug('persistVaultFile: returning destinationUri', destinationUri); } catch(e) {}
+  try {
+    console.debug("persistVaultFile: returning destinationUri", destinationUri);
+  } catch (e) {}
   return destinationUri;
 }
 
@@ -628,9 +827,11 @@ export async function clearDecryptedCache(): Promise<void> {
     if (!dir) return;
     await FileSystem.deleteAsync(dir, { idempotent: true });
     // Recreate empty folder so future writes succeed without racing with cleanup.
-    try { await FileSystem.makeDirectoryAsync(dir, { intermediates: true }); } catch(e) { }
+    try {
+      await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+    } catch (e) {}
   } catch (e) {
-    console.debug('clearDecryptedCache failed', e);
+    console.debug("clearDecryptedCache failed", e);
   }
 }
 
@@ -677,13 +878,18 @@ export async function getExternalTreeUri(): Promise<string | null> {
   }
 }
 
-export async function writeBytesToExternal(relativePath: string, base64Data: string): Promise<boolean> {
+export async function writeBytesToExternal(
+  relativePath: string,
+  base64Data: string,
+): Promise<boolean> {
   const tree = await getExternalTreeUri();
   if (!tree) throw new Error("No external tree configured");
   return await saf.writeFileToTree(tree, relativePath, base64Data);
 }
 
-export async function readBytesFromExternal(relativePath: string): Promise<string | null> {
+export async function readBytesFromExternal(
+  relativePath: string,
+): Promise<string | null> {
   const tree = await getExternalTreeUri();
   if (!tree) return null;
   return await saf.readFileFromTree(tree, relativePath);
@@ -703,13 +909,21 @@ export async function migrateCacheFilesToVault(): Promise<void> {
       // Normalize file.uri to start with cacheDir; match both file://cache and plain cache paths
       if (cacheDir && file.uri.startsWith(cacheDir)) {
         try {
-          const newUri = await persistVaultFile(file.uri, (file as any).id || (file as any).name || "vault-item", file.extension || "");
+          const newUri = await persistVaultFile(
+            file.uri,
+            (file as any).id || (file as any).name || "vault-item",
+            file.extension || "",
+          );
           if (newUri && newUri !== file.uri) {
             file.uri = newUri;
             changed = true;
           }
         } catch (err) {
-          console.debug("migrateCacheFilesToVault: failed to migrate", file.uri, err);
+          console.debug(
+            "migrateCacheFilesToVault: failed to migrate",
+            file.uri,
+            err,
+          );
         }
       }
     }
@@ -724,9 +938,14 @@ export async function migrateCacheFilesToVault(): Promise<void> {
 
 // Passphrase onboarding isn't implemented in this build. Provide a stub so screens that reference
 // initializeVaultWithPassphrase compile and can show an appropriate error to the user.
-export async function initializeVaultWithPassphrase(passphrase: string, create: boolean): Promise<void> {
+export async function initializeVaultWithPassphrase(
+  passphrase: string,
+  create: boolean,
+): Promise<void> {
   // Intentionally not implemented: real passphrase/KDF-based recovery requires
   // additional native bindings and UX for backup/restore. Surface a clear error so the caller
   // can present the user with an appropriate message.
-  throw new Error('Passphrase-derived vault initialization is not implemented in this build');
+  throw new Error(
+    "Passphrase-derived vault initialization is not implemented in this build",
+  );
 }

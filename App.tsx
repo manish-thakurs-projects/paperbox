@@ -1,6 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
-import { NavigationContainer, DefaultTheme, DarkTheme } from "@react-navigation/native";
+import {
+  NavigationContainer,
+  DefaultTheme,
+  DarkTheme,
+} from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AppNavigator } from "@/navigation/AppNavigator";
@@ -9,6 +13,7 @@ import { useSettingsStore } from "@/store/useSettingsStore";
 import { useVaultStore } from "@/store/useVaultStore";
 import { checkLocalAuthenticationAvailable } from "@/utils/localAuthentication";
 import { clearDecryptedCache } from "@/services/vaultStorage";
+import ThemedAlert from "@/components/ThemedAlert";
 
 export default function App() {
   const theme = useSettingsStore((s) => s.theme);
@@ -27,7 +32,9 @@ export default function App() {
       try {
         await clearDecryptedCache();
       } catch (e) {
-        try { console.debug('clearDecryptedCache failed on startup', e); } catch (_) {}
+        try {
+          console.debug("clearDecryptedCache failed on startup", e);
+        } catch (_) {}
       }
       // Now hydrate the in-memory vault/index.
       hydrate();
@@ -63,18 +70,27 @@ export default function App() {
     const handler = (nextState: string) => {
       try {
         // Clear on background and on resume (active) to cover both transitions.
-        if (nextState === 'background' || nextState === 'inactive' || nextState === 'active') {
+        if (
+          nextState === "background" ||
+          nextState === "inactive" ||
+          nextState === "active"
+        ) {
           void clearDecryptedCache();
         }
       } catch (e) {
-        try { console.debug('clearDecryptedCache AppState handler failed', e); } catch(_){}
+        try {
+          console.debug("clearDecryptedCache AppState handler failed", e);
+        } catch (_) {}
       }
     };
 
-    const sub = AppState.addEventListener ? AppState.addEventListener('change', handler) : null;
+    const sub = AppState.addEventListener
+      ? AppState.addEventListener("change", handler)
+      : null;
     return () => {
       try {
-        if (sub && typeof (sub as any).remove === 'function') (sub as any).remove();
+        if (sub && typeof (sub as any).remove === "function")
+          (sub as any).remove();
       } catch (e) {
         // ignore
       }
@@ -91,6 +107,7 @@ export default function App() {
           <AppNavigator />
         )}
       </NavigationContainer>
+    <ThemedAlert />
     </SafeAreaProvider>
   );
 }

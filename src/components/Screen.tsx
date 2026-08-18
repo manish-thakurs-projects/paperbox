@@ -14,7 +14,7 @@ export function Screen({
   const { colors } = usePaperTheme();
 
   return (
-    <View style={[styles.safe, { backgroundColor: colors.background }]}> 
+    <View style={[styles.safe, { backgroundColor: colors.background }]}>
       <View style={styles.container}>
         <ScrollView
           contentContainerStyle={[styles.content, style]}

@@ -6,7 +6,9 @@ declare module "react-native-opencv3" {
     facing?: "back" | "front";
     useStorage?: boolean;
     onPayload?: (event: { payload: any }) => void;
-    onFrameSize?: (event: { payload: { frameSize: { frameWidth: number; frameHeight: number } } }) => void;
+    onFrameSize?: (event: {
+      payload: { frameSize: { frameWidth: number; frameHeight: number } };
+    }) => void;
   }
 
   export const CvCamera: ComponentClass<CvCameraProps>;

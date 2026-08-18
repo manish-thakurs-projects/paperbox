@@ -1,12 +1,18 @@
 import React, { useState } from "react";
 import {
-  Alert,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { showAlert } from "../services/alertService";
+
+const Alert = {
+  alert: (title?: string, message?: string, buttons?: any[]) => {
+    showAlert(title, message, buttons);
+  },
+};
 import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";

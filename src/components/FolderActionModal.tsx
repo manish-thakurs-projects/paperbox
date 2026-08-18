@@ -1,5 +1,21 @@
 import React, { useEffect, useState } from "react";
-import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { showAlert } from "../services/alertService";
+
+const Alert = {
+  alert: (title?: string, message?: string, buttons?: any[]) => {
+    showAlert(title, message, buttons);
+  },
+};
 import { Feather } from "@expo/vector-icons";
 import { usePaperTheme, PaperColors } from "../theme/usePaperTheme";
 import { withAlpha } from "../theme/utils";
@@ -53,17 +69,26 @@ export function FolderActionModal({
   };
 
   const handleDelete = () => {
-    Alert.alert("Delete folder?", "This will remove the folder. Files inside will remain.", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: onDelete },
-    ]);
+    Alert.alert(
+      "Delete folder?",
+      "This will remove the folder. Files inside will remain.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: onDelete },
+      ],
+    );
   };
 
   if (renameVisible) {
     return (
-      <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setRenameVisible(false)}>
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === "ios" ? "padding" : "height"} 
+      <Modal
+        visible={visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRenameVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={s.overlay}
         >
           <Pressable style={s.overlay} onPress={() => setRenameVisible(false)}>
@@ -84,7 +109,10 @@ export function FolderActionModal({
                 >
                   <Text style={[s.buttonText, s.cancelText]}>Cancel</Text>
                 </Pressable>
-                <Pressable style={[s.button, s.saveButton]} onPress={handleRename}>
+                <Pressable
+                  style={[s.button, s.saveButton]}
+                  onPress={handleRename}
+                >
                   <Text style={[s.buttonText, s.saveText]}>Rename</Text>
                 </Pressable>
               </View>
@@ -96,7 +124,12 @@ export function FolderActionModal({
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onRequestClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onRequestClose}
+    >
       <Pressable style={s.overlay} onPress={onRequestClose}>
         <Pressable style={s.modal} onPress={(e) => e.stopPropagation()}>
           <View style={s.header}>
@@ -111,8 +144,14 @@ export function FolderActionModal({
               <Text style={s.actionLabel}>Rename</Text>
             </Pressable>
             <Pressable style={s.action} onPress={onTogglePin}>
-              <Feather name={folder?.isPinned ? "bookmark" : "bookmark"} size={18} color={colors.text} />
-              <Text style={s.actionLabel}>{folder?.isPinned ? "Unpin" : "Pin"}</Text>
+              <Feather
+                name={folder?.isPinned ? "bookmark" : "bookmark"}
+                size={18}
+                color={colors.text}
+              />
+              <Text style={s.actionLabel}>
+                {folder?.isPinned ? "Unpin" : "Pin"}
+              </Text>
             </Pressable>
             <Pressable style={[s.action, s.destructive]} onPress={handleDelete}>
               <Feather name="trash-2" size={18} color={colors.destructive} />

@@ -1,6 +1,9 @@
 ﻿import React, { useEffect, useState } from "react";
 import { Feather } from "@expo/vector-icons";
-import { BottomTabBarButtonProps, createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import {
+  BottomTabBarButtonProps,
+  createBottomTabNavigator,
+} from "@react-navigation/bottom-tabs";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { withAlpha } from "../theme/utils";
 import { HomeScreen } from "../screens/HomeScreen";
@@ -65,8 +68,19 @@ function IconOnlyTabBarButton({
     >
       {children}
       {showTooltip && (
-        <View style={[styles.tooltip, { backgroundColor: colors.elevated, borderColor: colors.border, shadowColor: withAlpha(colors.text, 0.15) }]}> 
-          <Text style={[styles.tooltipText, { color: colors.text }]}>{label}</Text>
+        <View
+          style={[
+            styles.tooltip,
+            {
+              backgroundColor: colors.elevated,
+              borderColor: colors.border,
+              shadowColor: withAlpha(colors.text, 0.15),
+            },
+          ]}
+        >
+          <Text style={[styles.tooltipText, { color: colors.text }]}>
+            {label}
+          </Text>
         </View>
       )}
     </Pressable>
@@ -147,4 +161,3 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
-

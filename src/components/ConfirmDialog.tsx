@@ -30,7 +30,12 @@ export function ConfirmDialog({
   const styles = getStyles(colors, destructive);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onCancel}
+    >
       <View style={styles.overlay}>
         <View style={styles.container}>
           <Text style={styles.title}>{title}</Text>
@@ -38,17 +43,34 @@ export function ConfirmDialog({
           <View style={styles.actions}>
             {!hideCancelButton ? (
               <Pressable
-                style={({ pressed }) => [styles.button, styles.cancelButton, pressed && styles.buttonPressed]}
+                style={({ pressed }) => [
+                  styles.button,
+                  styles.cancelButton,
+                  pressed && styles.buttonPressed,
+                ]}
                 onPress={onCancel}
               >
-                <Text style={[styles.buttonText, styles.cancelText]}>{cancelText}</Text>
+                <Text style={[styles.buttonText, styles.cancelText]}>
+                  {cancelText}
+                </Text>
               </Pressable>
             ) : null}
             <Pressable
-              style={({ pressed }) => [styles.button, destructive ? styles.destructiveButton : styles.confirmButton, pressed && styles.buttonPressed]}
+              style={({ pressed }) => [
+                styles.button,
+                destructive ? styles.destructiveButton : styles.confirmButton,
+                pressed && styles.buttonPressed,
+              ]}
               onPress={onConfirm}
             >
-              <Text style={[styles.buttonText, destructive ? styles.destructiveText : styles.confirmText]}>{confirmText}</Text>
+              <Text
+                style={[
+                  styles.buttonText,
+                  destructive ? styles.destructiveText : styles.confirmText,
+                ]}
+              >
+                {confirmText}
+              </Text>
             </Pressable>
           </View>
         </View>

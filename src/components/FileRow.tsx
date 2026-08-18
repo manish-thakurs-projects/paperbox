@@ -12,15 +12,15 @@ import { fileSize, relativeDate } from "../utils/files";
 import { radius } from "../theme/tokens";
 import { PaperColors, usePaperTheme } from "../theme/usePaperTheme";
 const icons: Record<string, keyof typeof Feather.glyphMap> = {
-  pdf: 'file-text',
-  document: 'file-text',
-  spreadsheet: 'grid',
-  presentation: 'monitor',
-  image: 'image',
-  video: 'film',   
-  archive: 'archive',
-  text: 'align-left',
-  other: 'file'
+  pdf: "file-text",
+  document: "file-text",
+  spreadsheet: "grid",
+  presentation: "monitor",
+  image: "image",
+  video: "film",
+  archive: "archive",
+  text: "align-left",
+  other: "file",
 };
 export const FileRow = React.memo(function FileRow({
   file,
@@ -41,7 +41,11 @@ export const FileRow = React.memo(function FileRow({
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
-      style={({ pressed }) => [s.row, selected && s.selectedRow, pressed && s.pressedRow]}
+      style={({ pressed }) => [
+        s.row,
+        selected && s.selectedRow,
+        pressed && s.pressedRow,
+      ]}
     >
       <View style={s.icon}>
         <Feather name={icons[file.kind]} size={20} color={colors.text} />

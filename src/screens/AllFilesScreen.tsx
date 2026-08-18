@@ -245,7 +245,9 @@ export function AllFilesScreen() {
         onShare={shareFile}
         onDelete={deleteFile}
         onInfo={goToInfo}
-        onDownload={() => { closeActions(); }}
+        onDownload={() => {
+          closeActions();
+        }}
       />
 
       <FolderMoveModal

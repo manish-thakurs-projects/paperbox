@@ -1,5 +1,11 @@
 import React, { useState } from "react";
-import { View, ActivityIndicator, StyleSheet, Text, TouchableOpacity } from "react-native";
+import {
+  View,
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+} from "react-native";
 import Pdf from "react-native-pdf";
 
 type Props = {
@@ -10,7 +16,13 @@ type Props = {
   showOpenExternal?: boolean; // if false, hide the footer "Open in other app" button
 };
 
-export default function PdfViewer({ uri, filename, onError, onOpenExternal, showOpenExternal = true }: Props) {
+export default function PdfViewer({
+  uri,
+  filename,
+  onError,
+  onOpenExternal,
+  showOpenExternal = true,
+}: Props) {
   const [loading, setLoading] = useState<boolean>(true);
   const [page, setPage] = useState<number>(1);
   const [numberOfPages, setNumberOfPages] = useState<number>(0);
@@ -43,7 +55,6 @@ export default function PdfViewer({ uri, filename, onError, onOpenExternal, show
         onPageChanged={(p: number) => setPage(p)}
         style={styles.pdf}
       />
-
     </View>
   );
 }

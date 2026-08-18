@@ -6,7 +6,7 @@
 try {
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
-  if (typeof global !== 'undefined' && (global as any).process) {
+  if (typeof global !== "undefined" && (global as any).process) {
     try {
       // prefer delete
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -26,6 +26,6 @@ try {
 // Require the standalone ES5 build which is friendlier in some bundlers
 // (we already removed the direct import to this file elsewhere)
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const asm = require('asmcrypto.js/asmcrypto.all.es5.js');
+const asm = require("asmcrypto.js/asmcrypto.all.es5.js");
 
 export default asm;

@@ -1,13 +1,13 @@
-export type FileKind = 
-  | 'pdf'
-  | 'document'
-  | 'spreadsheet'
-  | 'presentation'
-  | 'image'
-  | 'video'
-  | 'archive'
-  | 'text'
-  | 'other';
+export type FileKind =
+  | "pdf"
+  | "document"
+  | "spreadsheet"
+  | "presentation"
+  | "image"
+  | "video"
+  | "archive"
+  | "text"
+  | "other";
 export type VaultFile = {
   id: string;
   name: string;

@@ -1,13 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
 import {
-  Alert,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { showAlert } from "../services/alertService";
+
+const Alert = {
+  alert: (title?: string, message?: string, buttons?: any[]) => {
+    showAlert(title, message, buttons);
+  },
+};
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Screen } from "../components/Screen";
@@ -255,7 +261,9 @@ export function SearchScreen() {
         }}
         onRename={renameFileAction}
         onRemoveFromFolder={actionFile?.folderId ? removeFromFolder : undefined}
-        onDownload={() => { closeActions(); }}
+        onDownload={() => {
+          closeActions();
+        }}
       />
       <FolderMoveModal
         visible={moveVisible}

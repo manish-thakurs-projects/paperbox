@@ -1,5 +1,12 @@
 import React from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { usePaperTheme } from "../theme/usePaperTheme";
 import { withAlpha } from "../theme/utils";
 import { Folder } from "../types";
@@ -25,12 +32,22 @@ export function FolderMoveModal({
   const s = styles(colors);
 
   return (
-    <Modal animationType="slide" transparent visible={visible} onRequestClose={onRequestClose}>
+    <Modal
+      animationType="slide"
+      transparent
+      visible={visible}
+      onRequestClose={onRequestClose}
+    >
       <View style={s.modalOverlay}>
         <View style={s.modalContent}>
           <Text style={s.modalTitle}>Move to folders</Text>
-          <Text style={s.modalSubtitle}>Select one or more folders for this file.</Text>
-          <ScrollView style={s.modalActions} showsVerticalScrollIndicator={false}>
+          <Text style={s.modalSubtitle}>
+            Select one or more folders for this file.
+          </Text>
+          <ScrollView
+            style={s.modalActions}
+            showsVerticalScrollIndicator={false}
+          >
             {folders.length ? (
               folders.map((folder) => {
                 const selected = selectedFolderIds.includes(folder.id);
@@ -46,14 +63,22 @@ export function FolderMoveModal({
                 );
               })
             ) : (
-              <Text style={s.modalEmpty}>Create a folder first to organize this file.</Text>
+              <Text style={s.modalEmpty}>
+                Create a folder first to organize this file.
+              </Text>
             )}
           </ScrollView>
           <View style={s.modalFooter}>
-            <Pressable style={[s.modalActionButton, s.modalCancelButton]} onPress={onRequestClose}>
+            <Pressable
+              style={[s.modalActionButton, s.modalCancelButton]}
+              onPress={onRequestClose}
+            >
               <Text style={s.modalActionText}>Cancel</Text>
             </Pressable>
-            <Pressable style={[s.modalActionButton, s.modalSaveButton]} onPress={onSave}>
+            <Pressable
+              style={[s.modalActionButton, s.modalSaveButton]}
+              onPress={onSave}
+            >
               <Text style={[s.modalActionText, s.modalSaveText]}>Done</Text>
             </Pressable>
           </View>

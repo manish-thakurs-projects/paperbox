@@ -60,7 +60,11 @@ export const useSettingsStore = create<State>((set, get) => {
     setLockEnabled: (enabled) => {
       set({ lockEnabled: enabled });
       const p = get();
-      save({ theme: p.theme, hidePreviews: p.hidePreviews, lockEnabled: enabled });
+      save({
+        theme: p.theme,
+        hidePreviews: p.hidePreviews,
+        lockEnabled: enabled,
+      });
     },
     setLockSuppressed: (enabled) => {
       set({ lockSuppressed: enabled });
@@ -68,7 +72,12 @@ export const useSettingsStore = create<State>((set, get) => {
     toggle: (key) => {
       set((s) => {
         const next = { [key]: !s[key] } as any;
-        const p = { theme: s.theme, hidePreviews: key === "hidePreviews" ? !s.hidePreviews : s.hidePreviews, lockEnabled: s.lockEnabled };
+        const p = {
+          theme: s.theme,
+          hidePreviews:
+            key === "hidePreviews" ? !s.hidePreviews : s.hidePreviews,
+          lockEnabled: s.lockEnabled,
+        };
         save(p).catch(() => {});
         return next;
       });

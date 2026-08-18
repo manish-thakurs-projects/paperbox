@@ -8,9 +8,7 @@
     "android": {
       "package": "paperbox.dustmedia.org",
       "versionCode": 4,
-      "permissions": [
-        "CAMERA"
-      ],
+      "permissions": ["CAMERA"],
       "allowBackup": false
     },
     "ios": {

@@ -5,7 +5,8 @@ import { Platform } from "react-native";
 import { VaultFile } from "../types";
 import { decryptVaultFileForUse } from "./vaultStorage";
 
-const CACHE_DIRECTORY = (FileSystem as any).cacheDirectory ??
+const CACHE_DIRECTORY =
+  (FileSystem as any).cacheDirectory ??
   (FileSystem as any).documentDirectory ??
   "";
 
@@ -23,18 +24,21 @@ const extensionFromMimeType = (mimeType?: string) => {
   if (!mimeType) return "";
   const type = mimeType.toLowerCase();
   if (type.includes("pdf")) return "pdf";
-  if (type.includes("presentationml.presentation") || type.includes("pptx")) return "pptx";
+  if (type.includes("presentationml.presentation") || type.includes("pptx"))
+    return "pptx";
   if (type.includes("powerpoint") || type.includes("ppt")) return "ppt";
-  if (type.includes("wordprocessingml.document") || type.includes("docx")) return "docx";
+  if (type.includes("wordprocessingml.document") || type.includes("docx"))
+    return "docx";
   if (type.includes("msword")) return "doc";
-  if (type.includes("spreadsheetml.sheet") || type.includes("xlsx")) return "xlsx";
+  if (type.includes("spreadsheetml.sheet") || type.includes("xlsx"))
+    return "xlsx";
   if (type.includes("excel") || type.includes("xls")) return "xls";
   return "";
 };
 
 async function copyToCache(file: VaultFile): Promise<string> {
-
-  const extension = file.extension || extensionFromMimeType(file.mimeType) || "bin";
+  const extension =
+    file.extension || extensionFromMimeType(file.mimeType) || "bin";
   const filename = ensureFilename(file.name || "file", extension);
   const destination = `${CACHE_DIRECTORY}${filename}`;
   const fsAny = FileSystem as any;
@@ -58,7 +62,10 @@ async function copyToCache(file: VaultFile): Promise<string> {
 
 async function downloadIfNeeded(file: VaultFile): Promise<string> {
   if (file.uri.startsWith("http://") || file.uri.startsWith("https://")) {
-    const filename = ensureFilename(file.name || "file", file.extension || "bin");
+    const filename = ensureFilename(
+      file.name || "file",
+      file.extension || "bin",
+    );
     const destination = `${CACHE_DIRECTORY}${filename}`;
     const { uri } = await FileSystem.downloadAsync(file.uri, destination);
     return uri;
@@ -85,16 +92,21 @@ async function prepareFileForSharing(file: VaultFile): Promise<string> {
   // so external apps can read the file without requiring additional storage permissions.
   try {
     const fsAny = FileSystem as any;
-    if (Platform.OS === 'android' && typeof fsAny.getContentUriAsync === 'function' && uri && uri.startsWith('file://')) {
+    if (
+      Platform.OS === "android" &&
+      typeof fsAny.getContentUriAsync === "function" &&
+      uri &&
+      uri.startsWith("file://")
+    ) {
       try {
         const content = await fsAny.getContentUriAsync(uri);
-        const contentUri = typeof content === 'string' ? content : content?.uri;
-        if (contentUri && contentUri.startsWith('content://')) {
+        const contentUri = typeof content === "string" ? content : content?.uri;
+        if (contentUri && contentUri.startsWith("content://")) {
           return contentUri;
         }
       } catch (e) {
         // If conversion fails, fall back to returning the file:// URI.
-        console.debug('shareService: getContentUriAsync failed', e);
+        console.debug("shareService: getContentUriAsync failed", e);
       }
     }
   } catch (e) {
@@ -106,7 +118,8 @@ async function prepareFileForSharing(file: VaultFile): Promise<string> {
 
 let _shareLock = false;
 export async function shareVaultFile(file: VaultFile): Promise<void> {
-  if (_shareLock) throw new Error('Another share request is being processed now.');
+  if (_shareLock)
+    throw new Error("Another share request is being processed now.");
   _shareLock = true;
   try {
     const targetUri = await prepareFileForSharing(file);
@@ -121,10 +134,15 @@ export async function shareVaultFile(file: VaultFile): Promise<void> {
     // Expo Sharing on Android expects a local file:// URL. If prepareFileForSharing
     // returned a content:// URI (preferred for external intents), copy it into
     // the app cache and use the resulting file:// path for Sharing.shareAsync.
-    if (Platform.OS === 'android' && shareUri && shareUri.startsWith('content://')) {
+    if (
+      Platform.OS === "android" &&
+      shareUri &&
+      shareUri.startsWith("content://")
+    ) {
       try {
-        const extension = file.extension || extensionFromMimeType(file.mimeType) || 'bin';
-        const filename = ensureFilename(file.name || 'file', extension);
+        const extension =
+          file.extension || extensionFromMimeType(file.mimeType) || "bin";
+        const filename = ensureFilename(file.name || "file", extension);
         const destination = `${CACHE_DIRECTORY}${filename}`;
         try {
           await fsAny.copyAsync({ from: shareUri, to: destination });
@@ -132,21 +150,29 @@ export async function shareVaultFile(file: VaultFile): Promise<void> {
         } catch (copyErr) {
           // Some content URIs may not be copyable; fall back to reading as base64 and writing
           try {
-            const base64 = await fsAny.readAsStringAsync(shareUri, { encoding: fsAny.EncodingType.Base64 });
-            await fsAny.writeAsStringAsync(destination, base64, { encoding: fsAny.EncodingType.Base64 });
+            const base64 = await fsAny.readAsStringAsync(shareUri, {
+              encoding: fsAny.EncodingType.Base64,
+            });
+            await fsAny.writeAsStringAsync(destination, base64, {
+              encoding: fsAny.EncodingType.Base64,
+            });
             shareUri = destination;
           } catch (b64Err) {
-            console.warn('shareService: failed to stage content:// URI for sharing', copyErr, b64Err);
+            console.warn(
+              "shareService: failed to stage content:// URI for sharing",
+              copyErr,
+              b64Err,
+            );
             // leave shareUri as content:// and let shareAsync fail with useful error
           }
         }
       } catch (e) {
-        console.debug('shareService: content URI staging failed', e);
+        console.debug("shareService: content URI staging failed", e);
       }
     }
 
     // Ensure file:// scheme for local paths
-    if (shareUri && shareUri.startsWith('/') ) {
+    if (shareUri && shareUri.startsWith("/")) {
       shareUri = `file://${shareUri}`;
     }
 
@@ -171,24 +197,30 @@ export async function shareVaultFiles(files: VaultFile[]): Promise<void> {
 
       // If prepareFileForSharing returned a content:// URI on Android, copy it into the app cache
       // so expo-file-system can read it as base64 for zipping.
-      if (Platform.OS === 'android' && uri && uri.startsWith('content://')) {
+      if (Platform.OS === "android" && uri && uri.startsWith("content://")) {
         try {
-          const extension = file.extension || extensionFromMimeType(file.mimeType) || 'bin';
-          const filename = ensureFilename(file.name || 'file', extension);
+          const extension =
+            file.extension || extensionFromMimeType(file.mimeType) || "bin";
+          const filename = ensureFilename(file.name || "file", extension);
           const destination = `${CACHE_DIRECTORY}${filename}`;
           try {
             await fsAny.copyAsync({ from: uri, to: destination });
             uri = destination;
           } catch (e) {
             // Some content:// may not be copyable; attempt reading directly instead.
-            console.debug('shareService: copyAsync from content URI failed', e);
+            console.debug("shareService: copyAsync from content URI failed", e);
           }
         } catch (e) {
-          console.debug('shareService: preparing content URI for zip failed', e);
+          console.debug(
+            "shareService: preparing content URI for zip failed",
+            e,
+          );
         }
       }
 
-      const data = await FileSystem.readAsStringAsync(uri, { encoding: "base64" });
+      const data = await FileSystem.readAsStringAsync(uri, {
+        encoding: "base64",
+      });
       zip.file(file.name, data, { base64: true });
     }),
   );

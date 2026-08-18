@@ -1,12 +1,18 @@
 import React, { useMemo, useState } from "react";
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { showAlert } from "../services/alertService";
+
+const Alert = {
+  alert: (title?: string, message?: string, buttons?: any[]) => {
+    showAlert(title, message, buttons);
+  },
+};
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Screen } from "../components/Screen";
@@ -422,7 +428,9 @@ export function FavoritesScreen() {
         onShare={shareFile}
         onDelete={deleteFile}
         onInfo={goToInfo}
-        onDownload={() => { closeActions(); }}
+        onDownload={() => {
+          closeActions();
+        }}
       />
       <FolderMoveModal
         visible={moveVisible}

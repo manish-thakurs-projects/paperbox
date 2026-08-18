@@ -21,10 +21,16 @@ import {
   Pressable,
   ScrollView,
   ActivityIndicator,
-  Alert,
   Share,
   Linking,
 } from "react-native";
+import { showAlert } from "../services/alertService";
+
+const Alert = {
+  alert: (title?: string, message?: string, buttons?: any[]) => {
+    showAlert(title, message, buttons);
+  },
+};
 import { Screen } from "../components/Screen";
 import { usePaperTheme } from "../theme/usePaperTheme";
 import { withAlpha } from "../theme/utils";

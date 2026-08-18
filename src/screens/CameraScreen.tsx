@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from "react";
 import {
-  Alert,
   PermissionsAndroid,
   Platform,
   StyleSheet,
@@ -9,6 +8,13 @@ import {
   View,
   Pressable,
 } from "react-native";
+import { showAlert } from "../services/alertService";
+
+const Alert = {
+  alert: (title?: string, message?: string, buttons?: any[]) => {
+    showAlert(title, message, buttons);
+  },
+};
 import { Feather } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
@@ -223,25 +229,31 @@ export function CameraScreen() {
 
   const normalizeUri = (value?: string) => {
     if (!value) return "";
-    return value.startsWith("file://") || value.startsWith("content://") ? value : `file://${value}`;
+    return value.startsWith("file://") || value.startsWith("content://")
+      ? value
+      : `file://${value}`;
   };
 
-  const showRetrySaveDialog = (message: string) =>
-    new Promise<boolean>((resolve) => {
-      Alert.alert(
+  const showRetrySaveDialog = async (message: string) => {
+      const idx = await showAlert(
         "Save failed",
         message,
         [
-          { text: "Retry", onPress: () => resolve(true) },
-          { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+          { text: "Retry" },
+          { text: "Cancel", style: "cancel" },
         ],
-        { cancelable: false },
       );
-    });
+      return idx === 0;
+    };
 
   const saveImageToVault = async (uri: string) => {
     const normalizedUri = normalizeUri(uri);
-    try { console.debug('CameraScreen: saveImageToVault input uri', { uri, normalizedUri }); } catch(e){}
+    try {
+      console.debug("CameraScreen: saveImageToVault input uri", {
+        uri,
+        normalizedUri,
+      });
+    } catch (e) {}
     const filename = `Scan-${Date.now()}.jpg`;
     const extension = extensionOf(normalizedUri) || "jpg";
     const fileId = `${Date.now()}-${Math.random()}`;
@@ -259,20 +271,25 @@ export function CameraScreen() {
         break;
       } catch (err: any) {
         attempts += 1;
-        console.debug('CameraScreen: persistVaultFile error', err);
+        console.debug("CameraScreen: persistVaultFile error", err);
         const retry = await showRetrySaveDialog(
           `Unable to save encrypted file. ${err?.message || String(err)}. Retry?`,
         );
         if (!retry || attempts >= 3) {
           // Bubble up an error so the caller (scanFromCamera) can show its message
-          throw new Error(`Failed to save vault file: ${err?.message || String(err)}`);
+          throw new Error(
+            `Failed to save vault file: ${err?.message || String(err)}`,
+          );
         }
       }
     }
 
-    if (!durableUri) throw new Error('Failed to obtain destination URI for saved file');
+    if (!durableUri)
+      throw new Error("Failed to obtain destination URI for saved file");
 
-    try { console.debug('CameraScreen: persistVaultFile returned', durableUri); } catch(e){}
+    try {
+      console.debug("CameraScreen: persistVaultFile returned", durableUri);
+    } catch (e) {}
     const fileInfo = await FileSystem.getInfoAsync(durableUri);
     const file: VaultFile = {
       id: fileId,
@@ -496,7 +513,9 @@ export function CameraScreen() {
         onShare={shareFile}
         onDelete={deleteFile}
         onInfo={goToInfo}
-        onDownload={() => { closeActions(); }}
+        onDownload={() => {
+          closeActions();
+        }}
       />
       <FolderMoveModal
         visible={moveVisible}

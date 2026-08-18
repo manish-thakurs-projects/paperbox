@@ -248,7 +248,9 @@ export function CapturedFilesScreen() {
         onShare={shareFile}
         onDelete={deleteFile}
         onInfo={goToInfo}
-        onDownload={() => { closeActions(); }}
+        onDownload={() => {
+          closeActions();
+        }}
       />
 
       <FolderMoveModal

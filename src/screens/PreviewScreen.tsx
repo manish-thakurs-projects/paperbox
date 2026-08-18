@@ -9,12 +9,18 @@ import {
   TouchableOpacity,
   Platform,
   Modal,
-  Alert,
   Linking,
   AppState,
   PermissionsAndroid,
   Pressable,
 } from "react-native";
+import { showAlert } from "../services/alertService";
+
+const Alert = {
+  alert: (title?: string, message?: string, buttons?: any[]) => {
+    showAlert(title, message, buttons);
+  },
+};
 import { Video, ResizeMode } from "expo-av";
 import { Feather } from "@expo/vector-icons";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -27,9 +33,12 @@ import { withAlpha } from "../theme/utils";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as IntentLauncher from "expo-intent-launcher";
-import RNFS from 'react-native-fs';
+import RNFS from "react-native-fs";
 import * as ScreenCapture from "expo-screen-capture";
-import { decryptVaultFileForUse, clearDecryptedCache } from "../services/vaultStorage";
+import {
+  decryptVaultFileForUse,
+  clearDecryptedCache,
+} from "../services/vaultStorage";
 import PdfViewer from "../components/PdfViewer";
 
 type Props = NativeStackScreenProps<RootStackParams, "Preview">;
@@ -240,7 +249,7 @@ export function PreviewScreen({ route, navigation }: Props) {
   const [zoomVisible, setZoomVisible] = useState<boolean>(false);
   const [pdfOpened, setPdfOpened] = useState(false);
   const videoRef = useRef<Video | null>(null);
-  
+
   // reloadKey forces re-run of preview preparation
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -255,8 +264,15 @@ export function PreviewScreen({ route, navigation }: Props) {
     navigation.setOptions({
       title: name,
       headerRight: () => (
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Pressable onPress={() => { setLocalUri(null); setError(null); setReloadKey((k) => k + 1); }} style={{ paddingHorizontal: 12 }}>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Pressable
+            onPress={() => {
+              setLocalUri(null);
+              setError(null);
+              setReloadKey((k) => k + 1);
+            }}
+            style={{ paddingHorizontal: 12 }}
+          >
             <Feather name="refresh-ccw" size={20} color={colors.text} />
           </Pressable>
         </View>
@@ -284,7 +300,7 @@ export function PreviewScreen({ route, navigation }: Props) {
   useEffect(() => {
     const handler = (nextState: string) => {
       try {
-        if (nextState === 'active') {
+        if (nextState === "active") {
           const backgroundedAt = lastBackgroundedAtRef.current;
           const elapsed = backgroundedAt ? Date.now() - backgroundedAt : null;
           const isLikelyHandoffFlicker =
@@ -293,7 +309,12 @@ export function PreviewScreen({ route, navigation }: Props) {
             elapsed < EXTERNAL_HANDOFF_GRACE_MS;
 
           if (isLikelyHandoffFlicker) {
-            try { console.debug('PreviewScreen: ignoring transient active flicker during external handoff', { elapsed }); } catch(e){}
+            try {
+              console.debug(
+                "PreviewScreen: ignoring transient active flicker during external handoff",
+                { elapsed },
+              );
+            } catch (e) {}
             return;
           }
 
@@ -304,38 +325,59 @@ export function PreviewScreen({ route, navigation }: Props) {
 
         // If app goes to background/inactive and we specifically opened an external viewer,
         // leave the decrypted file in place so the external app can read it. Otherwise purge.
-        if (nextState === 'background' || nextState === 'inactive') {
+        if (nextState === "background" || nextState === "inactive") {
           lastBackgroundedAtRef.current = Date.now();
 
           if (openedExternallyRef.current) {
-            try { console.debug('PreviewScreen: skipping clear on background because file opened externally'); } catch(e){}
+            try {
+              console.debug(
+                "PreviewScreen: skipping clear on background because file opened externally",
+              );
+            } catch (e) {}
             return;
           }
 
           try {
             void clearDecryptedCache();
           } catch (e) {
-            try { console.debug('clearDecryptedCache call failed', e); } catch(_){ }
+            try {
+              console.debug("clearDecryptedCache call failed", e);
+            } catch (_) {}
           }
 
           const currentLocalUri = localUriRef.current;
-          if (currentLocalUri && currentLocalUri !== uri && currentLocalUri.startsWith('file://')) {
+          if (
+            currentLocalUri &&
+            currentLocalUri !== uri &&
+            currentLocalUri.startsWith("file://")
+          ) {
             void (FileSystem as any)
               .deleteAsync(currentLocalUri, { idempotent: true })
-              .catch((err: any) => { try { console.debug('PreviewScreen: background deleteAsync failed', err); } catch(e){} });
+              .catch((err: any) => {
+                try {
+                  console.debug(
+                    "PreviewScreen: background deleteAsync failed",
+                    err,
+                  );
+                } catch (e) {}
+              });
             // remove reference so we don't attempt to double-delete on unmount
             setLocalUri(null);
           }
         }
       } catch (e) {
-        try { console.debug('PreviewScreen: AppState handler error', e); } catch(e){}
+        try {
+          console.debug("PreviewScreen: AppState handler error", e);
+        } catch (e) {}
       }
     };
 
-    const sub = AppState.addEventListener ? AppState.addEventListener('change', handler) : null;
+    const sub = AppState.addEventListener
+      ? AppState.addEventListener("change", handler)
+      : null;
     return () => {
       try {
-        if (sub && typeof sub.remove === 'function') sub.remove();
+        if (sub && typeof sub.remove === "function") sub.remove();
       } catch (e) {
         // ignore cleanup errors
       }
@@ -352,7 +394,6 @@ export function PreviewScreen({ route, navigation }: Props) {
     name,
     ext || extension || mimeExtension || "bin",
   );
-
 
   const isImage =
     file.kind === "image" ||
@@ -372,13 +413,24 @@ export function PreviewScreen({ route, navigation }: Props) {
         if (isEncryptedUri(uri)) {
           setLoading(true);
           try {
-            try { console.debug('PreviewScreen: encrypted uri detected, decrypting before preview', { uri }); } catch(e){}
+            try {
+              console.debug(
+                "PreviewScreen: encrypted uri detected, decrypting before preview",
+                { uri },
+              );
+            } catch (e) {}
             const savedUri = await saveUriToCache(uri, filename);
-            try { console.debug('PreviewScreen: saveUriToCache (for encrypted) returned', savedUri); } catch(e){}
+            try {
+              console.debug(
+                "PreviewScreen: saveUriToCache (for encrypted) returned",
+                savedUri,
+              );
+            } catch (e) {}
             if (mounted) setLocalUri(savedUri);
           } catch (e) {
-            console.debug('PreviewScreen: decrypting encrypted uri failed', e);
-            if (mounted) setError('Unable to prepare encrypted file for preview.');
+            console.debug("PreviewScreen: decrypting encrypted uri failed", e);
+            if (mounted)
+              setError("Unable to prepare encrypted file for preview.");
           } finally {
             if (mounted) setLoading(false);
           }
@@ -391,19 +443,33 @@ export function PreviewScreen({ route, navigation }: Props) {
       if (isPdf || (!isImage && !isVideo && !isAudio)) {
         setLoading(true);
         try {
-          try { console.debug('PreviewScreen: preparing preview', { uri, filename, ext, isPdf, isImage, isVideo, isAudio }); } catch(e){}
+          try {
+            console.debug("PreviewScreen: preparing preview", {
+              uri,
+              filename,
+              ext,
+              isPdf,
+              isImage,
+              isVideo,
+              isAudio,
+            });
+          } catch (e) {}
           const savedUri = await saveUriToCache(uri, filename);
-          try { console.debug('PreviewScreen: saveUriToCache returned', savedUri); } catch(e){}
+          try {
+            console.debug("PreviewScreen: saveUriToCache returned", savedUri);
+          } catch (e) {}
           // Cached preview URI prepared.
           if (mounted) setLocalUri(savedUri);
         } catch (e) {
-          console.debug('PreviewScreen: prepare preview failed', e);
+          console.debug("PreviewScreen: prepare preview failed", e);
           if (mounted) setError("Unable to prepare file for preview.");
         } finally {
           if (mounted) setLoading(false);
         }
       } else {
-        try { console.debug('PreviewScreen: using direct uri for preview', uri); } catch(e){}
+        try {
+          console.debug("PreviewScreen: using direct uri for preview", uri);
+        } catch (e) {}
         setLocalUri(uri);
       }
     }
@@ -416,18 +482,32 @@ export function PreviewScreen({ route, navigation }: Props) {
 
   useEffect(() => {
     return () => {
-      try { console.debug('PreviewScreen: cleaning up localUri', { localUri, uri, openedExternally: openedExternallyRef.current }); } catch(e){}
+      try {
+        console.debug("PreviewScreen: cleaning up localUri", {
+          localUri,
+          uri,
+          openedExternally: openedExternallyRef.current,
+        });
+      } catch (e) {}
       if (!localUri || localUri === uri) return;
       // If we intentionally opened the file externally, preserve the decrypted temp so the external
       // app can read it. It will be cleared on resume by the AppState handler.
       if (openedExternallyRef.current) {
-        try { console.debug('PreviewScreen: preserving decrypted temp because file was opened externally'); } catch(e){}
+        try {
+          console.debug(
+            "PreviewScreen: preserving decrypted temp because file was opened externally",
+          );
+        } catch (e) {}
         return;
       }
-      if (!localUri.startsWith('file://')) return;
+      if (!localUri.startsWith("file://")) return;
       void (FileSystem as any)
         .deleteAsync(localUri, { idempotent: true })
-        .catch((err: any) => { try { console.debug('PreviewScreen: deleteAsync failed', err); } catch(e){} });
+        .catch((err: any) => {
+          try {
+            console.debug("PreviewScreen: deleteAsync failed", err);
+          } catch (e) {}
+        });
     };
   }, [localUri, uri]);
 
@@ -436,28 +516,41 @@ export function PreviewScreen({ route, navigation }: Props) {
   // viewer can be shown instead. Falling back to external viewer is still supported via UI.
   // (Effect intentionally removed.)
 
-  const copyToDownloads = async (sourceUri: string, filename: string): Promise<string> => {
+  const copyToDownloads = async (
+    sourceUri: string,
+    filename: string,
+  ): Promise<string> => {
     try {
       // Normalize source path to a filesystem path for RNFS
-      const srcPath = sourceUri.startsWith('file://') ? sourceUri.replace('file://', '') : sourceUri;
+      const srcPath = sourceUri.startsWith("file://")
+        ? sourceUri.replace("file://", "")
+        : sourceUri;
       const rnfsAny = RNFS as any;
-      let downloadsDir = rnfsAny.DownloadDirectoryPath || (rnfsAny.ExternalStorageDirectoryPath ? `${rnfsAny.ExternalStorageDirectoryPath}/Download` : null);
+      let downloadsDir =
+        rnfsAny.DownloadDirectoryPath ||
+        (rnfsAny.ExternalStorageDirectoryPath
+          ? `${rnfsAny.ExternalStorageDirectoryPath}/Download`
+          : null);
       if (!downloadsDir) {
-        throw new Error('No Downloads directory available on this device');
+        throw new Error("No Downloads directory available on this device");
       }
- 
+
       // Request write permission on Android if needed
       try {
-        const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE);
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+        );
         if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
           // Still attempt copy; caller will receive an error if it truly fails due to permission.
-          throw new Error('WRITE_EXTERNAL_STORAGE permission denied');
+          throw new Error("WRITE_EXTERNAL_STORAGE permission denied");
         }
       } catch (permErr) {
         // Log and continue; copying will likely fail, but we'll attempt other strategies.
-        try { console.debug('copyToDownloads: permission request failed', permErr); } catch(_){ }
+        try {
+          console.debug("copyToDownloads: permission request failed", permErr);
+        } catch (_) {}
       }
- 
+
       const destPath = `${downloadsDir}/${filename}`;
 
       // If destination exists, overwrite
@@ -479,24 +572,36 @@ export function PreviewScreen({ route, navigation }: Props) {
         }
       } catch (e) {
         // Ignore and fall back to reading via expo-file-system
-        try { console.debug('copyToDownloads: RNFS.copyFile failed, falling back to base64 method', e); } catch(_){ }
+        try {
+          console.debug(
+            "copyToDownloads: RNFS.copyFile failed, falling back to base64 method",
+            e,
+          );
+        } catch (_) {}
       }
 
       // Fallback: use expo-file-system to read base64 and write with RNFS
       try {
         const fsAny = FileSystem as any;
         const info = await fsAny.getInfoAsync(sourceUri, { size: true });
-        if (!info.exists) throw new Error('Source file does not exist for export');
+        if (!info.exists)
+          throw new Error("Source file does not exist for export");
 
-        const base64 = await fsAny.readAsStringAsync(sourceUri, { encoding: fsAny.EncodingType.Base64 });
-        await rnfsAny.writeFile(destPath, base64, 'base64');
+        const base64 = await fsAny.readAsStringAsync(sourceUri, {
+          encoding: fsAny.EncodingType.Base64,
+        });
+        await rnfsAny.writeFile(destPath, base64, "base64");
         return `file://${destPath}`;
       } catch (e) {
-        try { console.debug('copyToDownloads failed', e); } catch(_){ }
+        try {
+          console.debug("copyToDownloads failed", e);
+        } catch (_) {}
         throw e;
       }
     } catch (e) {
-      try { console.debug('copyToDownloads failed', e); } catch(_){ }
+      try {
+        console.debug("copyToDownloads failed", e);
+      } catch (_) {}
       throw e;
     }
   };
@@ -532,30 +637,47 @@ export function PreviewScreen({ route, navigation }: Props) {
             // decryptVaultFileForUse can read it (expo FileSystem.readAsStringAsync doesn't support content://).
             const fsAny = FileSystem as any;
             let decryptSource = dataUri;
-            if (decryptSource.startsWith('content://')) {
+            if (decryptSource.startsWith("content://")) {
               try {
                 const cacheDir = getCacheDirectory();
-                const tmpName = `tmp-decrypt-${Date.now()}-${Math.random().toString(36).slice(2)}.${(filename.includes('.') ? filename.split('.').pop() : 'enc')}`;
+                const tmpName = `tmp-decrypt-${Date.now()}-${Math.random().toString(36).slice(2)}.${filename.includes(".") ? filename.split(".").pop() : "enc"}`;
                 const tmpDest = `${cacheDir}${tmpName}`;
                 try {
                   await fsAny.copyAsync({ from: decryptSource, to: tmpDest });
                   decryptSource = tmpDest;
-                  try { console.debug('openExternally: copied content:// to cache for decrypt', { decryptSource }); } catch(_){ }
+                  try {
+                    console.debug(
+                      "openExternally: copied content:// to cache for decrypt",
+                      { decryptSource },
+                    );
+                  } catch (_) {}
                 } catch (copyErr) {
-                  try { console.debug('openExternally: copyAsync from content:// for decrypt failed', copyErr); } catch(_){ }
+                  try {
+                    console.debug(
+                      "openExternally: copyAsync from content:// for decrypt failed",
+                      copyErr,
+                    );
+                  } catch (_) {}
                 }
               } catch (copyErr2) {
-                try { console.debug('openExternally: copying content:// for decrypt failed', copyErr2); } catch(_){ }
+                try {
+                  console.debug(
+                    "openExternally: copying content:// for decrypt failed",
+                    copyErr2,
+                  );
+                } catch (_) {}
               }
             }
 
             const decrypted = await decryptVaultFileForUse({
-              id: 'external',
+              id: "external",
               name: filename,
               uri: decryptSource,
               size: 0,
-              extension: filename.includes('.') ? filename.split('.').pop() || 'bin' : 'bin',
-              kind: 'other',
+              extension: filename.includes(".")
+                ? filename.split(".").pop() || "bin"
+                : "bin",
+              kind: "other",
               createdAt: new Date().toISOString(),
               isFavorite: false,
               isPinned: false,
@@ -563,136 +685,207 @@ export function PreviewScreen({ route, navigation }: Props) {
             });
             if (decrypted) {
               dataUri = decrypted;
-              try { console.debug('openExternally: decrypted before handoff', { dataUri }); } catch(_){ }
+              try {
+                console.debug("openExternally: decrypted before handoff", {
+                  dataUri,
+                });
+              } catch (_) {}
               // Preserve localUri so cleanup logic doesn't delete it while external app reads it
-              if (dataUri.startsWith('file://')) {
+              if (dataUri.startsWith("file://")) {
                 setLocalUri(dataUri);
               }
             }
           } catch (decryptErr) {
-            try { console.debug('openExternally: decrypt for external handoff failed', decryptErr); } catch(_){ }
+            try {
+              console.debug(
+                "openExternally: decrypt for external handoff failed",
+                decryptErr,
+              );
+            } catch (_) {}
             // continue — we'll attempt other fallbacks below
           }
         }
       } catch (e) {
-        try { console.debug('openExternally: decrypt pre-check failed', e); } catch(_){ }
+        try {
+          console.debug("openExternally: decrypt pre-check failed", e);
+        } catch (_) {}
       }
 
       // Open the file with the appropriate external handler.
 
       if (Platform.OS === "android") {
-
-          // Verify the file exists and is non-empty before attempting an external handoff.
-          try {
-            const fsAny = FileSystem as any;
-            const infoCheck = await fsAny.getInfoAsync(normalizeFileUri(dataUri), { size: true });
-            if (!infoCheck.exists || (infoCheck.size !== undefined && infoCheck.size === 0)) {
-              // If the prepared local file is missing/empty, surface an error instead of launching a blank viewer.
-              try { console.debug('openExternally: file missing or empty', { dataUri, infoCheck }); } catch (_) {}
-              setError('File not available to open externally.');
-              openedExternallyRef.current = false;
-              return;
-            }
-          } catch (e) {
-            // getInfoAsync may fail for some content URIs; ignore and continue with other checks.
-            try { console.debug('openExternally: getInfoAsync check failed (continuing)', e); } catch(_){ }
-          }
-
-          // Prefer converting an app-private file:// URI to a content:// URI so external apps can read it
-          // without requiring WRITE_EXTERNAL_STORAGE or copying into Downloads. This is supported by
-          // expo-file-system.getContentUriAsync on Android.
-          try {
-            const fsAny = FileSystem as any;
-            if (dataUri.startsWith("file://") && typeof fsAny.getContentUriAsync === "function") {
-              try {
-                const content = await fsAny.getContentUriAsync(dataUri);
-                const contentUri = typeof content === "string" ? content : content?.uri;
-                if (contentUri && contentUri.startsWith("content://")) {
-                  dataUri = contentUri;
-                  try { console.debug('openExternally: converted to content URI', dataUri); } catch(_){ }
-                }
-              } catch (e) {
-                try { console.debug('openExternally: getContentUriAsync failed', e); } catch(_){ }
-              }
-            }
-          } catch (e) {
-            try { console.debug('openExternally: content URI conversion check failed', e); } catch(_){ }
-          }
-
-          // If conversion to content:// succeeded, try launching intent directly (preferred).
-          if (dataUri.startsWith("content://")) {
+        // Verify the file exists and is non-empty before attempting an external handoff.
+        try {
+          const fsAny = FileSystem as any;
+          const infoCheck = await fsAny.getInfoAsync(
+            normalizeFileUri(dataUri),
+            { size: true },
+          );
+          if (
+            !infoCheck.exists ||
+            (infoCheck.size !== undefined && infoCheck.size === 0)
+          ) {
+            // If the prepared local file is missing/empty, surface an error instead of launching a blank viewer.
             try {
-              // FLAG_GRANT_READ_URI_PERMISSION (1) | FLAG_ACTIVITY_NEW_TASK (0x10000000).
-              // NOTE: 2 is FLAG_GRANT_WRITE_URI_PERMISSION, not read — using it here was the
-              // original bug that made every external viewer fail to read the handed-off file.
-              const INTENT_FLAGS = 1 | 0x10000000;
-              await IntentLauncher.startActivityAsync(
-                "android.intent.action.VIEW",
-                {
-                  data: dataUri,
-                  type: mimeType,
-                  flags: INTENT_FLAGS,
-                },
-              );
-              return;
+              console.debug("openExternally: file missing or empty", {
+                dataUri,
+                infoCheck,
+              });
+            } catch (_) {}
+            setError("File not available to open externally.");
+            openedExternallyRef.current = false;
+            return;
+          }
+        } catch (e) {
+          // getInfoAsync may fail for some content URIs; ignore and continue with other checks.
+          try {
+            console.debug(
+              "openExternally: getInfoAsync check failed (continuing)",
+              e,
+            );
+          } catch (_) {}
+        }
+
+        // Prefer converting an app-private file:// URI to a content:// URI so external apps can read it
+        // without requiring WRITE_EXTERNAL_STORAGE or copying into Downloads. This is supported by
+        // expo-file-system.getContentUriAsync on Android.
+        try {
+          const fsAny = FileSystem as any;
+          if (
+            dataUri.startsWith("file://") &&
+            typeof fsAny.getContentUriAsync === "function"
+          ) {
+            try {
+              const content = await fsAny.getContentUriAsync(dataUri);
+              const contentUri =
+                typeof content === "string" ? content : content?.uri;
+              if (contentUri && contentUri.startsWith("content://")) {
+                dataUri = contentUri;
+                try {
+                  console.debug(
+                    "openExternally: converted to content URI",
+                    dataUri,
+                  );
+                } catch (_) {}
+              }
             } catch (e) {
-              // Do not clear openedExternallyRef here yet; allow fallback strategies to preserve the file until failure is final.
-              try { console.debug('openExternally: Intent launch with content:// failed', e); } catch(_){ }
-              // Fall through to attempt other strategies
+              try {
+                console.debug("openExternally: getContentUriAsync failed", e);
+              } catch (_) {}
             }
           }
+        } catch (e) {
+          try {
+            console.debug(
+              "openExternally: content URI conversion check failed",
+              e,
+            );
+          } catch (_) {}
+        }
 
-// If we were not able to obtain a content:// URI, fall back to copying into Downloads.
-try {
-  const exported = await copyToDownloads(dataUri, filename);
-  if (exported) {
-    dataUri = exported;
-    try { console.debug('openExternally: exported to Downloads', dataUri); } catch(_){ }
-  }
-} catch (e) {
-  try { console.debug('openExternally: export to Downloads failed, falling back to temp file', e); } catch(_){ }
-}
+        // If conversion to content:// succeeded, try launching intent directly (preferred).
+        if (dataUri.startsWith("content://")) {
+          try {
+            // FLAG_GRANT_READ_URI_PERMISSION (1) | FLAG_ACTIVITY_NEW_TASK (0x10000000).
+            // NOTE: 2 is FLAG_GRANT_WRITE_URI_PERMISSION, not read — using it here was the
+            // original bug that made every external viewer fail to read the handed-off file.
+            const INTENT_FLAGS = 1 | 0x10000000;
+            await IntentLauncher.startActivityAsync(
+              "android.intent.action.VIEW",
+              {
+                data: dataUri,
+                type: mimeType,
+                flags: INTENT_FLAGS,
+              },
+            );
+            return;
+          } catch (e) {
+            // Do not clear openedExternallyRef here yet; allow fallback strategies to preserve the file until failure is final.
+            try {
+              console.debug(
+                "openExternally: Intent launch with content:// failed",
+                e,
+              );
+            } catch (_) {}
+            // Fall through to attempt other strategies
+          }
+        }
 
-// Normalize to file:// when necessary for downstream handlers
-if (!dataUri.startsWith("file://") && !dataUri.startsWith("content://") && dataUri.startsWith("/")) {
-  dataUri = `file://${dataUri}`;
-}
+        // If we were not able to obtain a content:// URI, fall back to copying into Downloads.
+        try {
+          const exported = await copyToDownloads(dataUri, filename);
+          if (exported) {
+            dataUri = exported;
+            try {
+              console.debug("openExternally: exported to Downloads", dataUri);
+            } catch (_) {}
+          }
+        } catch (e) {
+          try {
+            console.debug(
+              "openExternally: export to Downloads failed, falling back to temp file",
+              e,
+            );
+          } catch (_) {}
+        }
 
-// If we copied to Downloads and have a file:// path, try converting that to content:// too.
-if (dataUri.startsWith("file://")) {
-  const fsAny = FileSystem as any;
-  if (typeof fsAny.getContentUriAsync === "function") {
-    try {
-      const content = await fsAny.getContentUriAsync(dataUri);
-      const contentUri = typeof content === "string" ? content : content?.uri;
-      if (contentUri && contentUri.startsWith("content://")) {
-        dataUri = contentUri;
-        try { console.debug('openExternally: converted exported file to content URI', dataUri); } catch(_){ }
-      }
-    } catch (e) {
-      try { console.debug('openExternally: getContentUriAsync for exported file failed', e); } catch(_){ }
-    }
-  }
-}
+        // Normalize to file:// when necessary for downstream handlers
+        if (
+          !dataUri.startsWith("file://") &&
+          !dataUri.startsWith("content://") &&
+          dataUri.startsWith("/")
+        ) {
+          dataUri = `file://${dataUri}`;
+        }
 
-try {
-  // Launch Intent with GRANT_READ_URI_PERMISSION so the external app can read the content:// URI
-  // returned by getContentUriAsync. Use FLAG_GRANT_READ_URI_PERMISSION and FLAG_ACTIVITY_NEW_TASK.
-  const INTENT_FLAGS = 1 | 0x10000000;
-  await IntentLauncher.startActivityAsync(
-    "android.intent.action.VIEW",
-    {
-      data: dataUri,
-      type: mimeType,
-      flags: INTENT_FLAGS,
-    },
-  );
-  return;
-} catch (e) {
-  // If IntentLauncher fails, we will try a generic open fallback. Do not clear openedExternallyRef here yet;
-  // allow the fallbacks to attempt an alternative that may still read the file.
-  try { console.debug('openExternally: final Intent launch failed', e); } catch(_){ }
-}
+        // If we copied to Downloads and have a file:// path, try converting that to content:// too.
+        if (dataUri.startsWith("file://")) {
+          const fsAny = FileSystem as any;
+          if (typeof fsAny.getContentUriAsync === "function") {
+            try {
+              const content = await fsAny.getContentUriAsync(dataUri);
+              const contentUri =
+                typeof content === "string" ? content : content?.uri;
+              if (contentUri && contentUri.startsWith("content://")) {
+                dataUri = contentUri;
+                try {
+                  console.debug(
+                    "openExternally: converted exported file to content URI",
+                    dataUri,
+                  );
+                } catch (_) {}
+              }
+            } catch (e) {
+              try {
+                console.debug(
+                  "openExternally: getContentUriAsync for exported file failed",
+                  e,
+                );
+              } catch (_) {}
+            }
+          }
+        }
+
+        try {
+          // Launch Intent with GRANT_READ_URI_PERMISSION so the external app can read the content:// URI
+          // returned by getContentUriAsync. Use FLAG_GRANT_READ_URI_PERMISSION and FLAG_ACTIVITY_NEW_TASK.
+          const INTENT_FLAGS = 1 | 0x10000000;
+          await IntentLauncher.startActivityAsync(
+            "android.intent.action.VIEW",
+            {
+              data: dataUri,
+              type: mimeType,
+              flags: INTENT_FLAGS,
+            },
+          );
+          return;
+        } catch (e) {
+          // If IntentLauncher fails, we will try a generic open fallback. Do not clear openedExternallyRef here yet;
+          // allow the fallbacks to attempt an alternative that may still read the file.
+          try {
+            console.debug("openExternally: final Intent launch failed", e);
+          } catch (_) {}
+        }
       }
 
       try {
@@ -701,7 +894,9 @@ try {
         await Linking.openURL(dataUri);
         return;
       } catch (e) {
-        try { openedExternallyRef.current = false; } catch(_){ }
+        try {
+          openedExternallyRef.current = false;
+        } catch (_) {}
         // Linking failed, continue to fallback sharing.
       }
 
@@ -717,13 +912,17 @@ try {
           }
         }
       } catch (e) {
-        try { openedExternallyRef.current = false; } catch(_){}
+        try {
+          openedExternallyRef.current = false;
+        } catch (_) {}
         // Share fallback failed, surface an error to the user.
       }
 
       setError("Unable to open file in another app.");
     } catch (_e) {
-      try { openedExternallyRef.current = false; } catch(_) {}
+      try {
+        openedExternallyRef.current = false;
+      } catch (_) {}
       setError("Unable to open file in another app.");
     }
   };
@@ -835,60 +1034,96 @@ try {
           <PdfViewer
             uri={pdfUri}
             filename={filename}
-          onError={async (e) => {
-              try { console.debug('PdfViewer reported error', e); } catch(_){ }
-
-            // Guard: only attempt a content:// retry if we still have a genuinely decrypted
-            // local file. If localUri has been cleared or somehow points back at the encrypted
-            // .enc blob (e.g. a background/active flicker purged the decrypted cache mid-read),
-            // retrying will just hand react-native-pdf ciphertext again and it will fail the
-            // same way. In that case, re-decrypt from scratch instead of retrying blindly.
-            const currentLocalUri = localUriRef.current;
-            if (!currentLocalUri || isEncryptedUri(currentLocalUri)) {
-              try { console.debug('PdfViewer onError: no valid decrypted file to retry with, re-preparing preview', { currentLocalUri }); } catch(_){ }
+            onError={async (e) => {
               try {
-                setLoading(true);
-                const savedUri = await saveUriToCache(uri, filename);
-                setLocalUri(savedUri);
-              } catch (reErr) {
-                try { console.debug('PdfViewer onError: re-decrypt failed', reErr); } catch(_){ }
-                setError('Unable to render PDF in-app. Opening in default viewer...');
-                void openExternally();
-              } finally {
-                setLoading(false);
-              }
-              return;
-            }
+                console.debug("PdfViewer reported error", e);
+              } catch (_) {}
 
-            // Try to convert local file:// path to a content:// URI and retry in-app render once.
-            try {
-              const fsAny = FileSystem as any;
-              if (Platform.OS === 'android' && pdfUri.startsWith('file://') && typeof fsAny.getContentUriAsync === 'function') {
+              // Guard: only attempt a content:// retry if we still have a genuinely decrypted
+              // local file. If localUri has been cleared or somehow points back at the encrypted
+              // .enc blob (e.g. a background/active flicker purged the decrypted cache mid-read),
+              // retrying will just hand react-native-pdf ciphertext again and it will fail the
+              // same way. In that case, re-decrypt from scratch instead of retrying blindly.
+              const currentLocalUri = localUriRef.current;
+              if (!currentLocalUri || isEncryptedUri(currentLocalUri)) {
                 try {
-                  const content = await fsAny.getContentUriAsync(pdfUri);
-                  const contentUri = typeof content === 'string' ? content : content?.uri;
-                  if (contentUri) {
-                    try { console.debug('PdfViewer: retrying render with content URI', contentUri); } catch(_){ }
-                    // Update localUri so PdfViewer receives the content URI and re-renders
-                    setLocalUri(contentUri);
-                    return;
-                  }
-                } catch (convErr) {
-                  try { console.debug('PdfViewer: content URI conversion failed', convErr); } catch(_){ }
+                  console.debug(
+                    "PdfViewer onError: no valid decrypted file to retry with, re-preparing preview",
+                    { currentLocalUri },
+                  );
+                } catch (_) {}
+                try {
+                  setLoading(true);
+                  const savedUri = await saveUriToCache(uri, filename);
+                  setLocalUri(savedUri);
+                } catch (reErr) {
+                  try {
+                    console.debug(
+                      "PdfViewer onError: re-decrypt failed",
+                      reErr,
+                    );
+                  } catch (_) {}
+                  setError(
+                    "Unable to render PDF in-app. Opening in default viewer...",
+                  );
+                  void openExternally();
+                } finally {
+                  setLoading(false);
                 }
+                return;
               }
-            } catch (convErr2) {
-              try { console.debug('PdfViewer: conversion attempt failed', convErr2); } catch(_){ }
-            }
 
-            // If retry didn't work, surface an error and open externally as before
-            setError('Unable to render PDF in-app. Opening in default viewer...');
-            // Attempt external open as fallback
-            void openExternally();
-          }}
-          onOpenExternal={() => {
-            void openExternally();
-          }}
+              // Try to convert local file:// path to a content:// URI and retry in-app render once.
+              try {
+                const fsAny = FileSystem as any;
+                if (
+                  Platform.OS === "android" &&
+                  pdfUri.startsWith("file://") &&
+                  typeof fsAny.getContentUriAsync === "function"
+                ) {
+                  try {
+                    const content = await fsAny.getContentUriAsync(pdfUri);
+                    const contentUri =
+                      typeof content === "string" ? content : content?.uri;
+                    if (contentUri) {
+                      try {
+                        console.debug(
+                          "PdfViewer: retrying render with content URI",
+                          contentUri,
+                        );
+                      } catch (_) {}
+                      // Update localUri so PdfViewer receives the content URI and re-renders
+                      setLocalUri(contentUri);
+                      return;
+                    }
+                  } catch (convErr) {
+                    try {
+                      console.debug(
+                        "PdfViewer: content URI conversion failed",
+                        convErr,
+                      );
+                    } catch (_) {}
+                  }
+                }
+              } catch (convErr2) {
+                try {
+                  console.debug(
+                    "PdfViewer: conversion attempt failed",
+                    convErr2,
+                  );
+                } catch (_) {}
+              }
+
+              // If retry didn't work, surface an error and open externally as before
+              setError(
+                "Unable to render PDF in-app. Opening in default viewer...",
+              );
+              // Attempt external open as fallback
+              void openExternally();
+            }}
+            onOpenExternal={() => {
+              void openExternally();
+            }}
           />
         </Screen>
       );
@@ -904,7 +1139,9 @@ try {
             PDFs open in your device's default viewer.
           </Text>
 
-          <Text style={[styles.copy, { marginTop: 10 }]}>Use the Refresh action in the header to re-prepare this preview.</Text>
+          <Text style={[styles.copy, { marginTop: 10 }]}>
+            Use the Refresh action in the header to re-prepare this preview.
+          </Text>
         </View>
       </Screen>
     );

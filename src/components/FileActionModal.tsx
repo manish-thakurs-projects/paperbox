@@ -1,10 +1,30 @@
 import React, { useEffect, useRef, useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, ActivityIndicator, Alert, PermissionsAndroid } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  ActivityIndicator,
+  PermissionsAndroid,
+} from "react-native";
+import { showAlert } from "../services/alertService";
+
+// Local themed Alert shim — route Alert.alert calls to our themed alert
+const Alert = {
+  alert: (title?: string, message?: string, buttons?: any[]) => {
+    showAlert(title, message, buttons);
+  },
+};
 import { usePaperTheme } from "../theme/usePaperTheme";
 import { withAlpha } from "../theme/utils";
 import { VaultFile } from "../types";
-import RNFS from 'react-native-fs';
-import * as FileSystem from 'expo-file-system/legacy';
+import RNFS from "react-native-fs";
+import * as FileSystem from "expo-file-system/legacy";
 import { decryptVaultFileForUse } from "../services/vaultStorage";
 import { downloadFile } from "../services/downloadService";
 
@@ -88,15 +108,30 @@ export function FileActionModal({
   };
 
   return (
-    <Modal animationType="none" transparent visible={visible} onRequestClose={renameVisible ? () => setRenameVisible(false) : onRequestClose}>
+    <Modal
+      animationType="none"
+      transparent
+      visible={visible}
+      onRequestClose={
+        renameVisible ? () => setRenameVisible(false) : onRequestClose
+      }
+    >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={s.modalOverlay}
         keyboardVerticalOffset={Platform.OS === "ios" ? 70 : 20}
       >
-        <Pressable style={renameVisible ? s.renameModalOverlay : s.modalOverlay} onPress={renameVisible ? () => setRenameVisible(false) : onRequestClose}>
+        <Pressable
+          style={renameVisible ? s.renameModalOverlay : s.modalOverlay}
+          onPress={
+            renameVisible ? () => setRenameVisible(false) : onRequestClose
+          }
+        >
           {renameVisible ? (
-            <Pressable style={s.renameModalCard} onPress={(event) => event.stopPropagation()}>
+            <Pressable
+              style={s.renameModalCard}
+              onPress={(event) => event.stopPropagation()}
+            >
               <Text style={s.modalTitle}>Rename file</Text>
               <TextInput
                 ref={inputRef}
@@ -110,23 +145,35 @@ export function FileActionModal({
                 blurOnSubmit={false}
               />
               <View style={s.modalFooter}>
-                <Pressable style={[s.modalActionButton, s.modalCancelButton]} onPress={() => setRenameVisible(false)}>
+                <Pressable
+                  style={[s.modalActionButton, s.modalCancelButton]}
+                  onPress={() => setRenameVisible(false)}
+                >
                   <Text style={s.modalActionText}>Cancel</Text>
                 </Pressable>
-                <Pressable style={[s.modalActionButton, s.modalSaveButton]} onPress={saveRename}>
+                <Pressable
+                  style={[s.modalActionButton, s.modalSaveButton]}
+                  onPress={saveRename}
+                >
                   <Text style={[s.modalActionText, s.modalSaveText]}>Save</Text>
                 </Pressable>
               </View>
             </Pressable>
           ) : (
-            <Pressable style={s.modalContent} onPress={(event) => event.stopPropagation()}>
+            <Pressable
+              style={s.modalContent}
+              onPress={(event) => event.stopPropagation()}
+            >
               <Text style={s.modalTitle}>File actions</Text>
               {file ? (
                 <>
                   <Text numberOfLines={1} style={s.modalFileName}>
                     {file.name}
                   </Text>
-                  <ScrollView style={s.modalActions} keyboardShouldPersistTaps="handled">
+                  <ScrollView
+                    style={s.modalActions}
+                    keyboardShouldPersistTaps="handled"
+                  >
                     <Pressable style={s.actionItem} onPress={onInfo}>
                       <Text style={s.actionLabel}>Info</Text>
                     </Pressable>
@@ -135,17 +182,24 @@ export function FileActionModal({
                     </Pressable>
                     <Pressable style={s.actionItem} onPress={onToggleFavorite}>
                       <Text style={s.actionLabel}>
-                        {file.isFavorite ? "Remove favorite" : "Add to favorites"}
+                        {file.isFavorite
+                          ? "Remove favorite"
+                          : "Add to favorites"}
                       </Text>
                     </Pressable>
                     <Pressable style={s.actionItem} onPress={onTogglePin}>
-                      <Text style={s.actionLabel}>{file.isPinned ? "Unpin" : "Pin"}</Text>
+                      <Text style={s.actionLabel}>
+                        {file.isPinned ? "Unpin" : "Pin"}
+                      </Text>
                     </Pressable>
                     <Pressable style={s.actionItem} onPress={onOpenMoveModal}>
                       <Text style={s.actionLabel}>Move to folders</Text>
                     </Pressable>
                     {onRemoveFromFolder ? (
-                      <Pressable style={s.actionItem} onPress={onRemoveFromFolder}>
+                      <Pressable
+                        style={s.actionItem}
+                        onPress={onRemoveFromFolder}
+                      >
                         <Text style={s.actionLabel}>Remove from folder</Text>
                       </Pressable>
                     ) : null}
@@ -166,50 +220,75 @@ export function FileActionModal({
                       {shareLoading ? (
                         <>
                           <ActivityIndicator size="small" color={colors.text} />
-                          <Text style={[s.actionLabel, { marginLeft: 8 }]}>Decrypting...</Text>
+                          <Text style={[s.actionLabel, { marginLeft: 8 }]}>
+                            Decrypting...
+                          </Text>
                         </>
                       ) : (
                         <Text style={s.actionLabel}>Share</Text>
                       )}
                     </Pressable>
                     <Pressable style={s.actionItem} onPress={onDelete}>
-                      <Text style={[s.actionLabel, s.destructiveAction]}>Delete from vault</Text>
+                      <Text style={[s.actionLabel, s.destructiveAction]}>
+                        Delete from vault
+                      </Text>
                     </Pressable>
 
-                    <Pressable style={s.actionItem} onPress={async () => {
-                      if (!file) return;
-                      setDownloadLoading(true);
-                      try {
-                        const saved = await downloadFile(file);
-                        Alert.alert('Download complete', `Saved to ${saved}`);
-                        try { onDownload && onDownload(); } catch(_){ }
-                      } catch (e: any) {
-                        console.debug('FileActionModal: download failed', e);
-                        if (e && typeof e.message === 'string' && e.message.includes('No folder selected')) {
-                          Alert.alert('Download cancelled', 'No folder selected for saving files.');
-                        } else if (e && typeof e.message === 'string') {
-                          Alert.alert('Download failed', e.message);
-                        } else {
-                          Alert.alert('Download failed', 'Unable to save file to device.');
+                    <Pressable
+                      style={s.actionItem}
+                      onPress={async () => {
+                        if (!file) return;
+                        setDownloadLoading(true);
+                        try {
+                          const saved = await downloadFile(file);
+                          Alert.alert("Download complete", `Saved to ${saved}`);
+                          try {
+                            onDownload && onDownload();
+                          } catch (_) {}
+                        } catch (e: any) {
+                          console.debug("FileActionModal: download failed", e);
+                          if (
+                            e &&
+                            typeof e.message === "string" &&
+                            e.message.includes("No folder selected")
+                          ) {
+                            Alert.alert(
+                              "Download cancelled",
+                              "No folder selected for saving files.",
+                            );
+                          } else if (e && typeof e.message === "string") {
+                            Alert.alert("Download failed", e.message);
+                          } else {
+                            Alert.alert(
+                              "Download failed",
+                              "Unable to save file to device.",
+                            );
+                          }
+                        } finally {
+                          setDownloadLoading(false);
+                          onRequestClose();
                         }
-                      } finally {
-                        setDownloadLoading(false);
-                        onRequestClose();
-                      }
-                    }}>
+                      }}
+                    >
                       {downloadLoading ? (
                         <>
                           <ActivityIndicator size="small" color={colors.text} />
-                          <Text style={[s.actionLabel, { marginLeft: 8 }]}>Decrypting...</Text>
+                          <Text style={[s.actionLabel, { marginLeft: 8 }]}>
+                            Decrypting...
+                          </Text>
                         </>
                       ) : (
                         <Text style={s.actionLabel}>Download file</Text>
                       )}
                     </Pressable>
-
                   </ScrollView>
-                  <Pressable style={[s.modalButton, s.modalCancelButton]} onPress={onRequestClose}>
-                    <Text style={[s.modalButtonText, s.modalCancelText]}>Cancel</Text>
+                  <Pressable
+                    style={[s.modalButton, s.modalCancelButton]}
+                    onPress={onRequestClose}
+                  >
+                    <Text style={[s.modalButtonText, s.modalCancelText]}>
+                      Cancel
+                    </Text>
                   </Pressable>
                 </>
               ) : (
