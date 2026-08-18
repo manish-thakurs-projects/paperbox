@@ -100,7 +100,7 @@ export async function downloadFile(file: VaultFile): Promise<string> {
                         const pkgName = (Constants as any)?.manifest?.android?.package || (Constants as any)?.expoConfig?.android?.package || (Constants as any)?.manifest?.slug || 'paperbox.dustmedia.org';
                 // Launch the Manage All Files Access settings for this app
                 await IntentLauncher.startActivityAsync(
-                  IntentLauncher.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION || 'android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION',
+                          'android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION',
                           { data: `package:${pkgName}` },
                 );
               } catch (launchErr) {
