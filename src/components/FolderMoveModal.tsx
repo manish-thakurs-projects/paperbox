@@ -102,13 +102,15 @@ const styles = (c: {
     modalOverlay: {
       flex: 1,
       justifyContent: "flex-end",
-      backgroundColor: withAlpha(c.text, 0.38),
+      backgroundColor: withAlpha(c.text, 0.01),
     },
     modalContent: {
       backgroundColor: c.surface,
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,
       padding: 20,
+      borderWidth: 1,
+      borderColor: withAlpha(c.text, 0.2),
       maxHeight: "80%",
     },
     modalTitle: {
@@ -131,6 +133,8 @@ const styles = (c: {
       justifyContent: "space-between",
       alignItems: "center",
       paddingVertical: 14,
+      borderRadius: 10,
+      paddingHorizontal: 14,
       borderBottomWidth: 1,
       borderColor: c.border,
     },

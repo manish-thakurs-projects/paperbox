@@ -82,16 +82,6 @@ export function FileActionModal({
     }
   }, [visible]);
 
-  useEffect(() => {
-    if (!renameVisible) return;
-
-    const frame = requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
-
-    return () => cancelAnimationFrame(frame);
-  }, [renameVisible]);
-
   const openRename = () => {
     if (!file) return;
     setRenameText(file.name);
@@ -108,58 +98,20 @@ export function FileActionModal({
   };
 
   return (
-    <Modal
-      animationType="none"
-      transparent
-      visible={visible}
-      onRequestClose={
-        renameVisible ? () => setRenameVisible(false) : onRequestClose
-      }
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={s.modalOverlay}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 70 : 20}
+    <>
+      {/* Action sheet modal */}
+      <Modal
+        animationType="slide"
+        transparent
+        visible={visible && !renameVisible}
+        onRequestClose={onRequestClose}
       >
-        <Pressable
-          style={renameVisible ? s.renameModalOverlay : s.modalOverlay}
-          onPress={
-            renameVisible ? () => setRenameVisible(false) : onRequestClose
-          }
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={s.modalOverlay}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 70 : 20}
         >
-          {renameVisible ? (
-            <Pressable
-              style={s.renameModalCard}
-              onPress={(event) => event.stopPropagation()}
-            >
-              <Text style={s.modalTitle}>Rename file</Text>
-              <TextInput
-                ref={inputRef}
-                value={renameText}
-                onChangeText={setRenameText}
-                placeholder="Enter new file name"
-                placeholderTextColor={colors.secondary}
-                style={s.modalInput}
-                returnKeyType="done"
-                onSubmitEditing={saveRename}
-                blurOnSubmit={false}
-              />
-              <View style={s.modalFooter}>
-                <Pressable
-                  style={[s.modalActionButton, s.modalCancelButton]}
-                  onPress={() => setRenameVisible(false)}
-                >
-                  <Text style={s.modalActionText}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  style={[s.modalActionButton, s.modalSaveButton]}
-                  onPress={saveRename}
-                >
-                  <Text style={[s.modalActionText, s.modalSaveText]}>Save</Text>
-                </Pressable>
-              </View>
-            </Pressable>
-          ) : (
+          <Pressable style={s.modalOverlay} onPress={onRequestClose}>
             <Pressable
               style={s.modalContent}
               onPress={(event) => event.stopPropagation()}
@@ -295,10 +247,68 @@ export function FileActionModal({
                 <Text style={s.modalEmpty}>Unable to load file actions.</Text>
               )}
             </Pressable>
-          )}
-        </Pressable>
-      </KeyboardAvoidingView>
-    </Modal>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Rename dialog modal — separate Modal so it gets its own mount/animation
+          instead of morphing out of the action sheet's overlay. */}
+      <Modal
+        animationType="fade"
+        transparent
+        visible={renameVisible}
+        onShow={() => {
+          // Focus only after the dialog has finished presenting, so the
+          // keyboard's layout shift doesn't collide with the modal's own
+          // entrance animation.
+          inputRef.current?.focus();
+        }}
+        onRequestClose={() => setRenameVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={s.renameModalOverlay}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 70 : 20}
+        >
+          <Pressable
+            style={s.renameModalOverlay}
+            onPress={() => setRenameVisible(false)}
+          >
+            <Pressable
+              style={s.renameModalCard}
+              onPress={(event) => event.stopPropagation()}
+            >
+              <Text style={s.modalTitle}>Rename file</Text>
+              <TextInput
+                ref={inputRef}
+                value={renameText}
+                onChangeText={setRenameText}
+                placeholder="Enter new file name"
+                placeholderTextColor={colors.secondary}
+                style={s.modalInput}
+                returnKeyType="done"
+                onSubmitEditing={saveRename}
+                blurOnSubmit={false}
+              />
+              <View style={s.modalFooter}>
+                <Pressable
+                  style={[s.modalActionButton, s.modalCancelButton]}
+                  onPress={() => setRenameVisible(false)}
+                >
+                  <Text style={s.modalActionText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={[s.modalActionButton, s.modalSaveButton]}
+                  onPress={saveRename}
+                >
+                  <Text style={[s.modalActionText, s.modalSaveText]}>Save</Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
+    </>
   );
 }
 
@@ -318,16 +328,18 @@ const styles = (c: {
     modalOverlay: {
       flex: 1,
       justifyContent: "flex-end",
-      backgroundColor: withAlpha(c.text, 0.38),
+      backgroundColor: withAlpha(c.text, 0.01),
     },
     renameModalOverlay: {
       flex: 1,
       justifyContent: "center",
       paddingHorizontal: 20,
       paddingVertical: 24,
-      backgroundColor: withAlpha(c.text, 0.38),
+      backgroundColor: withAlpha(c.text, 0.01),
     },
     modalContent: {
+      borderWidth: 1,
+      borderColor: withAlpha(c.text, 0.2),
       backgroundColor: c.surface,
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,

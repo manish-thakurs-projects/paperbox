@@ -508,10 +508,12 @@ const styles = (c: PaperColors) =>
     },
     modalOverlay: {
       flex: 1,
-      backgroundColor: withAlpha(c.text, 0.4),
+      backgroundColor: withAlpha(c.text, 0.01),
       justifyContent: "flex-end",
     },
     modalContent: {
+      borderWidth: 1,
+      borderColor: withAlpha(c.text, 0.2),
       backgroundColor: c.elevated,
       borderTopLeftRadius: radius.lg,
       borderTopRightRadius: radius.lg,
