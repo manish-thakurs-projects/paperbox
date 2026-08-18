@@ -93,7 +93,6 @@ export function PdfReviewScreen({ navigation, route }: Props) {
   );
   const [selectedPageIds, setSelectedPageIds] = useState<string[]>([]);
   const [deleteAlertVisible, setDeleteAlertVisible] = useState(false);
-  const [successDialogVisible, setSuccessDialogVisible] = useState(false);
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -527,8 +526,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
           source: "camera",
         },
       ]);
-
-      setSuccessDialogVisible(true);
+      navigation.navigate("Preview", { fileId });
     } catch (error) {
       Alert.alert("PDF creation failed", "Please try again.");
     } finally {
@@ -650,11 +648,6 @@ export function PdfReviewScreen({ navigation, route }: Props) {
   const cancelDeletePages = () => {
     setDeleteAlertVisible(false);
     setSelectedPageIds([]);
-  };
-
-  const closeSuccessDialog = () => {
-    setSuccessDialogVisible(false);
-    navigation.goBack();
   };
 
   const movePage = (fromIndex: number, toIndex: number) => {
@@ -1228,16 +1221,6 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         </View>
       </Modal>
 
-      <ConfirmDialog
-        visible={successDialogVisible}
-        title="PDF created"
-        message="Your scanned PDF was saved to the vault."
-        confirmText="Open vault"
-        cancelText="Close"
-        hideCancelButton
-        onConfirm={closeSuccessDialog}
-        onCancel={closeSuccessDialog}
-      />
     </View>
   );
 }

@@ -24,6 +24,10 @@ export type VaultFile = {
   isPinned: boolean;
   tags: string[];
   source?: "camera" | "import";
+  /** ID of the PDF created from this Office file, if one has been saved. */
+  convertedPdfId?: string;
+  /** ID of the Office file this saved PDF was converted from. */
+  convertedFromId?: string;
 };
 export type Folder = {
   id: string;

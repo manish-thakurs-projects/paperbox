@@ -38,8 +38,15 @@ import * as ScreenCapture from "expo-screen-capture";
 import {
   decryptVaultFileForUse,
   clearDecryptedCache,
+  persistVaultFile,
 } from "../services/vaultStorage";
 import PdfViewer from "../components/PdfViewer";
+import { downloadFile } from "../services/downloadService";
+import {
+  convertOfficeFileToPdf,
+  isOfficeExtension,
+} from "../services/officeToPdfService";
+import { VaultFile } from "../types";
 
 type Props = NativeStackScreenProps<RootStackParams, "Preview">;
 
@@ -146,6 +153,12 @@ const saveUriToCache = async (
   const destination = normalizeFileUri(destinationPath);
   const fsAny = FileSystem as any;
 
+  // A file may already be staged at this exact cache location. Deleting it before copying
+  // would delete the source as well, leaving external apps with a broken URI.
+  if (normalizeFileUri(uri) === destination) {
+    return destination;
+  }
+
   if (cacheDir) {
     try {
       await fsAny.makeDirectoryAsync(cacheDir, { intermediates: true });
@@ -228,6 +241,13 @@ export function PreviewScreen({ route, navigation }: Props) {
   const file = useVaultStore((s) =>
     s.files.find((f) => f.id === route.params.fileId),
   );
+  const addConvertedPdf = useVaultStore((s) => s.addConvertedPdf);
+  const savedConvertedPdf = useVaultStore((s) => {
+    const source = s.files.find((f) => f.id === route.params.fileId);
+    return source?.convertedPdfId
+      ? s.files.find((f) => f.id === source.convertedPdfId)
+      : undefined;
+  });
 
   if (!file) {
     return (
@@ -242,12 +262,20 @@ export function PreviewScreen({ route, navigation }: Props) {
 
   const uri = file.uri;
   const name = file.name || "preview";
+  const officeExtension = (
+    file.extension || extensionFromMimeType(file.mimeType) || extFromUri(uri)
+  ).toLowerCase();
+  const isOfficeFile = isOfficeExtension(officeExtension);
 
   const [loading, setLoading] = useState<boolean>(false);
   const [localUri, setLocalUri] = useState<string | null>(null);
+  const [convertedFilename, setConvertedFilename] = useState<string | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [zoomVisible, setZoomVisible] = useState<boolean>(false);
   const [pdfOpened, setPdfOpened] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const videoRef = useRef<Video | null>(null);
 
   // reloadKey forces re-run of preview preparation
@@ -262,12 +290,69 @@ export function PreviewScreen({ route, navigation }: Props) {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: name,
+      title:
+        loading && isOfficeFile
+          ? "Converting to PDF…"
+          : convertedFilename || name,
+      headerTitleStyle: {
+        fontSize: 18,
+        fontWeight: "500",
+      },
       headerRight: () => (
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <Pressable
+            onPress={async () => {
+              if (downloading || !file) return;
+              setDownloading(true);
+              try {
+                const saved = await downloadFile(file);
+                Alert.alert("Download complete", `Saved to ${saved}`);
+              } catch (e: any) {
+                if (
+                  e &&
+                  typeof e.message === "string" &&
+                  e.message.includes("No folder selected")
+                ) {
+                  Alert.alert(
+                    "Download cancelled",
+                    "No folder selected for saving files.",
+                  );
+                } else if (e && typeof e.message === "string") {
+                  Alert.alert("Download failed", e.message);
+                } else {
+                  Alert.alert(
+                    "Download failed",
+                    "Unable to save file to device.",
+                  );
+                }
+              } finally {
+                setDownloading(false);
+              }
+            }}
+            style={{ paddingHorizontal: 12 }}
+            hitSlop={8}
+          >
+            <Feather
+              name={downloading ? "download-cloud" : "download"}
+              size={20}
+              color={colors.text}
+            />
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              void openExternally();
+            }}
+            style={{ paddingHorizontal: 12 }}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Open in another app"
+          >
+            <Feather name="external-link" size={20} color={colors.text} />
+          </Pressable>
+          <Pressable
             onPress={() => {
               setLocalUri(null);
+              setConvertedFilename(null);
               setError(null);
               setReloadKey((k) => k + 1);
             }}
@@ -279,7 +364,16 @@ export function PreviewScreen({ route, navigation }: Props) {
       ),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigation, colors.text, file]);
+  }, [
+    navigation,
+    colors.text,
+    file,
+    downloading,
+    loading,
+    isOfficeFile,
+    convertedFilename,
+    name,
+  ]);
 
   useEffect(() => {
     void ScreenCapture.preventScreenCaptureAsync();
@@ -389,12 +483,74 @@ export function PreviewScreen({ route, navigation }: Props) {
     file.kind === "video" || ["mp4", "mov", "mkv", "webm"].includes(ext);
   const isPdf = file.kind === "pdf" || ext === "pdf";
   const isAudio = ["mp3", "m4a", "wav", "aac", "ogg"].includes(ext);
+  const isPdfPreview = isPdf || Boolean(convertedFilename);
+  const previewFilename = convertedFilename || filename;
+
+  const convertToPdf = async () => {
+    if (savedConvertedPdf) {
+      navigation.navigate("Preview", { fileId: savedConvertedPdf.id });
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      let sourceUri = localUriRef.current;
+      if (!sourceUri) {
+        sourceUri = await saveUriToCache(uri, filename);
+        setLocalUri(sourceUri);
+      }
+
+      const converted = await convertOfficeFileToPdf(sourceUri, filename);
+      const convertedId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const convertedInfo = await (FileSystem as any).getInfoAsync(
+        converted.uri,
+        { size: true },
+      );
+      const vaultUri = await persistVaultFile(
+        converted.uri,
+        `${convertedId}-${converted.filename.replace(/\.pdf$/i, "")}`,
+        "pdf",
+      );
+      const inheritedFolderIds = file.folderIds ?? (file.folderId ? [file.folderId] : []);
+      const convertedFile: VaultFile = {
+        id: convertedId,
+        name: converted.filename,
+        uri: vaultUri,
+        mimeType: "application/pdf",
+        size: convertedInfo.size ?? 0,
+        extension: "pdf",
+        kind: "pdf",
+        folderIds: inheritedFolderIds.length ? inheritedFolderIds : undefined,
+        folderId: inheritedFolderIds[0],
+        createdAt: new Date().toISOString(),
+        isFavorite: false,
+        isPinned: false,
+        tags: [],
+        source: "import",
+        convertedFromId: file.id,
+      };
+      addConvertedPdf(file.id, convertedFile);
+      navigation.replace("Preview", { fileId: convertedFile.id });
+    } catch (conversionError: any) {
+      setError(
+        conversionError?.message ||
+          "Unable to convert this Office file to PDF.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // … (download logic unchanged) …
   useEffect(() => {
     let mounted = true;
 
     async function maybeDownload() {
+      // Office files start on the action screen. Only stage a plaintext copy when the
+      // user chooses conversion or hands the document to another application.
+      if (isOfficeFile) return;
+
       // If the stored URI points to an encrypted blob, always decrypt it first regardless of kind
       try {
         if (isEncryptedUri(uri)) {
@@ -444,7 +600,7 @@ export function PreviewScreen({ route, navigation }: Props) {
     return () => {
       mounted = false;
     };
-  }, [uri, reloadKey]);
+  }, [uri, reloadKey, isOfficeFile]);
 
   useEffect(() => {
     return () => {
@@ -560,6 +716,46 @@ export function PreviewScreen({ route, navigation }: Props) {
     openedExternallyRef.current = true;
     lastBackgroundedAtRef.current = null;
     try {
+      try {
+      // Always hand Android a fresh content:// URI. Passing a private file:// URI (or a
+      // previously-generated content URI) directly is unreliable across viewers, especially
+      // for Office files. getContentUriAsync creates a FileProvider URI and grants the selected
+      // application read access using the documented IntentLauncher flow.
+      let readyForExternalApp = localUriRef.current;
+      if (!readyForExternalApp) {
+        readyForExternalApp = await saveUriToCache(uri, filename);
+      }
+      readyForExternalApp = await saveUriToCache(readyForExternalApp, filename);
+      localUriRef.current = readyForExternalApp;
+      setLocalUri(readyForExternalApp);
+
+      const directMimeType = file.mimeType || mimeTypeFromExtension(ext);
+      if (Platform.OS === "android") {
+        const fsAny = FileSystem as any;
+        const contentUri = readyForExternalApp.startsWith("content://")
+          ? readyForExternalApp
+          : await fsAny.getContentUriAsync(readyForExternalApp);
+
+        await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
+          data: contentUri,
+          type: directMimeType,
+          // FLAG_GRANT_READ_URI_PERMISSION. Do not request broad storage permissions.
+          flags: 1,
+        });
+        return;
+      }
+
+      // iOS does not expose Android-style VIEW intents. Its system share/open sheet is the
+      // supported way to hand a local document to another installed application.
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(readyForExternalApp, { dialogTitle: file.name });
+        return;
+      }
+      } catch {
+        // Some older Android devices/providers cannot create a content URI from the staging
+        // file. Keep the previous, more permissive fallback below for those devices.
+      }
+
       let target = localUriRef.current;
       if (!target) {
         target = await saveUriToCache(uri, filename);
@@ -917,18 +1113,57 @@ export function PreviewScreen({ route, navigation }: Props) {
     );
   }
 
-  // PDF
-  if (isPdf) {
+  // Office files need an explicit user choice. The conversion is intentionally on-demand:
+  // it avoids creating a plaintext PDF until the user asks to view one.
+  if (isOfficeFile && !convertedFilename) {
+    return (
+      <Screen style={styles.content}>
+        <View style={styles.center}>
+          <Feather name="file-text" size={64} color={colors.text} />
+          <Text style={styles.title}>{file.name}</Text>
+          <Text style={styles.copy}>
+            Choose how you would like to open this Office file.
+          </Text>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => void convertToPdf()}
+            activeOpacity={0.8}
+          >
+            <Feather
+              name={savedConvertedPdf ? "file" : "file-plus"}
+              size={18}
+              color={colors.text}
+            />
+            <Text style={styles.primaryButtonText}>
+              {savedConvertedPdf ? "Open PDF" : "Convert to PDF"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.primaryButton, styles.secondaryButton]}
+            onPress={() => void openExternally()}
+            activeOpacity={0.8}
+          >
+            <Feather name="external-link" size={18} color={colors.text} />
+            <Text style={styles.primaryButtonText}>Open in other app</Text>
+          </TouchableOpacity>
+        </View>
+      </Screen>
+    );
+  }
+
+  // PDF (including a PDF created from an Office document above).
+  if (isPdfPreview) {
     const target = localUri || uri;
     // If we have a local decrypted file, render it in-app using react-native-pdf. If rendering
     // fails, fall back to the existing external open flow.
     if (target) {
       const pdfUri = normalizeFileUri(target);
       return (
-        <Screen style={styles.content}>
+        <Screen style={styles.pdfContent}>
           <PdfViewer
             uri={pdfUri}
-            filename={filename}
+            filename={previewFilename}
+            colors={colors}
             onError={async (e) => {
               try {
               } catch (_) {}
@@ -939,6 +1174,11 @@ export function PreviewScreen({ route, navigation }: Props) {
               // retrying will just hand react-native-pdf ciphertext again and it will fail the
               // same way. In that case, re-decrypt from scratch instead of retrying blindly.
               const currentLocalUri = localUriRef.current;
+              if (convertedFilename) {
+                setError("Unable to render the converted PDF in-app.");
+                void openExternally();
+                return;
+              }
               if (!currentLocalUri || isEncryptedUri(currentLocalUri)) {
                 try {
                 } catch (_) {}
@@ -1005,7 +1245,7 @@ export function PreviewScreen({ route, navigation }: Props) {
 
     // No target available — show fallback UI that allows external open / share
     return (
-      <Screen style={styles.content}>
+      <Screen style={styles.pdfContent}>
         <View style={styles.center}>
           <Feather name="file-text" size={64} color={colors.text} />
           <Text style={styles.title}>{file.name}</Text>
@@ -1042,6 +1282,11 @@ const getStyles = (colors: any) =>
     content: {
       flexGrow: 1,
       justifyContent: "center",
+      backgroundColor: colors.background,
+    },
+    pdfContent: {
+      flexGrow: 1,
+      padding: 0,
       backgroundColor: colors.background,
     },
     center: {
@@ -1113,6 +1358,10 @@ const getStyles = (colors: any) =>
       color: colors.text,
       fontSize: 15,
       fontWeight: "600",
+      marginLeft: 8,
+    },
+    secondaryButton: {
+      marginTop: 12,
     },
     floatingButton: {
       position: "absolute",

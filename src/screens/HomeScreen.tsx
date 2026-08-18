@@ -1,6 +1,12 @@
 import React from "react";
 import { Feather } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { showAlert } from "../services/alertService";
 
 // Local themed Alert shim — routes to our custom ThemedAlert UI
@@ -53,6 +59,7 @@ export function HomeScreen() {
   >(null);
   const [confirmDeleteSelectionVisible, setConfirmDeleteSelectionVisible] =
     React.useState(false);
+  const [importing, setImporting] = React.useState(false);
 
   const actionFile = React.useMemo(
     () =>
@@ -63,10 +70,14 @@ export function HomeScreen() {
   );
 
   const upload = async () => {
+    if (importing) return;
+    setImporting(true);
     try {
       addFiles(await pickFiles());
     } catch {
       Alert.alert("Could not import", "Try selecting the files again.");
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -229,12 +240,24 @@ export function HomeScreen() {
   };
 
   return (
-    <Screen>
+    <Screen
+      overlay={
+        importing ? (
+          <View style={s.importOverlay} pointerEvents="auto">
+            <View style={s.importCard}>
+              <ActivityIndicator size="large" color={colors.text} />
+              <Text style={s.importTitle}>Encrypting…</Text>
+              <Text style={s.importBody}>Please wait while your files are imported.</Text>
+            </View>
+          </View>
+        ) : null
+      }
+    >
       <View style={s.head}>
         <View>
           <Text style={s.title}>PaperBox</Text>
         </View>
-        <Pressable style={s.add} onPress={upload}>
+        <Pressable style={s.add} onPress={upload} disabled={importing}>
           <Feather name="plus" size={23} color={colors.background} />
         </Pressable>
       </View>
@@ -505,5 +528,33 @@ const styles = (c: PaperColors) =>
       fontSize: 13,
       fontWeight: "700",
       color: c.text,
+    },
+    importOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: "rgba(0,0,0,0.35)",
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 20,
+    },
+    importCard: {
+      width: "100%",
+      maxWidth: 280,
+      borderRadius: radius.md,
+      backgroundColor: c.elevated,
+      paddingVertical: 22,
+      paddingHorizontal: 20,
+      alignItems: "center",
+      gap: 10,
+    },
+    importTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: c.text,
+    },
+    importBody: {
+      fontSize: 13,
+      lineHeight: 18,
+      textAlign: "center",
+      color: c.secondary,
     },
   });

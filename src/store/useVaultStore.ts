@@ -13,6 +13,7 @@ type State = {
   ready: boolean;
   hydrate: () => Promise<void>;
   addFiles: (items: VaultFile[]) => void;
+  addConvertedPdf: (sourceId: string, pdf: VaultFile) => void;
   addFolder: (name: string, parentId?: string) => void;
   addFolders: (items: Folder[]) => void;
   toggleFavorite: (id: string) => void;
@@ -191,6 +192,16 @@ export const useVaultStore = create<State>((set, get) => ({
       }
     }
     const files = normalizeFiles(get().files.filter((f) => f.id !== id));
+    set({ files });
+    persist(files, get().folders);
+  },
+  addConvertedPdf: (sourceId, pdf) => {
+    const files = normalizeFiles([
+      pdf,
+      ...get().files.map((file) =>
+        file.id === sourceId ? { ...file, convertedPdfId: pdf.id } : file,
+      ),
+    ]);
     set({ files });
     persist(files, get().folders);
   },

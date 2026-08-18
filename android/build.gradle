@@ -4,7 +4,6 @@ buildscript {
   repositories {
     google()
     mavenCentral()
-    maven { url "$rootDir/../node_modules/expo-camera/android/maven" }
   }
   dependencies {
     classpath('com.android.tools.build:gradle')
@@ -18,7 +17,6 @@ allprojects {
     google()
     mavenCentral()
     maven { url 'https://www.jitpack.io' }
-    maven { url "$rootDir/../node_modules/expo-camera/android/maven" }
   }
 }
 

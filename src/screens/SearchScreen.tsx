@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather } from "@expo/vector-icons";
 import {
   Pressable,
@@ -29,12 +30,16 @@ import { shareVaultFile } from "../services/shareService";
 import { getFolderIdsForFile } from "../utils/files";
 import { RootStackParams } from "../navigation/types";
 
+const RECENT_SEARCHES_KEY = "paperbox.recent-searches";
+const MAX_RECENT_SEARCHES = 8;
+
 export function SearchScreen() {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParams>>();
   const { colors } = usePaperTheme();
   const [query, setQuery] = useState("");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const hasLoadedRecentSearches = useRef(false);
   const [actionFileId, setActionFileId] = useState<string | null>(null);
   const [actionsVisible, setActionsVisible] = useState(false);
   const [moveVisible, setMoveVisible] = useState(false);
@@ -67,6 +72,44 @@ export function SearchScreen() {
     inputRef.current?.focus();
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    void AsyncStorage.getItem(RECENT_SEARCHES_KEY)
+      .then((stored) => {
+        if (!stored || !active) return;
+        const parsed: unknown = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setRecentSearches(
+            parsed
+              .filter((item): item is string => typeof item === "string")
+              .map((item) => item.trim())
+              .filter(Boolean)
+              .slice(0, MAX_RECENT_SEARCHES),
+          );
+        }
+      })
+      .catch(() => {
+        // Search history is a convenience feature; an unreadable entry can be ignored.
+      })
+      .finally(() => {
+        if (active) hasLoadedRecentSearches.current = true;
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedRecentSearches.current) return;
+    void AsyncStorage.setItem(
+      RECENT_SEARCHES_KEY,
+      JSON.stringify(recentSearches),
+    ).catch(() => {
+      // Keep the in-memory list working when device storage is temporarily unavailable.
+    });
+  }, [recentSearches]);
+
   const results = useMemo(
     () =>
       files.filter((f) =>
@@ -77,21 +120,27 @@ export function SearchScreen() {
     [files, query],
   );
 
-  const handleSearch = (text: string) => {
-    setQuery(text);
-    if (!text.trim()) return;
-
+  const recordRecentSearch = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
     setRecentSearches((current) => {
-      const trimmed = text.trim().toLowerCase();
+      const normalized = trimmed.toLocaleLowerCase();
       const next = [
         trimmed,
-        ...current.filter((item) => item !== trimmed),
-      ].slice(0, 5);
+        ...current.filter(
+          (item) => item.toLocaleLowerCase() !== normalized,
+        ),
+      ].slice(0, MAX_RECENT_SEARCHES);
       return next;
     });
   };
 
-  const clearRecentSearches = () => setRecentSearches([]);
+  const handleSearch = (text: string) => setQuery(text);
+
+  const clearRecentSearches = () => {
+    setRecentSearches([]);
+    void AsyncStorage.removeItem(RECENT_SEARCHES_KEY);
+  };
 
   const openFileActions = (file: VaultFile) => {
     setActionFileId(file.id);
@@ -203,6 +252,8 @@ export function SearchScreen() {
           ref={inputRef}
           value={query}
           onChangeText={handleSearch}
+          onSubmitEditing={() => recordRecentSearch(query)}
+          returnKeyType="search"
           autoCorrect={false}
           autoFocus
           placeholder="Search files and tags"
@@ -217,7 +268,10 @@ export function SearchScreen() {
             <FileRow
               key={f.id}
               file={f}
-              onPress={() => navigation.navigate("Preview", { fileId: f.id })}
+              onPress={() => {
+                recordRecentSearch(query);
+                navigation.navigate("Preview", { fileId: f.id });
+              }}
               onMore={() => openFileActions(f)}
             />
           ))}
@@ -237,7 +291,10 @@ export function SearchScreen() {
               <Pressable
                 key={item}
                 style={s.recentItem}
-                onPress={() => handleSearch(item)}
+                onPress={() => {
+                  handleSearch(item);
+                  recordRecentSearch(item);
+                }}
               >
                 <Feather name="clock" size={16} color={colors.secondary} />
                 <Text style={s.recentText}>{item}</Text>

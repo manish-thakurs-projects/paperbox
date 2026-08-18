@@ -7,18 +7,21 @@ import {
   TouchableOpacity,
 } from "react-native";
 import Pdf from "react-native-pdf";
+import { PaperColors } from "../theme/usePaperTheme";
 
 type Props = {
   uri: string;
   filename?: string;
+  colors: PaperColors;
   onError?: (err: any) => void;
   onOpenExternal?: () => void;
-  showOpenExternal?: boolean; // if false, hide the footer "Open in other app" button
+  showOpenExternal?: boolean;
 };
 
 export default function PdfViewer({
   uri,
   filename,
+  colors,
   onError,
   onOpenExternal,
   showOpenExternal = true,
@@ -26,8 +29,6 @@ export default function PdfViewer({
   const [loading, setLoading] = useState<boolean>(true);
   const [page, setPage] = useState<number>(1);
   const [numberOfPages, setNumberOfPages] = useState<number>(0);
-
-  const source = { uri, cache: true } as any;
 
   const handleLoadComplete = (pageCount: number) => {
     setNumberOfPages(pageCount);
@@ -40,11 +41,13 @@ export default function PdfViewer({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {loading && (
         <View style={styles.loaderContainer}>
-          <ActivityIndicator size="large" />
-          <Text style={styles.loadingText}>Loading PDF…</Text>
+          <ActivityIndicator size="large" color={colors.text} />
+          <Text style={[styles.loadingText, { color: colors.text }]}>
+            Loading PDF...
+          </Text>
         </View>
       )}
 
@@ -53,18 +56,22 @@ export default function PdfViewer({
         onLoadComplete={(n: number) => handleLoadComplete(n)}
         onError={(e: any) => handleError(e)}
         onPageChanged={(p: number) => setPage(p)}
-        style={styles.pdf}
+        style={[styles.pdf, { backgroundColor: colors.background }]}
       />
-      <View style={styles.footer}>
-        <Text style={styles.pageLabel} numberOfLines={1}>
+
+      <View
+        style={[
+          styles.footer,
+          {
+            backgroundColor: colors.surface,
+            borderTopColor: colors.border,
+          },
+        ]}
+      >
+        <Text style={[styles.pageLabel, { color: colors.text }]} numberOfLines={1}>
           {filename ? `${filename} · ` : ""}
           {numberOfPages > 0 ? `Page ${page} of ${numberOfPages}` : `Page ${page}`}
         </Text>
-        {showOpenExternal && onOpenExternal ? (
-          <TouchableOpacity style={styles.openButton} onPress={onOpenExternal}>
-            <Text style={styles.openButtonText}>Open in other app</Text>
-          </TouchableOpacity>
-        ) : null}
       </View>
     </View>
   );
@@ -73,7 +80,6 @@ export default function PdfViewer({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
   },
   pdf: {
     flex: 1,
@@ -93,26 +99,24 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   footer: {
-    height: 56,
+    height: 30,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: "#ddd",
   },
   pageLabel: {
-    fontSize: 14,
+    fontSize: 12,
     flex: 1,
     marginRight: 12,
   },
   openButton: {
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: "#eee",
     borderRadius: 6,
   },
   openButtonText: {
-    fontSize: 14,
+    fontSize: 13,
   },
 });

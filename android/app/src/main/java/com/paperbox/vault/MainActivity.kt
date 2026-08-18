@@ -1,4 +1,4 @@
-package paperbox.dustmedia.org
+package com.paperbox.vault
 
 import android.os.Build
 import android.os.Bundle

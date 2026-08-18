@@ -28,6 +28,7 @@ import { useVaultStore } from "../store/useVaultStore";
 import { radius } from "../theme/tokens";
 import { PaperColors, usePaperTheme } from "../theme/usePaperTheme";
 import { withAlpha } from "../theme/utils";
+import { shareVaultFile } from "../services/shareService";
 import { isFileInFolder } from "../utils/files";
 
 type Props = NativeStackScreenProps<RootStackParams, "FolderDetail">;
@@ -159,6 +160,28 @@ export function FolderDetailScreen({ route, navigation }: Props) {
     if (!actionFile) return;
     closeActions();
     navigation.navigate("FileDetail", { fileId: actionFile.id });
+  };
+
+  const shareFile = async () => {
+    if (!actionFile) return;
+
+    try {
+      await shareVaultFile(actionFile);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === "Sharing not available on this device"
+      ) {
+        Alert.alert(
+          "Sharing not available",
+          "This device cannot share files directly.",
+        );
+      } else {
+        Alert.alert("Could not share file", "Try again later.");
+      }
+    } finally {
+      closeActions();
+    }
   };
 
   const goToPreview = (file: any) => {
@@ -423,7 +446,7 @@ export function FolderDetailScreen({ route, navigation }: Props) {
         onToggleFavorite={toggleFavoriteState}
         onTogglePin={togglePinState}
         onOpenMoveModal={openMoveModal}
-        onShare={() => {}}
+        onShare={shareFile}
         onDelete={deleteFile}
         onInfo={goToInfo}
         onRemoveFromFolder={removeFromFolder}

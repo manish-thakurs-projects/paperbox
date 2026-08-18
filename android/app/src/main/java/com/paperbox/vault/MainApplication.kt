@@ -1,4 +1,4 @@
-package paperbox.dustmedia.org
+package com.paperbox.vault
 
 import android.app.Application
 import android.content.res.Configuration
@@ -25,19 +25,19 @@ class MainApplication : Application(), ReactApplication {
             PackageList(this).packages.apply {
               // Packages that cannot be autolinked yet can be added manually here, for example:
               // add(MyReactNativePackage())
-                          try {
-                            // register SAF helper package
-                            add(SAFPackage())
-                          } catch (e: Exception) {
-                            // ignore if registration fails for some build variants
-                          }
-                          try {
-                            // register react-native-pdf package if autolinking misses it for any reason
-                            add(org.wonday.pdf.RNPDFPackage())
-                          } catch (e: Exception) {
-                            // ignore if registration fails (package may already be autolinked)
-                          }
-                        }
+              try {
+                // register SAF helper package
+                add(paperbox.dustmedia.org.SAFPackage())
+              } catch (e: Exception) {
+                // ignore if registration fails for some build variants
+              }
+              try {
+                // register react-native-pdf package if autolinking misses it for any reason
+                add(org.wonday.pdf.RNPDFPackage())
+              } catch (e: Exception) {
+                // ignore if registration fails (package may already be autolinked)
+              }
+            }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
 
