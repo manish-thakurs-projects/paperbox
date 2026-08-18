@@ -6,6 +6,8 @@ import { VaultFile } from "../types";
 import RNFS from 'react-native-fs';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decryptVaultFileForUse } from "../services/vaultStorage";
+import { downloadFile } from "../services/downloadService";
+import { Alert } from 'react-native';
 
 interface FileActionModalProps {
   visible: boolean;
@@ -41,6 +43,7 @@ export function FileActionModal({
   const [renameVisible, setRenameVisible] = useState(false);
   const [renameText, setRenameText] = useState("");
   const [shareLoading, setShareLoading] = useState(false);
+  const [downloadLoading, setDownloadLoading] = useState(false);
   const inputRef = useRef<TextInput | null>(null);
 
   useEffect(() => {
@@ -176,111 +179,33 @@ export function FileActionModal({
 
                     <Pressable style={s.actionItem} onPress={async () => {
                       if (!file) return;
+                      setDownloadLoading(true);
                       try {
-                        // Decrypt or stage file into app cache first
-                        const extension = file.extension || (file.mimeType ? file.mimeType.split('/').pop() : 'bin');
-                        const filename = file.name || `file.${extension}`;
-                        let sourceUri = file.uri;
-
-                        if (sourceUri.endsWith('.enc') || sourceUri.includes('.enc?')) {
-                          try {
-                            const decrypted = await decryptVaultFileForUse(file);
-                            sourceUri = decrypted;
-                          } catch (e) {
-                            console.debug('FileActionModal: decrypt for download failed', e);
-                            Alert.alert('Download failed', 'Unable to decrypt the file for download.');
-                            return;
-                          }
-                        }
-
-                        // If content://, try to copy into a file:// cache so RNFS can access
-                        if (Platform.OS === 'android' && sourceUri.startsWith('content://')) {
-                          try {
-                            const fsAny = FileSystem as any;
-                            const cacheDir = (fsAny as any).cacheDirectory || (fsAny as any).documentDirectory || '';
-                            const dest = `${cacheDir}${filename}`;
-                            try {
-                              await fsAny.copyAsync({ from: sourceUri, to: dest });
-                              sourceUri = dest;
-                            } catch (copyErr) {
-                              // try base64 fallback
-                              try {
-                                const base64 = await fsAny.readAsStringAsync(sourceUri, { encoding: fsAny.EncodingType.Base64 });
-                                await fsAny.writeAsStringAsync(dest, base64, { encoding: fsAny.EncodingType.Base64 });
-                                sourceUri = dest;
-                              } catch (b64Err) {
-                                console.debug('FileActionModal: staging content URI failed', copyErr, b64Err);
-                              }
-                            }
-                          } catch (e) {
-                            console.debug('FileActionModal: content:// staging failed', e);
-                          }
-                        }
-
-                        // Now copy to Downloads (Android) or Documents (iOS)
-                        const srcPath = sourceUri.startsWith('file://') ? sourceUri.replace('file://', '') : sourceUri;
-                        if (Platform.OS === 'android') {
-                          try {
-                            const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE);
-                            if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-                              Alert.alert('Permission required', 'Storage permission is required to save files to your device.');
-                              return;
-                            }
-                          } catch (permErr) {
-                            console.debug('FileActionModal: permission request failed', permErr);
-                          }
-
-                          const downloads = (RNFS as any).DownloadDirectoryPath || ((RNFS as any).ExternalStorageDirectoryPath ? `${(RNFS as any).ExternalStorageDirectoryPath}/Download` : null);
-                          if (!downloads) {
-                            Alert.alert('Download failed', 'No Downloads directory available on this device.');
-                            return;
-                          }
-
-                          const destPath = `${downloads}/${filename}`;
-                          try {
-                            await RNFS.copyFile(srcPath, destPath);
-                            Alert.alert('Download complete', `Saved to ${destPath}`);
-                            try { onDownload && onDownload(); } catch(_){}
-                          } catch (copyErr) {
-                            console.debug('FileActionModal: RNFS.copyFile failed, falling back to base64 method', copyErr);
-                            try {
-                              const base64 = await (FileSystem as any).readAsStringAsync(sourceUri, { encoding: (FileSystem as any).EncodingType.Base64 });
-                              await RNFS.writeFile(destPath, base64, 'base64');
-                              Alert.alert('Download complete', `Saved to ${destPath}`);
-                              try { onDownload && onDownload(); } catch(_){}
-                            } catch (e) {
-                              console.debug('FileActionModal: download failed', e);
-                              Alert.alert('Download failed', 'Unable to save file to Downloads.');
-                            }
-                          }
+                        const saved = await downloadFile(file);
+                        Alert.alert('Download complete', `Saved to ${saved}`);
+                        try { onDownload && onDownload(); } catch(_){ }
+                      } catch (e: any) {
+                        console.debug('FileActionModal: download failed', e);
+                        if (e && typeof e.message === 'string' && e.message.includes('No folder selected')) {
+                          Alert.alert('Download cancelled', 'No folder selected for saving files.');
+                        } else if (e && typeof e.message === 'string') {
+                          Alert.alert('Download failed', e.message);
                         } else {
-                          // iOS: write to DocumentDirectoryPath
-                          const dest = `${(RNFS as any).DocumentDirectoryPath}/${filename}`;
-                          try {
-                            await RNFS.copyFile(srcPath, dest);
-                            Alert.alert('Download complete', `Saved to ${dest}`);
-                            try { onDownload && onDownload(); } catch(_){}
-                          } catch (e) {
-                            try {
-                              const base64 = await (FileSystem as any).readAsStringAsync(sourceUri, { encoding: (FileSystem as any).EncodingType.Base64 });
-                              await RNFS.writeFile(dest, base64, 'base64');
-                              Alert.alert('Download complete', `Saved to ${dest}`);
-                              try { onDownload && onDownload(); } catch(_){}
-                            } catch (err) {
-                              console.debug('FileActionModal: iOS download failed', err);
-                              Alert.alert('Download failed', 'Unable to save file to documents.');
-                            }
-                          }
+                          Alert.alert('Download failed', 'Unable to save file to device.');
                         }
-
-                      } catch (e) {
-                        console.debug('FileActionModal: download action failed', e);
-                        Alert.alert('Download failed', 'An unexpected error occurred while saving the file.');
                       } finally {
+                        setDownloadLoading(false);
                         onRequestClose();
                       }
                     }}>
-                      <Text style={s.actionLabel}>Download file</Text>
+                      {downloadLoading ? (
+                        <>
+                          <ActivityIndicator size="small" color={colors.text} />
+                          <Text style={[s.actionLabel, { marginLeft: 8 }]}>Decrypting...</Text>
+                        </>
+                      ) : (
+                        <Text style={s.actionLabel}>Download file</Text>
+                      )}
                     </Pressable>
 
                   </ScrollView>
