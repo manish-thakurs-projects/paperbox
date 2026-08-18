@@ -124,7 +124,6 @@ export function FileDetailScreen({ route, navigation }: Props) {
         return;
       }
 
-      console.warn("shareFile error", e);
       Alert.alert("Could not share file", "Try again later.");
     }
   };

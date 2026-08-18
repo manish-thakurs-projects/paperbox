@@ -33,7 +33,6 @@ export default function App() {
         await clearDecryptedCache();
       } catch (e) {
         try {
-          console.debug("clearDecryptedCache failed on startup", e);
         } catch (_) {}
       }
       // Now hydrate the in-memory vault/index.
@@ -79,7 +78,6 @@ export default function App() {
         }
       } catch (e) {
         try {
-          console.debug("clearDecryptedCache AppState handler failed", e);
         } catch (_) {}
       }
     };

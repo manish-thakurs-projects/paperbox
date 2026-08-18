@@ -1,4 +1,5 @@
 import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system/legacy";
 import { VaultFile } from "../types";
 import { extensionOf, kindOf } from "../utils/files";
 import { showAlert } from "./alertService";
@@ -34,6 +35,7 @@ export async function pickFiles(): Promise<VaultFile[]> {
       while (true) {
         try {
           durableUri = await persistVaultFile(a.uri, `${id}-${a.name.replace(/\.[^/.]+$/, "")}`, extension);
+          await FileSystem.deleteAsync(a.uri, { idempotent: true }).catch(() => {});
           break;
         } catch (err: any) {
           attempts += 1;

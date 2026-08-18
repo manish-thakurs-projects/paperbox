@@ -55,6 +55,17 @@ export default function PdfViewer({
         onPageChanged={(p: number) => setPage(p)}
         style={styles.pdf}
       />
+      <View style={styles.footer}>
+        <Text style={styles.pageLabel} numberOfLines={1}>
+          {filename ? `${filename} · ` : ""}
+          {numberOfPages > 0 ? `Page ${page} of ${numberOfPages}` : `Page ${page}`}
+        </Text>
+        {showOpenExternal && onOpenExternal ? (
+          <TouchableOpacity style={styles.openButton} onPress={onOpenExternal}>
+            <Text style={styles.openButtonText}>Open in other app</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -92,6 +103,8 @@ const styles = StyleSheet.create({
   },
   pageLabel: {
     fontSize: 14,
+    flex: 1,
+    marginRight: 12,
   },
   openButton: {
     paddingVertical: 8,

@@ -137,7 +137,6 @@ export function PdfReviewScreen({ navigation, route }: Props) {
       setInfoTotalSize(total);
       setInfoEstimatedPdfSize(estimated);
     } catch (e) {
-      console.warn("info calc error", e);
       setInfoTotalSize(null);
       setInfoEstimatedPdfSize(null);
     } finally {
@@ -237,11 +236,9 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         pages.map(async (page) => {
           if (page.previewUri) return page;
           try {
-            console.debug("PdfReview: creating preview for page", page.uri);
           } catch (e) {}
           const pv = await createPreviewUri(page.uri);
           try {
-            console.debug("PdfReview: createPreviewUri returned", pv);
           } catch (e) {}
           return { ...page, previewUri: pv };
         }),
@@ -316,7 +313,6 @@ export function PdfReviewScreen({ navigation, route }: Props) {
 
       setPages((current) => [...current, ...newPages]);
     } catch (error) {
-      console.warn("addPages error", error);
       Alert.alert("Scan failed", "Unable to scan documents. Please try again.");
     } finally {
       setIsScanning(false);
@@ -366,7 +362,6 @@ export function PdfReviewScreen({ navigation, route }: Props) {
       const info = await FileSystem.getInfoAsync(uri);
       return info.exists ? info.size : 0;
     } catch (error) {
-      console.warn("PdfReview getFileSize error", error);
       return 0;
     }
   };
@@ -501,7 +496,6 @@ export function PdfReviewScreen({ navigation, route }: Props) {
           break;
         } catch (err: any) {
           attempts += 1;
-          console.debug("PdfReview: persistVaultFile error", err);
           const retry = await showRetrySaveDialog(
             `Unable to save encrypted PDF. ${err?.message || String(err)}. Retry?`,
           );
@@ -536,7 +530,6 @@ export function PdfReviewScreen({ navigation, route }: Props) {
 
       setSuccessDialogVisible(true);
     } catch (error) {
-      console.warn("PdfReview createPdf error", error);
       Alert.alert("PDF creation failed", "Please try again.");
     } finally {
       setIsSaving(false);
@@ -592,7 +585,6 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         ),
       );
     } catch (error) {
-      console.warn("retakePage error", error);
       Alert.alert(
         "Retake failed",
         "Unable to retake the page. Please try again.",

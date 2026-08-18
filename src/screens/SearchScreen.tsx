@@ -19,6 +19,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Screen } from "../components/Screen";
 import { FileRow } from "../components/FileRow";
 import { FileActionModal } from "../components/FileActionModal";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FolderMoveModal } from "../components/FolderMoveModal";
 import { EmptyState } from "../components/EmptyState";
 import { usePaperTheme } from "../theme/usePaperTheme";
@@ -38,6 +39,9 @@ export function SearchScreen() {
   const [actionsVisible, setActionsVisible] = useState(false);
   const [moveVisible, setMoveVisible] = useState(false);
   const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([]);
+  const [confirmDeleteFileId, setConfirmDeleteFileId] = useState<
+    string | null
+  >(null);
   const inputRef = useRef<TextInput | null>(null);
   const files = useVaultStore((s) => s.files);
   const folders = useVaultStore((s) => s.folders);
@@ -126,8 +130,19 @@ export function SearchScreen() {
   const deleteFile = () => {
     if (!actionFile) return;
 
-    removeFile(actionFile.id);
+    setConfirmDeleteFileId(actionFile.id);
+  };
+
+  const confirmDeleteFile = () => {
+    if (!confirmDeleteFileId) return;
+
+    removeFile(confirmDeleteFileId);
     closeActions();
+    setConfirmDeleteFileId(null);
+  };
+
+  const cancelDeleteFile = () => {
+    setConfirmDeleteFileId(null);
   };
 
   const toggleFavoriteState = () => {
@@ -166,7 +181,6 @@ export function SearchScreen() {
           "This device cannot share files directly.",
         );
       } else {
-        console.warn("shareFile error", error);
         Alert.alert("Could not share file", "Try again later.");
       }
     } finally {
@@ -278,6 +292,15 @@ export function SearchScreen() {
           )
         }
         onSave={saveFolderSelection}
+      />
+      <ConfirmDialog
+        visible={!!confirmDeleteFileId}
+        title="Delete this file?"
+        message="This only removes it from PaperBox."
+        confirmText="Delete"
+        destructive
+        onConfirm={confirmDeleteFile}
+        onCancel={cancelDeleteFile}
       />
     </Screen>
   );

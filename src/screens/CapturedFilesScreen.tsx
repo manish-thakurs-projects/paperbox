@@ -117,7 +117,6 @@ export function CapturedFilesScreen() {
     try {
       await shareVaultFile(actionFile);
     } catch (error) {
-      console.warn("shareFile error", error);
     } finally {
       closeActions();
     }

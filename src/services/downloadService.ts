@@ -52,87 +52,30 @@ async function ensureExternalTree(): Promise<string> {
   return tree || "";
 }
 
-export async function downloadFile(file: VaultFile): Promise<string> {
+async function deleteQuietly(uri: string | null | undefined) {
+  if (!uri) return;
   try {
-    // On Android prefer Storage Access Framework (no runtime WRITE_EXTERNAL_STORAGE needed)
-    if (Platform.OS === "android") {
-      // Ensure we have a SAF tree to write into (user picks once)
-      const tree = await ensureExternalTree();
-      if (!tree) throw new Error("No folder selected for external storage");
+    await FileSystem.deleteAsync(uri, { idempotent: true });
+  } catch {
+    // best-effort cleanup
+  }
+}
 
-      // Prepare filename and ensure decrypted source
-      const extension =
-        file.extension ||
-        (file.mimeType ? extractExtension(file.mimeType) : "bin");
-      const filename = ensureFilename(file.name, extension);
+export async function downloadFile(file: VaultFile): Promise<string> {
+  let decryptedTempUri: string | null = null;
+  let sourceUri = file.uri;
 
-      let sourceUri = file.uri;
-      if (sourceUri.endsWith(".enc") || sourceUri.includes(".enc?")) {
-        const decrypted = await decryptVaultFileForUse(file);
-        if (decrypted) sourceUri = decrypted;
-      }
-
-      // Read source as base64 and write via SAF
-      const fsAny = FileSystem as any;
-      const info = await fsAny.getInfoAsync(sourceUri, { size: true });
-      if (!info.exists) throw new Error("Source file does not exist");
-
-      const base64 = await fsAny.readAsStringAsync(sourceUri, {
-        encoding: fsAny.EncodingType.Base64,
-      });
-
-      // Try writing via vaultStorage helper (which uses SAF module)
-      try {
-        await writeBytesToExternal(filename, base64);
-        return filename;
-      } catch (e) {
-        // If SAF write fails, offer MANAGE_EXTERNAL_STORAGE settings flow as a fallback on Android 11+
-        try {
-          console.debug(
-            "downloadFile: SAF write failed, falling back to RNFS",
-            e,
-          );
-        } catch (_) {}
-
-        if (Platform.OS === "android") {
-          try {
-            const openIdx = await showAlert(
-                          "Unable to save using SAF",
-                          "PaperBox could not write to the selected folder. You can grant broader file access in system settings (All files access) as a fallback.",
-                          [
-                            { text: "Cancel", style: "cancel" },
-                            { text: "Open settings" },
-                          ],
-                        );
-
-                        if (openIdx === 1) {
-              try {
-                const pkgName =
-                  (Constants as any)?.manifest?.android?.package ||
-                  (Constants as any)?.expoConfig?.android?.package ||
-                  (Constants as any)?.manifest?.slug ||
-                  "paperbox.dustmedia.org";
-                // Launch the Manage All Files Access settings for this app
-                await IntentLauncher.startActivityAsync(
-                  "android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION",
-                  { data: `package:${pkgName}` },
-                );
-              } catch (launchErr) {
-                try {
-                  console.debug(
-                    "downloadFile: opening MANAGE_EXTERNAL_STORAGE settings failed",
-                    launchErr,
-                  );
-                } catch (_) {}
-                // fallthrough to RNFS fallback below
-              }
-            }
-          } catch (ee) {
-            // ignore
-          }
-        }
-      }
+  const ensureSourceUri = async () => {
+    if (decryptedTempUri) return decryptedTempUri;
+    if (sourceUri.endsWith(".enc") || sourceUri.includes(".enc?")) {
+      decryptedTempUri = await decryptVaultFileForUse(file);
+      if (decryptedTempUri) sourceUri = decryptedTempUri;
     }
+    return sourceUri;
+  };
+
+  const writeUsingRnfsOrBase64 = async (): Promise<string> => {
+    await ensureSourceUri();
 
     // Non-Android or fallback: write into app-accessible Downloads/Documents directory
     let downloadsDir =
@@ -151,13 +94,6 @@ export async function downloadFile(file: VaultFile): Promise<string> {
       (file.mimeType ? extractExtension(file.mimeType) : "bin");
     const filename = ensureFilename(file.name, extension);
     const destPath = downloadsDir ? `${downloadsDir}/${filename}` : filename;
-
-    let sourceUri = file.uri;
-    if (sourceUri.endsWith(".enc") || sourceUri.includes(".enc?")) {
-      const decrypted = await decryptVaultFileForUse(file);
-      if (decrypted) sourceUri = decrypted;
-    }
-
     const srcPath = sourceUri.replace(/^file:\/\//, "");
 
     try {
@@ -178,10 +114,6 @@ export async function downloadFile(file: VaultFile): Promise<string> {
       }
     } catch (e) {
       try {
-        console.debug(
-          "downloadFile: RNFS.copyFile failed, falling back to base64 method",
-          e,
-        );
       } catch (_) {}
     }
 
@@ -207,15 +139,84 @@ export async function downloadFile(file: VaultFile): Promise<string> {
       return tempPath;
     } catch (e) {
       try {
-        console.debug("downloadFile: base64 method failed", e);
       } catch (_) {}
       throw e;
     }
+  };
+
+  try {
+    // On Android prefer Storage Access Framework (no runtime WRITE_EXTERNAL_STORAGE needed)
+    if (Platform.OS === "android") {
+      // Ensure we have a SAF tree to write into (user picks once)
+      const tree = await ensureExternalTree();
+      if (!tree) throw new Error("No folder selected for external storage");
+
+      // Prepare filename and ensure decrypted source
+      const extension =
+        file.extension ||
+        (file.mimeType ? extractExtension(file.mimeType) : "bin");
+      const filename = ensureFilename(file.name, extension);
+      await ensureSourceUri();
+
+      // Read source as base64 and write via SAF
+      const fsAny = FileSystem as any;
+      const info = await fsAny.getInfoAsync(sourceUri, { size: true });
+      if (!info.exists) throw new Error("Source file does not exist");
+
+      const base64 = await fsAny.readAsStringAsync(sourceUri, {
+        encoding: fsAny.EncodingType.Base64,
+      });
+
+      // Try writing via vaultStorage helper (which uses SAF module)
+      try {
+        await writeBytesToExternal(filename, base64);
+        return filename;
+      } catch (e) {
+        // If SAF write fails, offer MANAGE_EXTERNAL_STORAGE settings flow as a fallback on Android 11+
+        try {
+        } catch (_) {}
+
+        try {
+          const openIdx = await showAlert(
+            "Unable to save using SAF",
+            "PaperBox could not write to the selected folder. You can grant broader file access in system settings (All files access) as a fallback.",
+            [
+              { text: "Cancel", style: "cancel" },
+              { text: "Open settings" },
+            ],
+          );
+
+          if (openIdx === 1) {
+            try {
+              const pkgName =
+                (Constants as any)?.manifest?.android?.package ||
+                (Constants as any)?.expoConfig?.android?.package ||
+                (Constants as any)?.manifest?.slug ||
+                "paperbox.dustmedia.org";
+              // Launch the Manage All Files Access settings for this app
+              await IntentLauncher.startActivityAsync(
+                "android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION",
+                { data: `package:${pkgName}` },
+              );
+            } catch (launchErr) {
+              try {
+              } catch (_) {}
+            }
+          }
+        } catch (ee) {
+          // ignore
+        }
+
+        return await writeUsingRnfsOrBase64();
+      }
+    }
+    return await writeUsingRnfsOrBase64();
   } catch (e) {
     try {
-      console.debug("downloadFile failed", e);
     } catch (_) {}
     throw e;
+  } finally {
+    await deleteQuietly(decryptedTempUri);
   }
 }
 

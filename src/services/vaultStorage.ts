@@ -28,25 +28,16 @@ async function secureGetItem(key: string): Promise<string | null> {
       return await SecureStore.getItemAsync(key);
     } catch (e) {
       try {
-        console.debug(
-          "SecureStore.getItemAsync failed, falling back to AsyncStorage",
-          e,
-        );
       } catch (_) {}
     }
   } else {
     try {
-      console.debug(
-        "SecureStore not available, using AsyncStorage fallback for key",
-        key,
-      );
     } catch (_) {}
   }
   try {
     return await AsyncStorage.getItem(key);
   } catch (e) {
     try {
-      console.debug("AsyncStorage.getItem fallback failed", e);
     } catch (_) {}
     return null;
   }
@@ -59,25 +50,16 @@ async function secureSetItem(key: string, value: string): Promise<void> {
       return;
     } catch (e) {
       try {
-        console.debug(
-          "SecureStore.setItemAsync failed, falling back to AsyncStorage",
-          e,
-        );
       } catch (_) {}
     }
   } else {
     try {
-      console.debug(
-        "SecureStore not available, using AsyncStorage fallback for key set",
-        key,
-      );
     } catch (_) {}
   }
   try {
     await AsyncStorage.setItem(key, value);
   } catch (e) {
     try {
-      console.debug("AsyncStorage.setItem fallback failed", e);
     } catch (_) {}
     throw e;
   }
@@ -424,7 +406,6 @@ const writeDurableBackup = async (encrypted: string) => {
       return;
     }
   } catch (e) {
-    console.debug("durable vault backup (SAF) failed", e);
   }
 
   // Fallback: write into app documentDirectory/persistent vault dir which is writable
@@ -438,7 +419,6 @@ const writeDurableBackup = async (encrypted: string) => {
     });
     return;
   } catch (error) {
-    console.debug("durable vault backup failed", error);
   }
 };
 
@@ -460,7 +440,6 @@ const readDurableBackup = async (): Promise<{
       }
     }
   } catch (e) {
-    console.debug("durable vault read (SAF) failed", e);
   }
 
   // Fallback: look in app documentDirectory
@@ -473,7 +452,6 @@ const readDurableBackup = async (): Promise<{
     });
     return await decryptVault(raw);
   } catch (error) {
-    console.debug("durable vault read failed", error);
   }
 
   return null;
@@ -523,13 +501,6 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
   // Log which crypto path is used to help diagnose decryption problems
   try {
     // eslint-disable-next-line no-console
-    console.debug(
-      "decryptVaultFileForUse: using WebCrypto?",
-      typeof (global as any).crypto !== "undefined" &&
-        !!(global as any).crypto.subtle,
-      "forgeFallbackLoaded?",
-      !!_forge,
-    );
   } catch (e) {
     // ignore
   }
@@ -543,9 +514,6 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
   // Basic integrity checks to avoid writing corrupted previews (helps diagnose blank previews)
   try {
     if (plain.length === 0) {
-      console.debug("decryptVaultFileForUse: decrypted payload is empty", {
-        uri: file.uri,
-      });
       throw new Error("Decrypted payload is empty");
     }
 
@@ -557,16 +525,11 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
         Array.prototype.slice.call(plain.slice(0, 4)),
       );
       if (!header.startsWith("%PDF")) {
-        console.debug("decryptVaultFileForUse: pdf magic header mismatch", {
-          header,
-          uri: file.uri,
-        });
         throw new Error("Decrypted PDF appears invalid");
       }
     }
   } catch (checkErr) {
     // Surface a helpful warning and rethrow so caller can show an error instead of a blank page
-    console.debug("decryptVaultFileForUse: integrity check failed", checkErr);
     throw checkErr;
   }
 
@@ -576,11 +539,6 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
       await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
     } catch (e) {
       try {
-        console.debug(
-          "decryptVaultFileForUse: makeDirectoryAsync failed for",
-          dir,
-          e,
-        );
       } catch (_) {}
     }
 
@@ -589,11 +547,6 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
       if (info.exists && info.isDirectory) return true;
     } catch (e) {
       try {
-        console.debug(
-          "decryptVaultFileForUse: getInfoAsync failed for dir",
-          dir,
-          e,
-        );
       } catch (_) {}
     }
     return false;
@@ -623,9 +576,6 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
   }
   if (!dirOk) {
     try {
-      console.debug(
-        "decryptVaultFileForUse: no writable decrypted cache directory available; will attempt write and likely fail",
-      );
     } catch (_) {}
   }
 
@@ -635,10 +585,6 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
 
   // Debug: log sizes to help diagnose write failures on device
   try {
-    console.debug("decryptVaultFileForUse: about to write decrypted file", {
-      destinationPath,
-      base64Length: plainBase64 ? plainBase64.length : 0,
-    });
   } catch (e) {
     /* ignore logging failures */
   }
@@ -652,7 +598,6 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
   } catch (e) {
     writeErr = e;
     try {
-      console.debug("decryptVaultFileForUse: first write failed", e);
     } catch (_) {}
   }
 
@@ -661,10 +606,6 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
     let info = await (FileSystem as any).getInfoAsync(destinationPath);
     if (!info.exists || (info.size || 0) === 0) {
       try {
-        console.debug(
-          "decryptVaultFileForUse: written file missing or empty on first check",
-          { destinationPath, info },
-        );
       } catch (_) {}
 
       // Try alternate path form: if path starts with file://, try without it, otherwise try adding it.
@@ -673,10 +614,6 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
           ? destinationPath.replace("file://", "")
           : `file://${destinationPath}`;
         try {
-          console.debug(
-            "decryptVaultFileForUse: attempting retry write to alternate path",
-            { alt },
-          );
         } catch (_) {}
         await FileSystem.writeAsStringAsync(alt, plainBase64, {
           encoding: (FileSystem as any).EncodingType?.Base64 ?? "base64",
@@ -684,10 +621,6 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
         info = await (FileSystem as any).getInfoAsync(alt);
         if (info.exists && (info.size || 0) > 0) {
           try {
-            console.debug("decryptVaultFileForUse: retry write succeeded", {
-              alt,
-              info,
-            });
           } catch (_) {}
           // Use alt as destinationPath for return
           if (alt.startsWith("file://")) {
@@ -696,23 +629,14 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
           // Note: we do not change destinationPath variable here because it's const; instead we'll handle normalization later.
         } else {
           try {
-            console.debug(
-              "decryptVaultFileForUse: retry write did not produce file",
-              { alt, info },
-            );
           } catch (_) {}
           throw new Error("Retry write failed to produce file");
         }
       } catch (retryErr) {
-        console.debug(
-          "decryptVaultFileForUse: verification failed after retry",
-          retryErr,
-        );
         throw retryErr;
       }
     }
   } catch (ioErr) {
-    console.debug("decryptVaultFileForUse: verification failed", ioErr);
     // Re-throw so caller can show an error instead of a blank page
     throw ioErr;
   }
@@ -775,15 +699,10 @@ export async function persistVaultFile(
     );
     wroteEncrypted = true;
     try {
-      console.debug("persistVaultFile: wrote encrypted file", {
-        sourceUri,
-        destinationUri,
-      });
     } catch (e) {}
   } catch (error) {
     // Do not silently fall back to plaintext — surface the error to callers so they can
     // show an explicit warning and the user can choose to retry or cancel the save.
-    console.debug("persistVaultFile: operation failed", error);
     throw error;
   }
 
@@ -799,11 +718,9 @@ export async function persistVaultFile(
       await FileSystem.deleteAsync(sourceUri, { idempotent: true });
     }
   } catch (error) {
-    console.debug("persistVaultFile cleanup failed", error);
   }
 
   try {
-    console.debug("persistVaultFile: returning destinationUri", destinationUri);
   } catch (e) {}
   return destinationUri;
 }
@@ -814,7 +731,6 @@ export async function deleteVaultFile(uri?: string): Promise<void> {
   try {
     await FileSystem.deleteAsync(uri, { idempotent: true });
   } catch (error) {
-    console.debug("deleteVaultFile failed", error);
   }
 }
 
@@ -831,7 +747,6 @@ export async function clearDecryptedCache(): Promise<void> {
       await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
     } catch (e) {}
   } catch (e) {
-    console.debug("clearDecryptedCache failed", e);
   }
 }
 
@@ -919,11 +834,6 @@ export async function migrateCacheFilesToVault(): Promise<void> {
             changed = true;
           }
         } catch (err) {
-          console.debug(
-            "migrateCacheFilesToVault: failed to migrate",
-            file.uri,
-            err,
-          );
         }
       }
     }
@@ -932,7 +842,6 @@ export async function migrateCacheFilesToVault(): Promise<void> {
       await saveVault(vault);
     }
   } catch (err) {
-    console.debug("migrateCacheFilesToVault failed", err);
   }
 }
 

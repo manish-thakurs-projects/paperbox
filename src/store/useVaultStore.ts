@@ -60,7 +60,6 @@ export const useVaultStore = create<State>((set, get) => ({
       await migrateCacheFilesToVault();
     } catch (err) {
       // Migration is best-effort; log and continue
-      console.warn("vault migration failed", err);
     }
 
     const data = await loadVault();
@@ -186,7 +185,10 @@ export const useVaultStore = create<State>((set, get) => ({
   removeFile: async (id) => {
     const file = get().files.find((entry) => entry.id === id);
     if (file) {
-      await deleteVaultFile(file.uri);
+      try {
+        await deleteVaultFile(file.uri);
+      } catch (error) {
+      }
     }
     const files = normalizeFiles(get().files.filter((f) => f.id !== id));
     set({ files });

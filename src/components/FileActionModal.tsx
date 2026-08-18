@@ -97,21 +97,77 @@ export function FileActionModal({
     setRenameVisible(false);
   };
 
+  // Single Modal instance for both the action sheet and the rename dialog.
+  // Switching *content* inside one mounted native Modal (instead of
+  // toggling between two separate <Modal> components) avoids the
+  // dismiss/present race that caused the glitch when opening rename.
   return (
-    <>
-      {/* Action sheet modal */}
-      <Modal
-        animationType="slide"
-        transparent
-        visible={visible && !renameVisible}
-        onRequestClose={onRequestClose}
+    <Modal
+      animationType={renameVisible ? "fade" : "slide"}
+      transparent
+      visible={visible}
+      onShow={() => {
+        if (renameVisible) {
+          // Focus only after the dialog has finished presenting, so the
+          // keyboard's layout shift doesn't collide with the modal's own
+          // entrance animation.
+          inputRef.current?.focus();
+        }
+      }}
+      onRequestClose={() => {
+        if (renameVisible) {
+          setRenameVisible(false);
+        } else {
+          onRequestClose();
+        }
+      }}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={renameVisible ? s.renameModalOverlay : s.modalOverlay}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 70 : 20}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={s.modalOverlay}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 70 : 20}
+        <Pressable
+          style={renameVisible ? s.renameModalOverlay : s.modalOverlay}
+          onPress={() =>
+            renameVisible ? setRenameVisible(false) : onRequestClose()
+          }
         >
-          <Pressable style={s.modalOverlay} onPress={onRequestClose}>
+          {renameVisible ? (
+            <Pressable
+              style={s.renameModalCard}
+              onPress={(event) => event.stopPropagation()}
+            >
+              <Text style={s.modalTitle}>Rename file</Text>
+              <TextInput
+                ref={inputRef}
+                value={renameText}
+                onChangeText={setRenameText}
+                placeholder="Enter new file name"
+                placeholderTextColor={colors.secondary}
+                style={s.modalInput}
+                returnKeyType="done"
+                onSubmitEditing={saveRename}
+                blurOnSubmit={false}
+              />
+              <View style={s.modalFooter}>
+                <Pressable
+                  style={[s.modalActionButton, s.modalCancelButton]}
+                  onPress={() => setRenameVisible(false)}
+                >
+                  <Text style={s.modalActionText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={[s.modalActionButton, s.modalSaveButton]}
+                  onPress={saveRename}
+                >
+                  <Text style={[s.modalActionText, s.modalSaveText]}>
+                    Save
+                  </Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          ) : (
             <Pressable
               style={s.modalContent}
               onPress={(event) => event.stopPropagation()}
@@ -198,7 +254,6 @@ export function FileActionModal({
                             onDownload && onDownload();
                           } catch (_) {}
                         } catch (e: any) {
-                          console.debug("FileActionModal: download failed", e);
                           if (
                             e &&
                             typeof e.message === "string" &&
@@ -247,68 +302,10 @@ export function FileActionModal({
                 <Text style={s.modalEmpty}>Unable to load file actions.</Text>
               )}
             </Pressable>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* Rename dialog modal — separate Modal so it gets its own mount/animation
-          instead of morphing out of the action sheet's overlay. */}
-      <Modal
-        animationType="fade"
-        transparent
-        visible={renameVisible}
-        onShow={() => {
-          // Focus only after the dialog has finished presenting, so the
-          // keyboard's layout shift doesn't collide with the modal's own
-          // entrance animation.
-          inputRef.current?.focus();
-        }}
-        onRequestClose={() => setRenameVisible(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={s.renameModalOverlay}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 70 : 20}
-        >
-          <Pressable
-            style={s.renameModalOverlay}
-            onPress={() => setRenameVisible(false)}
-          >
-            <Pressable
-              style={s.renameModalCard}
-              onPress={(event) => event.stopPropagation()}
-            >
-              <Text style={s.modalTitle}>Rename file</Text>
-              <TextInput
-                ref={inputRef}
-                value={renameText}
-                onChangeText={setRenameText}
-                placeholder="Enter new file name"
-                placeholderTextColor={colors.secondary}
-                style={s.modalInput}
-                returnKeyType="done"
-                onSubmitEditing={saveRename}
-                blurOnSubmit={false}
-              />
-              <View style={s.modalFooter}>
-                <Pressable
-                  style={[s.modalActionButton, s.modalCancelButton]}
-                  onPress={() => setRenameVisible(false)}
-                >
-                  <Text style={s.modalActionText}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  style={[s.modalActionButton, s.modalSaveButton]}
-                  onPress={saveRename}
-                >
-                  <Text style={[s.modalActionText, s.modalSaveText]}>Save</Text>
-                </Pressable>
-              </View>
-            </Pressable>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Modal>
-    </>
+          )}
+        </Pressable>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 

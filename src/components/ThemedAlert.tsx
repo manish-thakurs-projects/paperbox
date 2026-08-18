@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Modal, View, Text, Pressable, StyleSheet } from "react-native";
 import { subscribe } from "../services/alertService";
 import { usePaperTheme } from "../theme/usePaperTheme";
+import { withAlpha } from "../theme/utils";
 
 export function ThemedAlert() {
   const [visible, setVisible] = useState(false);
@@ -89,11 +90,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
 });
-
-// Helper: withAlpha used here but not imported; duplicate a simple implementation
-function withAlpha(hex: string, alpha: number) {
-  // naive fallback: return rgba(0,0,0,alpha)
-  return `rgba(0,0,0,${alpha})`;
-}
 
 export default ThemedAlert;

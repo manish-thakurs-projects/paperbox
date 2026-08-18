@@ -2,106 +2,117 @@ import React from "react";
 import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
 import { usePaperTheme } from "../theme/usePaperTheme";
 
+const WEBSITE_URL = "https://paperbox.dustmedia.org";
+const CONTACT_EMAIL = "dustmedianetwork@gmail.com";
+const EFFECTIVE_DATE = "August 18, 2026";
+
 export function PrivacyPolicyScreen() {
   const { colors } = usePaperTheme();
   const s = styles(colors);
 
   return (
     <ScrollView style={s.container} contentContainerStyle={s.content}>
+      <Text style={s.title}>Privacy Policy</Text>
+      <Text style={s.meta}>Effective date: {EFFECTIVE_DATE}</Text>
+
       <Text style={s.sectionTitle}>Summary</Text>
       <Text style={s.paragraph}>
-        PaperBox is an offline first personal document vault. This Privacy
-        Policy explains how the app collects, stores, and uses your data. The
-        app is designed to keep your files on your device; no personal data is
-        shared with third parties by default. PaperBox is owned, run, and
-        maintained by DustMedia. More information is available at{" "}
+        PaperBox is an offline-first personal document vault. It is designed so
+        your files stay on your device unless you explicitly share, export, or
+        open them in another app. PaperBox does not create user accounts, does
+        not sync your vault to a server, and does not use analytics or crash
+        reporting by default. DustMedia maintains the app and website at{" "}
         <Text
           style={s.link}
-          onPress={() => Linking.openURL("https://paperbox.dustmedia.org")}
+          onPress={() => void Linking.openURL(WEBSITE_URL)}
         >
           paperbox.dustmedia.org
         </Text>
         .
       </Text>
 
-      <Text style={s.sectionTitle}>Data collection and storage</Text>
+      <Text style={s.sectionTitle}>What PaperBox stores</Text>
       <Text style={s.paragraph}>
-        Files you add to PaperBox — whether captured with the in app camera or
-        imported from other sources — are stored locally on your device.
-        PaperBox stores only the files and metadata necessary for the app to
-        function (file names, URIs, timestamps, tags). The app does not upload
-        your files to any server unless you explicitly use an export or share
-        feature.
+        When you import or capture a file, PaperBox saves an encrypted copy in
+        the vault on your device. It also stores the local metadata needed to
+        organize the vault, such as file names, folder membership, favorites,
+        pinned state, tags, file types, sizes, and timestamps. App settings are
+        stored locally on the device as well.
       </Text>
 
-      <Text style={s.sectionTitle}>Local storage and security</Text>
+      <Text style={s.sectionTitle}>Temporary processing</Text>
       <Text style={s.paragraph}>
-        PaperBox stores your files and metadata locally on your device. The app
-        does not share this information with third parties unless you explicitly
-        export or share files. The security of your data depends on the device's
-        local protections and the app permissions you grant.
+        To make features like import, preview, share, download, and export work,
+        PaperBox may create temporary copies in app cache or other
+        app-accessible storage. For example, imported files may be copied to
+        cache before they are encrypted, and files may be decrypted temporarily
+        for preview, sharing, or downloading. The app attempts to remove those
+        temporary copies after the action finishes. If you share or export a
+        file, copies may remain in the destination app, download folder, email
+        draft, or on the recipient&apos;s device according to that app or
+        service&apos;s policies.
       </Text>
 
-      <Text style={s.sectionTitle}>Biometric authentication</Text>
+      <Text style={s.sectionTitle}>Permissions and system services</Text>
       <Text style={s.paragraph}>
-        When app lock is enabled, PaperBox uses your device's system biometric
-        prompt to authenticate. If biometrics are unavailable, the prompt can
-        fall back to the device credential method such as passcode or PIN. The
-        app does not receive biometric data directly.
+        PaperBox may request camera, file, storage, sharing, and local
+        authentication access only when you use the related feature. When you
+        use a camera screen, file picker, biometric prompt, share sheet, or
+        system folder picker, those features are handled by the operating system
+        or a native system component, and their own privacy practices apply.
       </Text>
 
-      <Text style={s.sectionTitle}>Exports and sharing</Text>
+      <Text style={s.sectionTitle}>Biometric lock</Text>
       <Text style={s.paragraph}>
-        Exporting or sharing files will create an export file or invoke the
-        system share sheet. When you share or export, you explicitly send files
-        or export packages to other apps or services — PaperBox does not
-        transfer data without your explicit action.
+        If you enable app lock, PaperBox uses the device&apos;s built-in
+        biometric or device credential prompt. PaperBox does not receive or
+        store your biometric template or passcode.
       </Text>
 
-      <Text style={s.sectionTitle}>Crash reporting & analytics</Text>
+      <Text style={s.sectionTitle}>Retention and deletion</Text>
       <Text style={s.paragraph}>
-        PaperBox does not include analytics or crash reporting by default. If
-        you enable any diagnostic or sharing features that send logs externally,
-        the app will warn you and ask for confirmation.
+        Your vault stays on the device until you delete files or remove the app.
+        Deleting a file from PaperBox removes the encrypted copy from the app&apos;s
+        vault, but OS caches, backups, system trash, or copies created outside
+        the app may remain until they are cleared by the operating system or
+        another app.
       </Text>
 
       <Text style={s.sectionTitle}>Third-party libraries</Text>
       <Text style={s.paragraph}>
-        PaperBox uses open source libraries to provide functionality (camera,
-        file system access, navigation). These libraries may collect runtime
-        information as part of their normal operation. No library is expected to
-        transmit your files to external servers without your explicit action.
+        PaperBox uses open-source libraries and platform services to provide
+        document scanning, camera access, file system access, navigation, PDF
+        rendering, and sharing. These components run locally on your device and
+        are used only to provide the feature you requested. PaperBox does not
+        intentionally send your vault contents to our servers.
       </Text>
 
-      <Text style={s.sectionTitle}>Data retention and deletion</Text>
+      <Text style={s.sectionTitle}>External links</Text>
       <Text style={s.paragraph}>
-        All data (files and metadata) are retained on your device until you
-        delete them. Deleting a file through the app removes it from the app's
-        vault; depending on the platform, a copy may remain in the system
-        recycle bin or backups until purged by the system.
-      </Text>
-
-      <Text style={s.sectionTitle}>Security</Text>
-      <Text style={s.paragraph}>
-        PaperBox keeps your data on the device and avoids sharing files without
-        your consent. Because the app stores information locally, use your
-        operating system's device-level security and encryption features for
-        stronger protection.
+        The app includes links to the PaperBox website and email support
+        address. If you open them, your browser or mail app handles the request
+        under its own privacy policy.
       </Text>
 
       <Text style={s.sectionTitle}>Changes to this policy</Text>
       <Text style={s.paragraph}>
-        This Privacy Policy may be updated as the app evolves. When changes are
-        made, the app will display an in app notice describing material changes.
+        If we update this policy, we will replace the text in the app and
+        update the effective date.
       </Text>
 
       <Text style={s.sectionTitle}>Contact</Text>
       <Text style={s.paragraph}>
-        For questions about privacy or app ownership, contact the developer at
-        DustMedia or visit{" "}
+        Questions about privacy or ownership? Email{" "}
         <Text
           style={s.link}
-          onPress={() => Linking.openURL("https://paperbox.dustmedia.org")}
+          onPress={() => void Linking.openURL(`mailto:${CONTACT_EMAIL}`)}
+        >
+          {CONTACT_EMAIL}
+        </Text>{" "}
+        or visit{" "}
+        <Text
+          style={s.link}
+          onPress={() => void Linking.openURL(WEBSITE_URL)}
         >
           paperbox.dustmedia.org
         </Text>
@@ -117,7 +128,17 @@ const styles = (c: any) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: c.background },
     content: { padding: 20 },
-    title: { fontSize: 28, fontWeight: "800", color: c.text, marginBottom: 12 },
+    title: {
+      fontSize: 28,
+      fontWeight: "800",
+      color: c.text,
+      marginBottom: 8,
+    },
+    meta: {
+      fontSize: 13,
+      color: c.secondary,
+      marginBottom: 18,
+    },
     sectionTitle: {
       fontSize: 16,
       fontWeight: "700",
@@ -125,6 +146,13 @@ const styles = (c: any) =>
       marginTop: 14,
       marginBottom: 6,
     },
-    paragraph: { color: c.secondary, lineHeight: 20 },
-    link: { color: c.accent, textDecorationLine: "underline" },
+    paragraph: {
+      color: c.secondary,
+      lineHeight: 20,
+      marginBottom: 2,
+    },
+    link: {
+      color: c.accent,
+      textDecorationLine: "underline",
+    },
   });

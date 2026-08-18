@@ -299,7 +299,6 @@ export function FavoritesScreen() {
           "This device cannot share files directly.",
         );
       } else {
-        console.warn("shareFile error", error);
         Alert.alert("Could not share file", "Try again later.");
       }
     } finally {

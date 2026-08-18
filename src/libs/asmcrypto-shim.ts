@@ -1,31 +1,37 @@
-// Shim that ensures asmcrypto does not try to require Node's 'crypto' module when bundling
-// in React Native. It removes `process` global if present so asmcrypto will use the
-// browser-friendly fallback for getRandomValues.
+// asmcrypto checks for Node globals at module-load time. We temporarily hide
+// `process` only while requiring the library so the shim does not leave a
+// permanent app-wide mutation behind.
+const asm = (() => {
+  const globalAny = typeof global !== "undefined" ? (global as any) : undefined;
+  const previousProcess = globalAny?.process;
+  const hadProcess = !!previousProcess;
 
-// Attempt to delete process to avoid asmcrypto's Node detect
-try {
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  if (typeof global !== "undefined" && (global as any).process) {
-    try {
-      // prefer delete
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
-      delete (global as any).process;
-    } catch (e) {
-      // fallback: set to undefined
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
-      (global as any).process = undefined;
+  try {
+    if (hadProcess) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        delete globalAny.process;
+      } catch {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        globalAny.process = undefined;
+      }
+    }
+
+    // Require the standalone ES5 build which is friendlier in some bundlers.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require("asmcrypto.js/asmcrypto.all.es5.js");
+  } finally {
+    if (hadProcess) {
+      try {
+        globalAny.process = previousProcess;
+      } catch {
+        // If restoration fails, leave the environment as-is; the shim has
+        // already completed its best-effort compatibility work.
+      }
     }
   }
-} catch (e) {
-  // ignore
-}
-
-// Require the standalone ES5 build which is friendlier in some bundlers
-// (we already removed the direct import to this file elsewhere)
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const asm = require("asmcrypto.js/asmcrypto.all.es5.js");
+})();
 
 export default asm;

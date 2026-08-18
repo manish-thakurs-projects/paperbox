@@ -48,7 +48,6 @@ export function PassphraseScreen({
         "Unlock failed",
         "Unable to derive key from passphrase. Please try again.",
       );
-      console.warn("PassphraseScreen initialize failed", err);
     } finally {
       setLoading(false);
     }

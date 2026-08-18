@@ -2,12 +2,12 @@
   "expo": {
     "name": "PaperBox",
     "slug": "paperbox",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "paperbox.dustmedia.org",
-      "versionCode": 4,
+      "versionCode": 5,
       "permissions": ["CAMERA"],
       "allowBackup": false
     },

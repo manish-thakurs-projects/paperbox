@@ -8,7 +8,6 @@ export type RootStackParams = {
   AllFiles: undefined;
   CapturedFiles: undefined;
   Privacy: undefined;
-  Tags: undefined;
 };
 
 export type BottomTabParams = {

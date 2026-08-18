@@ -18,7 +18,6 @@ const save = async (data: Persisted) => {
   try {
     await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(data));
   } catch (e) {
-    console.warn("save settings error", e);
   }
 };
 
@@ -27,7 +26,6 @@ const load = async (): Promise<Persisted | null> => {
     const raw = await AsyncStorage.getItem(SETTINGS_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch (e) {
-    console.warn("load settings error", e);
     return null;
   }
 };

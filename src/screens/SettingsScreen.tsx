@@ -212,7 +212,6 @@ export function SettingsScreen() {
                   "No mail app is available to send email.",
                 );
             } catch (e) {
-              console.warn("open mail error", e);
               Alert.alert(
                 "Unable to open mail app",
                 "Could not open your mail application.",
@@ -229,7 +228,7 @@ export function SettingsScreen() {
         </SettingsRow>
       </View>
       <Text style={s.version}>
-        PaperBox - Version 1.0.0{"\n"} Developed by DustMedia.{" "}
+        PaperBox - Version 1.0.2{"\n"} Developed by DustMedia.{" "}
       </Text>
     </Screen>
   );

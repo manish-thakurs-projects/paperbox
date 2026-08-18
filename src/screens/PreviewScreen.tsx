@@ -310,10 +310,6 @@ export function PreviewScreen({ route, navigation }: Props) {
 
           if (isLikelyHandoffFlicker) {
             try {
-              console.debug(
-                "PreviewScreen: ignoring transient active flicker during external handoff",
-                { elapsed },
-              );
             } catch (e) {}
             return;
           }
@@ -330,9 +326,6 @@ export function PreviewScreen({ route, navigation }: Props) {
 
           if (openedExternallyRef.current) {
             try {
-              console.debug(
-                "PreviewScreen: skipping clear on background because file opened externally",
-              );
             } catch (e) {}
             return;
           }
@@ -341,7 +334,6 @@ export function PreviewScreen({ route, navigation }: Props) {
             void clearDecryptedCache();
           } catch (e) {
             try {
-              console.debug("clearDecryptedCache call failed", e);
             } catch (_) {}
           }
 
@@ -355,10 +347,6 @@ export function PreviewScreen({ route, navigation }: Props) {
               .deleteAsync(currentLocalUri, { idempotent: true })
               .catch((err: any) => {
                 try {
-                  console.debug(
-                    "PreviewScreen: background deleteAsync failed",
-                    err,
-                  );
                 } catch (e) {}
               });
             // remove reference so we don't attempt to double-delete on unmount
@@ -367,7 +355,6 @@ export function PreviewScreen({ route, navigation }: Props) {
         }
       } catch (e) {
         try {
-          console.debug("PreviewScreen: AppState handler error", e);
         } catch (e) {}
       }
     };
@@ -414,21 +401,12 @@ export function PreviewScreen({ route, navigation }: Props) {
           setLoading(true);
           try {
             try {
-              console.debug(
-                "PreviewScreen: encrypted uri detected, decrypting before preview",
-                { uri },
-              );
             } catch (e) {}
             const savedUri = await saveUriToCache(uri, filename);
             try {
-              console.debug(
-                "PreviewScreen: saveUriToCache (for encrypted) returned",
-                savedUri,
-              );
             } catch (e) {}
             if (mounted) setLocalUri(savedUri);
           } catch (e) {
-            console.debug("PreviewScreen: decrypting encrypted uri failed", e);
             if (mounted)
               setError("Unable to prepare encrypted file for preview.");
           } finally {
@@ -444,31 +422,19 @@ export function PreviewScreen({ route, navigation }: Props) {
         setLoading(true);
         try {
           try {
-            console.debug("PreviewScreen: preparing preview", {
-              uri,
-              filename,
-              ext,
-              isPdf,
-              isImage,
-              isVideo,
-              isAudio,
-            });
           } catch (e) {}
           const savedUri = await saveUriToCache(uri, filename);
           try {
-            console.debug("PreviewScreen: saveUriToCache returned", savedUri);
           } catch (e) {}
           // Cached preview URI prepared.
           if (mounted) setLocalUri(savedUri);
         } catch (e) {
-          console.debug("PreviewScreen: prepare preview failed", e);
           if (mounted) setError("Unable to prepare file for preview.");
         } finally {
           if (mounted) setLoading(false);
         }
       } else {
         try {
-          console.debug("PreviewScreen: using direct uri for preview", uri);
         } catch (e) {}
         setLocalUri(uri);
       }
@@ -483,20 +449,12 @@ export function PreviewScreen({ route, navigation }: Props) {
   useEffect(() => {
     return () => {
       try {
-        console.debug("PreviewScreen: cleaning up localUri", {
-          localUri,
-          uri,
-          openedExternally: openedExternallyRef.current,
-        });
       } catch (e) {}
       if (!localUri || localUri === uri) return;
       // If we intentionally opened the file externally, preserve the decrypted temp so the external
       // app can read it. It will be cleared on resume by the AppState handler.
       if (openedExternallyRef.current) {
         try {
-          console.debug(
-            "PreviewScreen: preserving decrypted temp because file was opened externally",
-          );
         } catch (e) {}
         return;
       }
@@ -505,7 +463,6 @@ export function PreviewScreen({ route, navigation }: Props) {
         .deleteAsync(localUri, { idempotent: true })
         .catch((err: any) => {
           try {
-            console.debug("PreviewScreen: deleteAsync failed", err);
           } catch (e) {}
         });
     };
@@ -547,7 +504,6 @@ export function PreviewScreen({ route, navigation }: Props) {
       } catch (permErr) {
         // Log and continue; copying will likely fail, but we'll attempt other strategies.
         try {
-          console.debug("copyToDownloads: permission request failed", permErr);
         } catch (_) {}
       }
 
@@ -573,10 +529,6 @@ export function PreviewScreen({ route, navigation }: Props) {
       } catch (e) {
         // Ignore and fall back to reading via expo-file-system
         try {
-          console.debug(
-            "copyToDownloads: RNFS.copyFile failed, falling back to base64 method",
-            e,
-          );
         } catch (_) {}
       }
 
@@ -594,13 +546,11 @@ export function PreviewScreen({ route, navigation }: Props) {
         return `file://${destPath}`;
       } catch (e) {
         try {
-          console.debug("copyToDownloads failed", e);
         } catch (_) {}
         throw e;
       }
     } catch (e) {
       try {
-        console.debug("copyToDownloads failed", e);
       } catch (_) {}
       throw e;
     }
@@ -646,25 +596,13 @@ export function PreviewScreen({ route, navigation }: Props) {
                   await fsAny.copyAsync({ from: decryptSource, to: tmpDest });
                   decryptSource = tmpDest;
                   try {
-                    console.debug(
-                      "openExternally: copied content:// to cache for decrypt",
-                      { decryptSource },
-                    );
                   } catch (_) {}
                 } catch (copyErr) {
                   try {
-                    console.debug(
-                      "openExternally: copyAsync from content:// for decrypt failed",
-                      copyErr,
-                    );
                   } catch (_) {}
                 }
               } catch (copyErr2) {
                 try {
-                  console.debug(
-                    "openExternally: copying content:// for decrypt failed",
-                    copyErr2,
-                  );
                 } catch (_) {}
               }
             }
@@ -686,9 +624,6 @@ export function PreviewScreen({ route, navigation }: Props) {
             if (decrypted) {
               dataUri = decrypted;
               try {
-                console.debug("openExternally: decrypted before handoff", {
-                  dataUri,
-                });
               } catch (_) {}
               // Preserve localUri so cleanup logic doesn't delete it while external app reads it
               if (dataUri.startsWith("file://")) {
@@ -697,17 +632,12 @@ export function PreviewScreen({ route, navigation }: Props) {
             }
           } catch (decryptErr) {
             try {
-              console.debug(
-                "openExternally: decrypt for external handoff failed",
-                decryptErr,
-              );
             } catch (_) {}
             // continue — we'll attempt other fallbacks below
           }
         }
       } catch (e) {
         try {
-          console.debug("openExternally: decrypt pre-check failed", e);
         } catch (_) {}
       }
 
@@ -727,10 +657,6 @@ export function PreviewScreen({ route, navigation }: Props) {
           ) {
             // If the prepared local file is missing/empty, surface an error instead of launching a blank viewer.
             try {
-              console.debug("openExternally: file missing or empty", {
-                dataUri,
-                infoCheck,
-              });
             } catch (_) {}
             setError("File not available to open externally.");
             openedExternallyRef.current = false;
@@ -739,10 +665,6 @@ export function PreviewScreen({ route, navigation }: Props) {
         } catch (e) {
           // getInfoAsync may fail for some content URIs; ignore and continue with other checks.
           try {
-            console.debug(
-              "openExternally: getInfoAsync check failed (continuing)",
-              e,
-            );
           } catch (_) {}
         }
 
@@ -762,24 +684,15 @@ export function PreviewScreen({ route, navigation }: Props) {
               if (contentUri && contentUri.startsWith("content://")) {
                 dataUri = contentUri;
                 try {
-                  console.debug(
-                    "openExternally: converted to content URI",
-                    dataUri,
-                  );
                 } catch (_) {}
               }
             } catch (e) {
               try {
-                console.debug("openExternally: getContentUriAsync failed", e);
               } catch (_) {}
             }
           }
         } catch (e) {
           try {
-            console.debug(
-              "openExternally: content URI conversion check failed",
-              e,
-            );
           } catch (_) {}
         }
 
@@ -802,10 +715,6 @@ export function PreviewScreen({ route, navigation }: Props) {
           } catch (e) {
             // Do not clear openedExternallyRef here yet; allow fallback strategies to preserve the file until failure is final.
             try {
-              console.debug(
-                "openExternally: Intent launch with content:// failed",
-                e,
-              );
             } catch (_) {}
             // Fall through to attempt other strategies
           }
@@ -817,15 +726,10 @@ export function PreviewScreen({ route, navigation }: Props) {
           if (exported) {
             dataUri = exported;
             try {
-              console.debug("openExternally: exported to Downloads", dataUri);
             } catch (_) {}
           }
         } catch (e) {
           try {
-            console.debug(
-              "openExternally: export to Downloads failed, falling back to temp file",
-              e,
-            );
           } catch (_) {}
         }
 
@@ -849,18 +753,10 @@ export function PreviewScreen({ route, navigation }: Props) {
               if (contentUri && contentUri.startsWith("content://")) {
                 dataUri = contentUri;
                 try {
-                  console.debug(
-                    "openExternally: converted exported file to content URI",
-                    dataUri,
-                  );
                 } catch (_) {}
               }
             } catch (e) {
               try {
-                console.debug(
-                  "openExternally: getContentUriAsync for exported file failed",
-                  e,
-                );
               } catch (_) {}
             }
           }
@@ -883,7 +779,6 @@ export function PreviewScreen({ route, navigation }: Props) {
           // If IntentLauncher fails, we will try a generic open fallback. Do not clear openedExternallyRef here yet;
           // allow the fallbacks to attempt an alternative that may still read the file.
           try {
-            console.debug("openExternally: final Intent launch failed", e);
           } catch (_) {}
         }
       }
@@ -1036,7 +931,6 @@ export function PreviewScreen({ route, navigation }: Props) {
             filename={filename}
             onError={async (e) => {
               try {
-                console.debug("PdfViewer reported error", e);
               } catch (_) {}
 
               // Guard: only attempt a content:// retry if we still have a genuinely decrypted
@@ -1047,10 +941,6 @@ export function PreviewScreen({ route, navigation }: Props) {
               const currentLocalUri = localUriRef.current;
               if (!currentLocalUri || isEncryptedUri(currentLocalUri)) {
                 try {
-                  console.debug(
-                    "PdfViewer onError: no valid decrypted file to retry with, re-preparing preview",
-                    { currentLocalUri },
-                  );
                 } catch (_) {}
                 try {
                   setLoading(true);
@@ -1058,10 +948,6 @@ export function PreviewScreen({ route, navigation }: Props) {
                   setLocalUri(savedUri);
                 } catch (reErr) {
                   try {
-                    console.debug(
-                      "PdfViewer onError: re-decrypt failed",
-                      reErr,
-                    );
                   } catch (_) {}
                   setError(
                     "Unable to render PDF in-app. Opening in default viewer...",
@@ -1087,10 +973,6 @@ export function PreviewScreen({ route, navigation }: Props) {
                       typeof content === "string" ? content : content?.uri;
                     if (contentUri) {
                       try {
-                        console.debug(
-                          "PdfViewer: retrying render with content URI",
-                          contentUri,
-                        );
                       } catch (_) {}
                       // Update localUri so PdfViewer receives the content URI and re-renders
                       setLocalUri(contentUri);
@@ -1098,19 +980,11 @@ export function PreviewScreen({ route, navigation }: Props) {
                     }
                   } catch (convErr) {
                     try {
-                      console.debug(
-                        "PdfViewer: content URI conversion failed",
-                        convErr,
-                      );
                     } catch (_) {}
                   }
                 }
               } catch (convErr2) {
                 try {
-                  console.debug(
-                    "PdfViewer: conversion attempt failed",
-                    convErr2,
-                  );
                 } catch (_) {}
               }
 

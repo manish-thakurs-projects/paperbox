@@ -163,7 +163,6 @@ export function CameraScreen() {
           "This device cannot share files directly.",
         );
       } else {
-        console.warn("shareFile error", error);
         Alert.alert("Could not share file", "Try again later.");
       }
     } finally {
@@ -249,10 +248,6 @@ export function CameraScreen() {
   const saveImageToVault = async (uri: string) => {
     const normalizedUri = normalizeUri(uri);
     try {
-      console.debug("CameraScreen: saveImageToVault input uri", {
-        uri,
-        normalizedUri,
-      });
     } catch (e) {}
     const filename = `Scan-${Date.now()}.jpg`;
     const extension = extensionOf(normalizedUri) || "jpg";
@@ -271,7 +266,6 @@ export function CameraScreen() {
         break;
       } catch (err: any) {
         attempts += 1;
-        console.debug("CameraScreen: persistVaultFile error", err);
         const retry = await showRetrySaveDialog(
           `Unable to save encrypted file. ${err?.message || String(err)}. Retry?`,
         );
@@ -288,7 +282,6 @@ export function CameraScreen() {
       throw new Error("Failed to obtain destination URI for saved file");
 
     try {
-      console.debug("CameraScreen: persistVaultFile returned", durableUri);
     } catch (e) {}
     const fileInfo = await FileSystem.getInfoAsync(durableUri);
     const file: VaultFile = {
@@ -368,7 +361,6 @@ export function CameraScreen() {
 
       navigation.navigate("PdfReview", { imageUris: scannedImages });
     } catch (error) {
-      console.warn("scanFromCamera error", error);
       Alert.alert("Scan failed", "Unable to scan document. Please try again.");
     } finally {
       setIsScanning(false);
