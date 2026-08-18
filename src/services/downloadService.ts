@@ -1,10 +1,12 @@
-import { Platform } from "react-native";
+import { Platform, Alert } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import RNFS from "react-native-fs";
 import { VaultFile } from "../types";
 import { decryptVaultFileForUse } from "./vaultStorage";
 import { getExternalTreeUri, pickAndSaveExternalVaultFolder, writeBytesToExternal } from "./vaultStorage";
 import saf from "../libs/saf";
+import * as IntentLauncher from 'expo-intent-launcher';
+import * as Application from 'expo-application';
 
 const rnfsAny = RNFS as any;
 
@@ -18,14 +20,32 @@ const ensureFilename = (name: string, ext: string) => {
   return `${cleaned}.${normalizedExt}`;
 };
 
+async function promptUserToPickFolder(): Promise<boolean> {
+  return new Promise((resolve) => {
+    Alert.alert(
+      'Select folder',
+      'Please select a folder where PaperBox can save downloads. You will only need to do this once.',
+      [
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Select folder', onPress: () => resolve(true) },
+      ],
+      { cancelable: true },
+    );
+  });
+}
+
 async function ensureExternalTree(): Promise<string> {
   // Get previously saved tree URI if available
   let tree = await getExternalTreeUri();
   if (tree) return tree;
 
+  // Show explanatory prompt before opening native folder picker
+  const proceed = await promptUserToPickFolder();
+  if (!proceed) return "";
+
   // Ask the user to pick a folder using SAF (native folder picker). Persist and return
   tree = await pickAndSaveExternalVaultFolder();
-  return tree;
+  return tree || "";
 }
 
 export async function downloadFile(file: VaultFile): Promise<string> {
@@ -58,8 +78,40 @@ export async function downloadFile(file: VaultFile): Promise<string> {
         await writeBytesToExternal(filename, base64);
         return filename;
       } catch (e) {
-        // If SAF write fails, fall back to copying into Downloads via RNFS if available
+        // If SAF write fails, offer MANAGE_EXTERNAL_STORAGE settings flow as a fallback on Android 11+
         try { console.debug("downloadFile: SAF write failed, falling back to RNFS", e); } catch(_){}
+
+        if (Platform.OS === 'android' && (Application as any).androidId) {
+          try {
+            const openSettings = await new Promise<boolean>((resolve) => {
+              Alert.alert(
+                'Unable to save using SAF',
+                'PaperBox could not write to the selected folder. You can grant broader file access in system settings (All files access) as a fallback.',
+                [
+                  { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+                  { text: 'Open settings', onPress: () => resolve(true) },
+                ],
+                { cancelable: true },
+              );
+            });
+
+            if (openSettings) {
+              try {
+                const pkg = (Application as any).applicationId || (Application as any).expoId || `package:${(Application as any).applicationId}`;
+                // Launch the Manage All Files Access settings for this app
+                await IntentLauncher.startActivityAsync(
+                  IntentLauncher.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION || 'android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION',
+                  { data: `package:${(Application as any).applicationId}` },
+                );
+              } catch (launchErr) {
+                try { console.debug('downloadFile: opening MANAGE_EXTERNAL_STORAGE settings failed', launchErr); } catch(_){}
+                // fallthrough to RNFS fallback below
+              }
+            }
+          } catch (ee) {
+            // ignore
+          }
+        }
       }
     }
 
