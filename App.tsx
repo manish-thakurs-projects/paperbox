@@ -50,9 +50,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    // These operations touch independent storage locations, so start them in
-    // parallel to reduce time-to-first-screen after launch.
-    void clearDecryptedCache();
+    // hydrate performs legacy cache migration before clearing temporary
+    // plaintext, preventing startup cleanup from racing migration.
     void hydrate();
   }, [hydrate]);
 
@@ -132,9 +131,19 @@ export default function App() {
   // Clear decrypted cache when app backgrounds to reduce the window where
   // plaintext temp files can remain on disk without doing work on every focus.
   useEffect(() => {
+    let cleanupTimer: ReturnType<typeof setTimeout> | null = null;
     const handler = (nextState: string) => {
+      if (nextState === "active" && cleanupTimer) {
+        clearTimeout(cleanupTimer);
+        cleanupTimer = null;
+      }
       if (nextState === "background") {
-        void clearDecryptedCache();
+        // Give in-flight share/download/preview operations a short window to
+        // finish before purging temporary plaintext.
+        cleanupTimer = setTimeout(() => {
+          cleanupTimer = null;
+          void clearDecryptedCache();
+        }, 1500);
       }
     };
 
@@ -142,6 +151,7 @@ export default function App() {
       ? AppState.addEventListener("change", handler)
       : null;
     return () => {
+      if (cleanupTimer) clearTimeout(cleanupTimer);
       try {
         if (sub && typeof (sub as any).remove === "function")
           (sub as any).remove();

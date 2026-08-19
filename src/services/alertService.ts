@@ -11,7 +11,10 @@ type AlertPayload = {
   resolve?: (value: number | null) => void;
 };
 
+type ToastListener = (message: string, duration: number) => void;
+
 const listeners: Array<(p: AlertPayload) => void> = [];
+const toastListeners: ToastListener[] = [];
 
 export function subscribe(fn: (p: AlertPayload) => void) {
   listeners.push(fn);
@@ -38,4 +41,22 @@ export function showAlert(
   });
 }
 
-export default { subscribe, showAlert };
+export function subscribeToasts(fn: ToastListener) {
+  toastListeners.push(fn);
+  return () => {
+    const idx = toastListeners.indexOf(fn);
+    if (idx >= 0) toastListeners.splice(idx, 1);
+  };
+}
+
+export function showToast(message: string, duration = 2200) {
+  toastListeners.forEach((listener) => {
+    try {
+      listener(message, duration);
+    } catch {
+      // Toasts are best-effort UI feedback and must not interrupt an action.
+    }
+  });
+}
+
+export default { subscribe, showAlert, subscribeToasts, showToast };

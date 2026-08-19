@@ -1,5 +1,11 @@
 import React from "react";
-import { ScrollView, StyleSheet, View, ViewStyle } from "react-native";
+import {
+  Platform,
+  ScrollView,
+  StyleSheet,
+  View,
+  ViewStyle,
+} from "react-native";
 import { usePaperTheme } from "../theme/usePaperTheme";
 
 export function Screen({
@@ -19,6 +25,7 @@ export function Screen({
         <ScrollView
           contentContainerStyle={[styles.content, style]}
           showsVerticalScrollIndicator={false}
+          removeClippedSubviews={Platform.OS === "android"}
         >
           {children}
         </ScrollView>

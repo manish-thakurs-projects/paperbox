@@ -24,6 +24,8 @@ export type VaultFile = {
   isPinned: boolean;
   tags: string[];
   source?: "camera" | "import";
+  /** Fast import identity used to ignore repeated selections of the same file. */
+  sourceKey?: string;
   /** ID of the PDF created from this Office file, if one has been saved. */
   convertedPdfId?: string;
   /** ID of the Office file this saved PDF was converted from. */

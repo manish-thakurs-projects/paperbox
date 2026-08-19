@@ -419,6 +419,8 @@ const styles = (c: {
       backgroundColor: c.surface,
       borderRadius: 24,
       padding: 20,
+      borderWidth: 1,
+      borderColor: withAlpha(c.text, 0.28),
       marginHorizontal: 20,
     },
     modalInput: {

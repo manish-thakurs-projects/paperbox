@@ -493,7 +493,7 @@ export function CameraScreen({ route }: CameraProps) {
               style={styles.viewAllLink}
               onPress={() => navigation.navigate("CapturedFiles")}
             >
-              <Text style={styles.viewAllLinkText}>View all �</Text>
+            <Text style={styles.viewAllLinkText}>View all &gt;</Text>
             </Pressable>
           ) : null}
         </View>
@@ -670,6 +670,8 @@ const getStyles = (c: {
       shadowOpacity: 0.06,
       shadowRadius: 6,
       elevation: 2,
+      borderWidth: 1,
+      borderColor: withAlpha(c.text, 0.38),
     },
     cardContent: {
       alignItems: "center",

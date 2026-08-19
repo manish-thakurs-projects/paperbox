@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { Folder, PdfDraft, PdfDraftPage, VaultFile } from "../types";
 import {
+  clearDecryptedCache,
   deleteVaultFile,
   loadVault,
   saveVault,
@@ -37,9 +38,7 @@ type State = {
 };
 
 const normalizeFolderIds = (folderIds: string[] = []) =>
-  folderIds.filter(
-    (folderId, index, list) => folderId && list.indexOf(folderId) === index,
-  );
+  Array.from(new Set(folderIds.filter(Boolean)));
 
 const normalizeFile = (file: VaultFile): VaultFile => {
   const folderIds = normalizeFolderIds(getFolderIdsForFile(file));
@@ -129,6 +128,10 @@ export const useVaultStore = create<State>((set, get) => {
       // Migration is best-effort; log and continue
     }
 
+    // Clear temporary plaintext only after migration has had a chance to move
+    // any legacy cache-backed vault entries into encrypted storage.
+    await clearDecryptedCache();
+
     const data = await loadVault();
     const files = normalizeFiles(data.files ?? []);
     set({
@@ -143,9 +146,18 @@ export const useVaultStore = create<State>((set, get) => {
       ...item,
       name: sanitizeVaultName(item.name, "Untitled"),
     }));
-    const itemIds = new Set(sanitizedItems.map((item) => item.id));
+    const existingSourceKeys = new Set(
+      get().files.map((file) => file.sourceKey).filter(Boolean),
+    );
+    const uniqueItems = sanitizedItems.filter((item) => {
+      if (!item.sourceKey) return true;
+      if (existingSourceKeys.has(item.sourceKey)) return false;
+      existingSourceKeys.add(item.sourceKey);
+      return true;
+    });
+    const itemIds = new Set(uniqueItems.map((item) => item.id));
     const files = normalizeFiles([
-      ...sanitizedItems,
+      ...uniqueItems,
       ...get().files.filter((file) => !itemIds.has(file.id)),
     ]);
     set({ files });
@@ -261,15 +273,10 @@ export const useVaultStore = create<State>((set, get) => {
   removeFile: async (id) => {
     const file = get().files.find((entry) => entry.id === id);
     if (file) {
-      try {
-        await deleteVaultFile(file.uri);
-      } catch (error) {
-      }
-      if (file.pdfPages?.length) {
-        await Promise.all(
-          file.pdfPages.map((page) => deleteVaultFile(page.uri)),
-        );
-      }
+      await Promise.allSettled([
+        deleteVaultFile(file.uri),
+        ...(file.pdfPages ?? []).map((page) => deleteVaultFile(page.uri)),
+      ]);
     }
     const files = normalizeFiles(get().files.filter((f) => f.id !== id));
     set({ files });

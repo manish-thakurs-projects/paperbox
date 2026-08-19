@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Modal, View, Text, Pressable, StyleSheet } from "react-native";
-import { subscribe } from "../services/alertService";
+import { subscribe, subscribeToasts } from "../services/alertService";
 import { usePaperTheme } from "../theme/usePaperTheme";
 import { withAlpha } from "../theme/utils";
 
@@ -12,6 +12,8 @@ export function ThemedAlert() {
   const [resolver, setResolver] = useState<((v: number | null) => void) | null>(
     null,
   );
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { colors } = usePaperTheme();
 
   useEffect(() => {
@@ -22,7 +24,19 @@ export function ThemedAlert() {
       setResolver(() => p.resolve || null);
       setVisible(true);
     });
-    return () => unsub();
+    const unsubToast = subscribeToasts((message, duration) => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+      setToastMessage(message);
+      toastTimer.current = setTimeout(() => {
+        toastTimer.current = null;
+        setToastMessage(null);
+      }, duration);
+    });
+    return () => {
+      unsub();
+      unsubToast();
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
   }, []);
 
   const onPress = (idx: number) => {
@@ -36,44 +50,61 @@ export function ThemedAlert() {
     setVisible(false);
   };
 
-  if (!visible) return null;
+  if (!visible && !toastMessage) return null;
 
   return (
-    <Modal
-      transparent
-      animationType="fade"
-      visible={visible}
-      onRequestClose={() => onPress(0)}
-    >
-      <View
-        style={[
-          styles.overlay,
-          { backgroundColor: withAlpha(colors.text, 0.38) },
-        ]}
-      >
-        <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          {title ? (
-            <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
-          ) : null}
-          {message ? (
-            <Text style={[styles.message, { color: colors.secondary }]}>
-              {message}
+    <>
+      {visible ? (
+        <Modal
+          transparent
+          animationType="fade"
+          visible={visible}
+          onRequestClose={() => onPress(0)}
+        >
+          <View
+            style={[
+              styles.overlay,
+              { backgroundColor: withAlpha(colors.text, 0.38) },
+            ]}
+          >
+            <View style={[styles.card, { backgroundColor: colors.surface }]}>
+              {title ? (
+                <Text style={[styles.title, { color: colors.text }]}>
+                  {title}
+                </Text>
+              ) : null}
+              {message ? (
+                <Text style={[styles.message, { color: colors.secondary }]}>
+                  {message}
+                </Text>
+              ) : null}
+              <View style={styles.footer}>
+                {buttons.map((b, i) => (
+                  <Pressable
+                    key={i}
+                    style={[styles.button, { borderColor: colors.border }]}
+                    onPress={() => onPress(i)}
+                  >
+                    <Text style={{ color: colors.text }}>{b.text}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
+      {toastMessage ? (
+        <View pointerEvents="none" style={styles.toastContainer}>
+          <View
+            style={[styles.toast, { backgroundColor: colors.inverse }]}
+          >
+            <Text style={[styles.toastText, { color: colors.background }]}>
+              {toastMessage}
             </Text>
-          ) : null}
-          <View style={styles.footer}>
-            {buttons.map((b, i) => (
-              <Pressable
-                key={i}
-                style={[styles.button, { borderColor: colors.border }]}
-                onPress={() => onPress(i)}
-              >
-                <Text style={{ color: colors.text }}>{b.text}</Text>
-              </Pressable>
-            ))}
           </View>
         </View>
-      </View>
-    </Modal>
+      ) : null}
+    </>
   );
 }
 
@@ -89,6 +120,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
   },
+  toastContainer: {
+    position: "absolute",
+    left: 20,
+    right: 20,
+    bottom: 28,
+    alignItems: "center",
+  },
+  toast: {
+    maxWidth: "92%",
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 18,
+  },
+  toastText: { fontSize: 13, fontWeight: "600" },
 });
 
 export default ThemedAlert;

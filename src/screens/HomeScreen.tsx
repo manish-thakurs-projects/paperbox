@@ -84,7 +84,8 @@ export function HomeScreen({ route }: HomeProps) {
     if (importing) return;
     setImporting(true);
     try {
-      addFiles(await pickFiles());
+      const importedFiles = await pickFiles(files);
+      if (importedFiles.length) addFiles(importedFiles);
     } catch {
       Alert.alert("Could not import", "Try selecting the files again.");
     } finally {
@@ -352,7 +353,7 @@ export function HomeScreen({ route }: HomeProps) {
             style={s.viewAllLink}
             onPress={() => navigation.navigate("AllFiles")}
           >
-            <Text style={s.viewAllLinkText}>View all ›</Text>
+            <Text style={s.viewAllLinkText}>View all &gt;</Text>
           </Pressable>
         ) : null}
       </View>
@@ -608,7 +609,7 @@ const styles = (c: PaperColors) =>
     },
     importOverlay: {
       ...StyleSheet.absoluteFillObject,
-      backgroundColor: "rgba(0,0,0,0.35)",
+      backgroundColor: c.surface,
       justifyContent: "center",
       alignItems: "center",
       padding: 20,
@@ -617,7 +618,6 @@ const styles = (c: PaperColors) =>
       width: "100%",
       maxWidth: 280,
       borderRadius: radius.md,
-      backgroundColor: c.elevated,
       paddingVertical: 22,
       paddingHorizontal: 20,
       alignItems: "center",

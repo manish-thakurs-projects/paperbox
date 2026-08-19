@@ -21,26 +21,19 @@ const secureStoreAvailable = (() => {
     return false;
   }
 })();
+const allowInsecureStorageFallback = Boolean((global as any).__DEV__);
 
 async function secureGetItem(key: string): Promise<string | null> {
   if (secureStoreAvailable) {
     try {
       return await SecureStore.getItemAsync(key);
-    } catch (e) {
-      try {
-      } catch (_) {}
+    } catch (error) {
+      if (!allowInsecureStorageFallback) throw error;
     }
-  } else {
-    try {
-    } catch (_) {}
+  } else if (!allowInsecureStorageFallback) {
+    throw new Error("SecureStore is unavailable in this production build");
   }
-  try {
-    return await AsyncStorage.getItem(key);
-  } catch (e) {
-    try {
-    } catch (_) {}
-    return null;
-  }
+  return AsyncStorage.getItem(key);
 }
 
 async function secureSetItem(key: string, value: string): Promise<void> {
@@ -48,21 +41,13 @@ async function secureSetItem(key: string, value: string): Promise<void> {
     try {
       await SecureStore.setItemAsync(key, value);
       return;
-    } catch (e) {
-      try {
-      } catch (_) {}
+    } catch (error) {
+      if (!allowInsecureStorageFallback) throw error;
     }
-  } else {
-    try {
-    } catch (_) {}
+  } else if (!allowInsecureStorageFallback) {
+    throw new Error("SecureStore is unavailable in this production build");
   }
-  try {
-    await AsyncStorage.setItem(key, value);
-  } catch (e) {
-    try {
-    } catch (_) {}
-    throw e;
-  }
+  await AsyncStorage.setItem(key, value);
 }
 
 const KEY = "@paper-box/v1";
@@ -82,6 +67,40 @@ const PERSISTENT_VAULT_DIR = `${(FileSystem as any).documentDirectory ?? ""}vaul
 // clear files from here; using a dedicated folder makes purging easier and avoids
 // mixing plaintext temp files with other cache entries.
 const DECRYPTED_CACHE_DIR = `${(FileSystem as any).cacheDirectory ?? ""}vault-decrypted/`;
+
+// Keep temporary plaintext writes parallel for bulk actions, while making
+// cleanup wait until all active writes have finished. A cleanup barrier also
+// prevents a new write from starting while the cache directory is being purged.
+let activeDecryptedWrites = 0;
+let decryptedWritesIdle: Promise<void> | null = null;
+let resolveDecryptedWritesIdle: (() => void) | null = null;
+let decryptedCacheClearInFlight: Promise<void> | null = null;
+
+const withDecryptedCacheOperation = async <T>(
+  operation: () => Promise<T>,
+): Promise<T> => {
+  while (decryptedCacheClearInFlight) {
+    await decryptedCacheClearInFlight;
+  }
+
+  activeDecryptedWrites += 1;
+  if (activeDecryptedWrites === 1) {
+    decryptedWritesIdle = new Promise<void>((resolve) => {
+      resolveDecryptedWritesIdle = resolve;
+    });
+  }
+
+  try {
+    return await operation();
+  } finally {
+    activeDecryptedWrites -= 1;
+    if (activeDecryptedWrites === 0) {
+      resolveDecryptedWritesIdle?.();
+      resolveDecryptedWritesIdle = null;
+      decryptedWritesIdle = null;
+    }
+  }
+};
 
 // External vault directory (public external storage) - survives app uninstall on Android
 const EXTERNAL_VAULT_DIR =
@@ -502,13 +521,13 @@ const readStoredVault = async (
   }
 };
 
-export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
+const decryptVaultFileBytes = async (file: VaultFile): Promise<Uint8Array> => {
   if (
     !file.uri ||
     file.uri.startsWith("http://") ||
     file.uri.startsWith("https://")
   ) {
-    return file.uri;
+    throw new Error("Cannot decrypt a remote vault file");
   }
 
   const encryptedBase64 = await FileSystem.readAsStringAsync(file.uri, {
@@ -520,12 +539,6 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
 
   const key = await getVaultKey();
   const crypto = getCrypto();
-  // Log which crypto path is used to help diagnose decryption problems
-  try {
-    // eslint-disable-next-line no-console
-  } catch (e) {
-    // ignore
-  }
   const decrypted = await (crypto.subtle as any).decrypt(
     { name: "AES-GCM", iv },
     key,
@@ -555,120 +568,97 @@ export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
     throw checkErr;
   }
 
-  // Ensure dedicated decrypted cache directory exists and is writable, then write file there.
-  const ensureDir = async (dir: string) => {
-    try {
-      await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-    } catch (e) {
+  return plain;
+};
+
+export async function decryptVaultFileAsBase64(
+  file: VaultFile,
+): Promise<string> {
+  return bytesToBase64(await decryptVaultFileBytes(file));
+}
+
+export async function decryptVaultFileForUse(file: VaultFile): Promise<string> {
+  if (
+    !file.uri ||
+    file.uri.startsWith("http://") ||
+    file.uri.startsWith("https://")
+  ) {
+    return file.uri;
+  }
+
+  const plain = await decryptVaultFileBytes(file);
+
+  return withDecryptedCacheOperation(async () => {
+    const ensureDir = async (dir: string) => {
       try {
-      } catch (_) {}
+        await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+      } catch {
+        // The directory may already exist.
+      }
+
+      try {
+        const info = await (FileSystem as any).getInfoAsync(dir);
+        return !!info.exists && !!info.isDirectory;
+      } catch {
+        return false;
+      }
+    };
+
+    // Prefer the dedicated directory, then retry the same directory in its
+    // alternate URI form, and finally use the app cache root.
+    let writableDir = DECRYPTED_CACHE_DIR;
+    let dirOk = await ensureDir(writableDir);
+    if (!dirOk) {
+      const alternateDir = writableDir.startsWith("file://")
+        ? writableDir.replace("file://", "")
+        : `file://${writableDir}`;
+      dirOk = await ensureDir(alternateDir);
+      if (dirOk) writableDir = alternateDir;
     }
-
-    try {
-      const info = await (FileSystem as any).getInfoAsync(dir);
-      if (info.exists && info.isDirectory) return true;
-    } catch (e) {
-      try {
-      } catch (_) {}
-    }
-    return false;
-  };
-
-  // Try with configured DECRYPTED_CACHE_DIR, then without file:// prefix as fallback, then fallback to cacheDirectory root.
-  let writableDir = DECRYPTED_CACHE_DIR;
-  let dirOk = await ensureDir(writableDir);
-  if (!dirOk) {
-    // try alternate form without file://
-    const alt = writableDir.startsWith("file://")
-      ? writableDir.replace("file://", "")
-      : `file://${writableDir}`;
-    dirOk = await ensureDir(alt);
-    if (dirOk) writableDir = alt;
-  }
-  if (!dirOk) {
-    // last resort: use FileSystem.cacheDirectory root (may be with file:// already)
-    const root =
-      (FileSystem as any).cacheDirectory ||
-      (FileSystem as any).documentDirectory ||
-      "";
-    if (root) {
-      writableDir = root.endsWith("/") ? `${root}` : `${root}/`;
-      dirOk = await ensureDir(writableDir);
-    }
-  }
-  if (!dirOk) {
-    try {
-    } catch (_) {}
-  }
-
-  const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${file.extension || "bin"}`;
-  const destinationPath = `${DECRYPTED_CACHE_DIR}${filename}`;
-  const plainBase64 = bytesToBase64(new Uint8Array(plain));
-
-  // Debug: log sizes to help diagnose write failures on device
-  try {
-  } catch (e) {
-    /* ignore logging failures */
-  }
-
-  // Attempt write, and if verification says file missing/empty, retry using alternate URI form (with/without file://)
-  let writeErr: any = null;
-  try {
-    await FileSystem.writeAsStringAsync(destinationPath, plainBase64, {
-      encoding: (FileSystem as any).EncodingType?.Base64 ?? "base64",
-    });
-  } catch (e) {
-    writeErr = e;
-    try {
-    } catch (_) {}
-  }
-
-  // Verify written file exists and has expected size
-  try {
-    let info = await (FileSystem as any).getInfoAsync(destinationPath);
-    if (!info.exists || (info.size || 0) === 0) {
-      try {
-      } catch (_) {}
-
-      // Try alternate path form: if path starts with file://, try without it, otherwise try adding it.
-      try {
-        const alt = destinationPath.startsWith("file://")
-          ? destinationPath.replace("file://", "")
-          : `file://${destinationPath}`;
-        try {
-        } catch (_) {}
-        await FileSystem.writeAsStringAsync(alt, plainBase64, {
-          encoding: (FileSystem as any).EncodingType?.Base64 ?? "base64",
-        });
-        info = await (FileSystem as any).getInfoAsync(alt);
-        if (info.exists && (info.size || 0) > 0) {
-          try {
-          } catch (_) {}
-          // Use alt as destinationPath for return
-          if (alt.startsWith("file://")) {
-            // normalize to no-op; we'll return with file:// later
-          }
-          // Note: we do not change destinationPath variable here because it's const; instead we'll handle normalization later.
-        } else {
-          try {
-          } catch (_) {}
-          throw new Error("Retry write failed to produce file");
-        }
-      } catch (retryErr) {
-        throw retryErr;
+    if (!dirOk) {
+      const root =
+        (FileSystem as any).cacheDirectory ||
+        (FileSystem as any).documentDirectory ||
+        "";
+      if (root) {
+        writableDir = root.endsWith("/") ? root : `${root}/`;
+        dirOk = await ensureDir(writableDir);
       }
     }
-  } catch (ioErr) {
-    // Re-throw so caller can show an error instead of a blank page
-    throw ioErr;
-  }
+    if (!dirOk) {
+      throw new Error("Unable to create a temporary decrypted file");
+    }
 
-  // Normalize returned path to include file:// for consumers that expect URI format
-  let normalized = destinationPath;
-  if (!normalized.startsWith("file://") && normalized.startsWith("/")) {
-    normalized = `file://${normalized}`;
-  }
-  return normalized;
+    const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${file.extension || "bin"}`;
+    const destinationPath = `${writableDir}${filename}`;
+    const plainBase64 = bytesToBase64(plain);
+    const candidates = [
+      destinationPath,
+      destinationPath.startsWith("file://")
+        ? destinationPath.replace("file://", "")
+        : `file://${destinationPath}`,
+    ];
+    let lastError: unknown = null;
+
+    for (const candidate of candidates) {
+      try {
+        await FileSystem.writeAsStringAsync(candidate, plainBase64, {
+          encoding: (FileSystem as any).EncodingType?.Base64 ?? "base64",
+        });
+        const info = await (FileSystem as any).getInfoAsync(candidate);
+        if (info.exists && (info.size || 0) > 0) {
+          return candidate.startsWith("file://")
+            ? candidate
+            : `file://${candidate}`;
+        }
+        lastError = new Error("Temporary decrypted file is empty");
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError ?? new Error("Unable to write temporary decrypted file");
+  });
 }
 
 export async function persistVaultFile(
@@ -762,15 +752,26 @@ export async function deleteVaultFile(uri?: string): Promise<void> {
 // This should be invoked on app startup and on backgrounding to reduce the chance of
 // plaintext remnants remaining on disk.
 export async function clearDecryptedCache(): Promise<void> {
-  try {
+  if (decryptedCacheClearInFlight) {
+    await decryptedCacheClearInFlight;
+    return;
+  }
+
+  const cleanup = (async () => {
+    if (decryptedWritesIdle) await decryptedWritesIdle;
     const dir = DECRYPTED_CACHE_DIR;
     if (!dir) return;
     await FileSystem.deleteAsync(dir, { idempotent: true });
-    // Recreate empty folder so future writes succeed without racing with cleanup.
-    try {
-      await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-    } catch (e) {}
-  } catch (e) {
+    await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+  })();
+
+  decryptedCacheClearInFlight = cleanup;
+  try {
+    await cleanup;
+  } catch {
+    // Cache cleanup is best-effort and must never block app startup.
+  } finally {
+    decryptedCacheClearInFlight = null;
   }
 }
 

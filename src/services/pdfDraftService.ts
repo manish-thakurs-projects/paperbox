@@ -1,6 +1,7 @@
 import * as FileSystem from "expo-file-system/legacy";
 import {
   deleteVaultFile,
+  decryptVaultFileAsBase64,
   decryptVaultFileForUse,
   persistVaultFile,
 } from "./vaultStorage";
@@ -60,12 +61,20 @@ export async function persistPdfDraftPage(
 
 export async function createPdfDraft(imageUris: string[]): Promise<PdfDraft> {
   const id = `draft-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const pages: PdfDraftPage[] = [];
+  let pages: PdfDraftPage[] = [];
 
   try {
-    for (const [index, uri] of imageUris.entries()) {
-      pages.push(await persistPdfDraftPage(uri, id, index));
-    }
+    // Each page has its own encrypted destination, so these writes can safely
+    // run together. This removes the serial disk/crypto wait before opening
+    // the review screen after a multi-page scan.
+    const results = await Promise.allSettled(
+      imageUris.map((uri, index) => persistPdfDraftPage(uri, id, index)),
+    );
+    pages = results.flatMap((result) =>
+      result.status === "fulfilled" ? [result.value] : [],
+    );
+    const failed = results.find((result) => result.status === "rejected");
+    if (failed?.status === "rejected") throw failed.reason;
   } catch (error) {
     await deletePdfDraftPages(pages);
     await Promise.all(
@@ -88,6 +97,10 @@ export async function createPdfDraft(imageUris: string[]): Promise<PdfDraft> {
 
 export async function decryptPdfDraftPage(page: PdfDraftPage) {
   return decryptVaultFileForUse(makePageFile(page));
+}
+
+export async function decryptPdfDraftPageAsBase64(page: PdfDraftPage) {
+  return decryptVaultFileAsBase64(makePageFile(page));
 }
 
 export async function deletePdfDraftPages(pages: PdfDraftPage[]) {

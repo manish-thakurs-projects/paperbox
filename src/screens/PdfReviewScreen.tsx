@@ -26,8 +26,6 @@ const Alert = {
 import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as FileSystem from "expo-file-system/legacy";
-import * as ImageManipulator from "expo-image-manipulator";
-import * as Print from "expo-print";
 import DocumentScanner, {
   ResponseType,
   ScanDocumentResponseStatus,
@@ -41,11 +39,12 @@ import { useVaultStore } from "../store/useVaultStore";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { RootStackParams } from "../navigation/types";
 import {
-  decryptVaultFileForUse,
+  decryptVaultFileAsBase64,
   persistVaultFile,
 } from "../services/vaultStorage";
 import {
   decryptPdfDraftPage,
+  decryptPdfDraftPageAsBase64,
   deletePdfDraftPages,
   persistPdfDraftPage,
 } from "../services/pdfDraftService";
@@ -62,28 +61,25 @@ const showRetrySaveDialog = async (message: string) => {
   return idx === 0;
 };
 
+// Start loading pdf-lib as soon as the review screen mounts so the first tap
+// does not also pay the module-loading cost.
+let pdfLibPromise: Promise<typeof import("pdf-lib")> | null = null;
+const loadPdfLib = () => {
+  pdfLibPromise ??= import("pdf-lib");
+  return pdfLibPromise;
+};
+
 type Props = NativeStackScreenProps<RootStackParams, "PdfReview">;
 
 type ReviewPage = {
   id: string;
   uri: string;
-  previewUri?: string | null;
+  extension?: string;
 };
 
-const createPreviewUri = async (uri: string) => {
-  try {
-    const result = await ImageManipulator.manipulateAsync(
-      uri,
-      [{ resize: { width: 240 } }],
-      {
-        compress: 0.8,
-        format: ImageManipulator.SaveFormat.JPEG,
-      },
-    );
-    return result.uri;
-  } catch {
-    return null;
-  }
+const extensionFromUri = (uri: string) => {
+  const extension = uri.split("?")[0].split(".").pop()?.toLowerCase();
+  return extension || "jpg";
 };
 
 export function PdfReviewScreen({ navigation, route }: Props) {
@@ -98,7 +94,11 @@ export function PdfReviewScreen({ navigation, route }: Props) {
   );
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
   const [pages, setPages] = useState<ReviewPage[]>(
-    imageUris.map((uri, index) => ({ id: `${index}-${uri}`, uri })),
+    imageUris.map((uri, index) => ({
+      id: `${index}-${uri}`,
+      uri,
+      extension: extensionFromUri(uri),
+    })),
   );
   const draft = useVaultStore((s) =>
     draftId ? s.drafts.find((item) => item.id === draftId) ?? null : null,
@@ -110,6 +110,10 @@ export function PdfReviewScreen({ navigation, route }: Props) {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isReordering, setIsReordering] = useState(false);
   const temporaryUrisRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    void loadPdfLib();
+  }, []);
 
   // menu and modal state
   const [menuVisible, setMenuVisible] = useState(false);
@@ -211,13 +215,14 @@ export function PdfReviewScreen({ navigation, route }: Props) {
     setIsLoadingDraft(true);
     (async () => {
       try {
-        const hydratedPages: ReviewPage[] = [];
-        for (const page of draftToLoad.pages) {
-          const uri = await decryptPdfDraftPage(page);
-          temporaryUris.push(uri);
-          temporaryUrisRef.current.add(uri);
-          hydratedPages.push({ id: page.id, uri });
-        }
+        const hydratedPages = await Promise.all(
+          draftToLoad.pages.map(async (page) => {
+            const uri = await decryptPdfDraftPage(page);
+            temporaryUris.push(uri);
+            temporaryUrisRef.current.add(uri);
+            return { id: page.id, uri, extension: page.extension };
+          }),
+        );
 
         if (!active) {
           await Promise.all(
@@ -317,34 +322,6 @@ export function PdfReviewScreen({ navigation, route }: Props) {
       : `file://${uri}`;
   };
 
-  useEffect(() => {
-    let active = true;
-    const pending = pages.filter((page) => !page.previewUri);
-    if (!pending.length) return;
-
-    (async () => {
-      const hydrated = await Promise.all(
-        pages.map(async (page) => {
-          if (page.previewUri) return page;
-          try {
-          } catch (e) {}
-          const pv = await createPreviewUri(page.uri);
-          try {
-          } catch (e) {}
-          return { ...page, previewUri: pv };
-        }),
-      );
-
-      if (active) {
-        setPages(hydrated);
-      }
-    })();
-
-    return () => {
-      active = false;
-    };
-  }, [pages.length]);
-
   const requestCameraPermission = async () => {
     if (Platform.OS !== "android") {
       return true;
@@ -402,17 +379,24 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         : null;
 
       if (draftId && currentDraft) {
-        const persistedPages = [];
+        let persistedPages: Awaited<ReturnType<typeof persistPdfDraftPage>>[] = [];
         try {
-          for (const [offset, uri] of scannedImages.entries()) {
-            persistedPages.push(
-              await persistPdfDraftPage(
+          const results = await Promise.allSettled(
+            scannedImages.map((uri, offset) =>
+              persistPdfDraftPage(
                 uri,
                 draftId,
                 currentDraft.pages.length + offset,
               ),
-            );
-          }
+            ),
+          );
+          persistedPages = results.flatMap((result) =>
+            result.status === "fulfilled" ? [result.value] : [],
+          );
+          const failed = results.find(
+            (result) => result.status === "rejected",
+          );
+          if (failed?.status === "rejected") throw failed.reason;
 
           const newPages = await Promise.all(
             persistedPages.map(async (page) => {
@@ -421,7 +405,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
               return {
                 id: page.id,
                 uri: decryptedUri,
-                previewUri: await createPreviewUri(decryptedUri),
+                extension: page.extension,
               };
             }),
           );
@@ -444,7 +428,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
           scannedImages.map(async (uri, index) => ({
             id: `${Date.now()}-${index}-${uri}`,
             uri,
-            previewUri: await createPreviewUri(uri),
+            extension: extensionFromUri(uri),
           })),
         );
 
@@ -505,51 +489,15 @@ export function PdfReviewScreen({ navigation, route }: Props) {
     }
   };
 
-  // Helpers for per-image page PDF generation and merging
-  const getImageDimensions = (
-    uri: string,
-  ): Promise<{ width: number; height: number }> =>
-    new Promise((resolve, reject) => {
-      Image.getSize(
-        uri,
-        (width, height) => resolve({ width, height }),
-        (error) => reject(error),
-      );
-    });
-
+  // Keep generated pages within the same maximum size as the previous print
+  // based path, while embedding the original JPEG/PNG bytes directly.
   const computePageSizePt = (width: number, height: number) => {
-    // Keep pages to a reasonable maximum long edge in points (~A4 long edge = 842pt)
     const MAX_PAGE_DIMENSION_PT = 842;
     const scale = MAX_PAGE_DIMENSION_PT / Math.max(width, height);
     return {
       widthPt: Math.max(1, Math.round(width * scale)),
       heightPt: Math.max(1, Math.round(height * scale)),
     };
-  };
-
-  const generateImagePagePdf = async (photoUri: string) => {
-    const { width, height } = await getImageDimensions(photoUri);
-    const { widthPt, heightPt } = computePageSizePt(width, height);
-
-    const extMatch = (photoUri || "").split("?")[0].split(".");
-    const ext = extMatch.length > 1 ? extMatch.pop()!.toLowerCase() : "jpg";
-    const mime =
-      ext === "png" ? "image/png" : ext === "gif" ? "image/gif" : "image/jpeg";
-
-    const base64 = await FileSystem.readAsStringAsync(photoUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    if (!base64) throw new Error("Unable to read image for PDF generation");
-
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><style>@page{size:${widthPt}pt ${heightPt}pt;margin:0;}html,body{margin:0;padding:0;}img{display:block;width:${widthPt}pt;height:${heightPt}pt;margin:0;padding:0;border:none;}</style></head><body><img src="data:${mime};base64,${base64}" /></body></html>`;
-
-    const { uri: pagePdfUri } = await Print.printToFileAsync({
-      html,
-      width: widthPt,
-      height: heightPt,
-    });
-    if (!pagePdfUri) throw new Error("Unable to generate page PDF");
-    return pagePdfUri;
   };
 
   const uint8ArrayToBase64 = (u8: Uint8Array) => {
@@ -578,61 +526,82 @@ export function PdfReviewScreen({ navigation, route }: Props) {
       return;
     }
 
-    let sourcePdfTempUri: string | null = null;
-    let sourcePdfOriginalUri: string | null = null;
     try {
       setIsSaving(true);
       // Load the PDF engine only when a PDF is actually being created. This
-      // keeps the scanner/review screen lighter during normal app startup.
-      const { PDFDocument } = await import("pdf-lib");
+      // The module is prefetched when this screen mounts, so this resolves
+      // immediately in the normal review flow.
+      const { PDFDocument } = await loadPdfLib();
 
-      const sourcePdf = draft?.sourcePdfId
+      const addImagePage = async (
+        pdfDocument: any,
+        uri: string,
+        extension = extensionFromUri(uri),
+        decryptedBase64?: string,
+      ) => {
+        const base64 =
+          decryptedBase64 ??
+          (await FileSystem.readAsStringAsync(uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          }));
+        if (!base64) throw new Error("Unable to read image for PDF generation");
+
+        const normalizedExtension = extension.toLowerCase().replace(/^\./, "");
+        const image =
+          normalizedExtension === "png"
+            ? await pdfDocument.embedPng(base64)
+            : await pdfDocument.embedJpg(base64);
+        const { width: imageWidth, height: imageHeight } = image.scale(1);
+        const { widthPt, heightPt } = computePageSizePt(
+          imageWidth,
+          imageHeight,
+        );
+        const page = pdfDocument.addPage([widthPt, heightPt]);
+        page.drawImage(image, {
+          x: 0,
+          y: 0,
+          width: widthPt,
+          height: heightPt,
+        });
+      };
+
+      // Read the latest draft directly. The review screen can mount in the
+      // same render that creates the draft, before its selector refreshes.
+      const currentDraft = draftId
+        ? useVaultStore.getState().drafts.find((item) => item.id === draftId) ??
+          draft
+        : draft;
+      const sourcePdf = currentDraft?.sourcePdfId
         ? useVaultStore
             .getState()
-            .files.find((file) => file.id === draft.sourcePdfId)
+            .files.find((file) => file.id === currentDraft.sourcePdfId)
         : null;
-      sourcePdfOriginalUri = sourcePdf?.uri ?? null;
       const appendToExistingPdf = Boolean(
-        draft?.sourcePdfId && draft.includesSourcePages === false,
+        currentDraft?.sourcePdfId && currentDraft.includesSourcePages === false,
       );
 
       if (appendToExistingPdf && !sourcePdf) {
         throw new Error("The original PDF is no longer available.");
       }
 
+      // Prefer the render that enabled the button; use the ref only as a
+      // fallback for a tap that lands during a state transition.
+      const currentPages = pages.length ? pages : pagesRef.current;
       const pagesToAppend = appendToExistingPdf
-        ? pages.slice(Math.min(draft?.basePageCount ?? 0, pages.length))
-        : pages;
-      const pageUrisToAppend = pagesToAppend.map((page) => page.uri);
-
-      // Generate a one-page PDF per image sized to the image's own aspect ratio
-      const pagePdfUris = await Promise.all(
-        pageUrisToAppend.map((uri) => generateImagePagePdf(uri)),
+        ? currentPages.slice(
+            Math.min(currentDraft?.basePageCount ?? 0, currentPages.length),
+          )
+        : currentPages;
+      const draftPagesById = new Map(
+        (currentDraft?.pages ?? []).map((page) => [page.id, page]),
       );
-
-      // Merge all single-page PDFs into a single document, preserving page sizes
+      // Build one PDF directly. This avoids starting a native print job for
+      // every image and then reading/merging all of those temporary PDFs.
       const mergedPdf = await PDFDocument.create();
-      const base64ToUint8Array = (base64: string) => {
-        const binaryString =
-          typeof atob === "function"
-            ? atob(base64)
-            : Buffer.from(base64, "base64").toString("binary");
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        return bytes;
-      };
 
       if (appendToExistingPdf && sourcePdf) {
-        sourcePdfTempUri = await decryptVaultFileForUse(sourcePdf);
-        const sourceBase64 = await FileSystem.readAsStringAsync(
-          sourcePdfTempUri,
-          { encoding: FileSystem.EncodingType.Base64 },
-        );
-        const sourceBytes = base64ToUint8Array(sourceBase64);
-        const sourceDoc = await PDFDocument.load(sourceBytes);
+        const sourceBase64 = await decryptVaultFileAsBase64(sourcePdf);
+        const sourceDoc = await PDFDocument.load(sourceBase64);
         const sourcePages = await mergedPdf.copyPages(
           sourceDoc,
           sourceDoc.getPageIndices(),
@@ -640,14 +609,44 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         sourcePages.forEach((page) => mergedPdf.addPage(page));
       }
 
-      for (const pagePdfUri of pagePdfUris) {
-        const pageBase64 = await FileSystem.readAsStringAsync(pagePdfUri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        const pageBytes = base64ToUint8Array(pageBase64);
-        const srcDoc = await PDFDocument.load(pageBytes);
-        const [copiedPage] = await mergedPdf.copyPages(srcDoc, [0]);
-        mergedPdf.addPage(copiedPage);
+      for (const page of pagesToAppend) {
+        const encryptedDraftPage = draftPagesById.get(page.id);
+        let decryptedBase64: string | undefined;
+        if (encryptedDraftPage) {
+          // Reuse the already-hydrated preview file when available. If the
+          // cache was purged during the scanner transition, fall back to the
+          // encrypted vault page without making the user reopen the draft.
+          try {
+            decryptedBase64 = await FileSystem.readAsStringAsync(page.uri, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+          } catch {
+            decryptedBase64 = undefined;
+          }
+          if (!decryptedBase64) {
+            decryptedBase64 = await decryptPdfDraftPageAsBase64(
+              encryptedDraftPage,
+            );
+          }
+        }
+        try {
+          await addImagePage(
+            mergedPdf,
+            page.uri,
+            page.extension,
+            decryptedBase64,
+          );
+        } catch (error) {
+          if (!encryptedDraftPage || !decryptedBase64) throw error;
+          // A cache cleanup can race the first read. Retry this page directly
+          // from its encrypted vault blob before surfacing a failure.
+          await addImagePage(
+            mergedPdf,
+            page.uri,
+            page.extension,
+            await decryptPdfDraftPageAsBase64(encryptedDraftPage),
+          );
+        }
       }
 
       const mergedBytes = await mergedPdf.save();
@@ -661,11 +660,6 @@ export function PdfReviewScreen({ navigation, route }: Props) {
       await FileSystem.writeAsStringAsync(tempPdfUri, mergedBase64, {
         encoding: FileSystem.EncodingType.Base64,
       });
-
-      // Best-effort cleanup of intermediate per-page PDFs
-      pagePdfUris.forEach((u) =>
-        FileSystem.deleteAsync(u, { idempotent: true }).catch(() => {}),
-      );
 
       const fileId = sourcePdf?.id ?? `${Date.now()}-${Math.random()}`;
 
@@ -709,7 +703,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
           folderIds: sourcePdf?.folderIds,
           isFavorite: sourcePdf?.isFavorite ?? false,
           isPinned: sourcePdf?.isPinned ?? false,
-          pdfPages: draft?.pages.length ? draft.pages : undefined,
+          pdfPages: currentDraft?.pages.length ? currentDraft.pages : undefined,
           pdfHasUnextractedBase: appendToExistingPdf || undefined,
         },
       ]);
@@ -720,15 +714,6 @@ export function PdfReviewScreen({ navigation, route }: Props) {
     } catch (error) {
       Alert.alert("PDF creation failed", "Please try again.");
     } finally {
-      if (
-        sourcePdfTempUri &&
-        sourcePdfTempUri.startsWith("file://") &&
-        sourcePdfTempUri !== sourcePdfOriginalUri
-      ) {
-        await FileSystem.deleteAsync(sourcePdfTempUri, {
-          idempotent: true,
-        }).catch(() => {});
-      }
       setIsSaving(false);
     }
   };
@@ -775,10 +760,11 @@ export function PdfReviewScreen({ navigation, route }: Props) {
       }
 
       const newUri = scannedImages[0];
-      const previewUri = await createPreviewUri(newUri);
       setPages((current) =>
         current.map((page, pageIndex) =>
-          pageIndex === index ? { ...page, uri: newUri, previewUri } : page,
+          pageIndex === index
+            ? { ...page, uri: newUri, extension: extensionFromUri(newUri) }
+            : page,
         ),
       );
     } catch (error) {
@@ -1049,8 +1035,10 @@ export function PdfReviewScreen({ navigation, route }: Props) {
                   {/* When not reordering, a full-area Pressable owns tap / long-press.
                       When reordering, it's unmounted so the PanResponder owns the gesture. */}
                   <Image
-                    source={{ uri: page.previewUri ?? page.uri }}
+                    source={{ uri: page.uri }}
                     style={styles.pageImage}
+                    resizeMethod="resize"
+                    fadeDuration={0}
                   />
                   {!isReordering && (
                     <Pressable
@@ -1143,45 +1131,46 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         </View>
       )}
 
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={[
-            styles.primaryButton,
-            (isSaving || isLoadingDraft || !hasPages) &&
-              styles.primaryButtonDisabled,
-          ]}
-          onPress={createPdf}
-          disabled={isSaving || isLoadingDraft || !hasPages}
-        >
-          {isSaving ? (
-            <ActivityIndicator size="small" color={colors.background} />
-          ) : (
-            <View style={styles.primaryButtonContent}>
-              <Feather
-                name="file-text"
-                size={16}
-                color={colors.background}
-                style={{ marginRight: 8 }}
-              />
-              <Text style={styles.primaryButtonText}>Create PDF</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.secondaryButton,
-            !hasPages && styles.primaryButtonDisabled,
-          ]}
-          onPress={isReordering ? finishReorder : startReorder}
-          disabled={!hasPages}
-        >
-          <Feather
-            name={isReordering ? "check" : "edit-3"}
-            size={16}
-            color={colors.text}
-          />
-        </TouchableOpacity>
-      </View>
+      {!isLoadingDraft ? (
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={[
+              styles.primaryButton,
+              (isSaving || !hasPages) && styles.primaryButtonDisabled,
+            ]}
+            onPress={createPdf}
+            disabled={isSaving || !hasPages}
+          >
+            {isSaving ? (
+              <ActivityIndicator size="small" color={colors.background} />
+            ) : (
+              <View style={styles.primaryButtonContent}>
+                <Feather
+                  name="file-text"
+                  size={16}
+                  color={colors.background}
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={styles.primaryButtonText}>Create PDF</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.secondaryButton,
+              !hasPages && styles.primaryButtonDisabled,
+            ]}
+            onPress={isReordering ? finishReorder : startReorder}
+            disabled={!hasPages}
+          >
+            <Feather
+              name={isReordering ? "check" : "edit-3"}
+              size={16}
+              color={colors.text}
+            />
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       <Modal
         visible={isAddingPages}
@@ -1306,12 +1295,14 @@ export function PdfReviewScreen({ navigation, route }: Props) {
                       }}
                     >
                       <Image
-                        source={{ uri: p.previewUri ?? p.uri }}
+                        source={{ uri: p.uri }}
                         style={{
                           width: "100%",
                           height: "100%",
                           opacity: sel ? 0.5 : 1,
                         }}
+                        resizeMethod="resize"
+                        fadeDuration={0}
                       />
                       {sel && (
                         <View
@@ -1379,7 +1370,6 @@ export function PdfReviewScreen({ navigation, route }: Props) {
           {selectedImageIndex !== null && pages[selectedImageIndex] ? (
             <View style={styles.previewScrollContainer}>
               <ImageViewer
-                // Use the full-quality image for the viewer. Thumbnails keep using previewUri
                 imageUrls={[
                   { url: normalizeUri(pages[selectedImageIndex].uri) },
                 ]}
