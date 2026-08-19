@@ -14,6 +14,11 @@ import { useVaultStore } from "@/store/useVaultStore";
 import { checkLocalAuthenticationAvailable } from "@/utils/localAuthentication";
 import { clearDecryptedCache } from "@/services/vaultStorage";
 import ThemedAlert from "@/components/ThemedAlert";
+import { navigationRef } from "@/navigation/navigationRef";
+import {
+  consumeIncomingPdf,
+  IncomingPdf,
+} from "@/services/incomingPdfService";
 
 export default function App() {
   const theme = useSettingsStore((s) => s.theme);
@@ -23,7 +28,14 @@ export default function App() {
   const hydrate = useVaultStore((s) => s.hydrate);
   const [authenticated, setAuthenticated] = useState(!lockEnabled);
   const [authAvailable, setAuthAvailable] = useState<boolean | null>(null);
+  const [navigationReady, setNavigationReady] = useState(false);
+  const [incomingPdf, setIncomingPdf] = useState<IncomingPdf | null>(null);
   const appState = useRef(AppState.currentState);
+
+  const readIncomingPdf = async () => {
+    const document = await consumeIncomingPdf();
+    if (document?.uri) setIncomingPdf(document);
+  };
 
   useEffect(() => {
     // Clear any leftover decrypted cache from prior runs before hydrating the vault
@@ -63,6 +75,25 @@ export default function App() {
     appState.current = AppState.currentState;
   }, []);
 
+  useEffect(() => {
+    void readIncomingPdf();
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      appState.current = nextState;
+      if (nextState === "active") void readIncomingPdf();
+    });
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    if (!incomingPdf || !navigationReady || !authenticated) return;
+    navigationRef.navigate("Preview", {
+      externalUri: incomingPdf.uri,
+      externalName: incomingPdf.name,
+      externalMimeType: incomingPdf.mimeType,
+    });
+    setIncomingPdf(null);
+  }, [authenticated, incomingPdf, navigationReady]);
+
   // Clear decrypted cache on app lifecycle changes: when app backgrounds or resumes
   // this reduces the window where plaintext temp files can remain on disk.
   useEffect(() => {
@@ -97,7 +128,11 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer theme={theme === "dark" ? DarkTheme : DefaultTheme}>
+      <NavigationContainer
+        ref={navigationRef}
+        onReady={() => setNavigationReady(true)}
+        theme={theme === "dark" ? DarkTheme : DefaultTheme}
+      >
         <StatusBar style={theme === "dark" ? "light" : "dark"} />
         {lockEnabled && authAvailable && !authenticated ? (
           <LockScreen onUnlock={() => setAuthenticated(true)} />

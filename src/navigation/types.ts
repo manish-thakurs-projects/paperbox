@@ -3,7 +3,12 @@ export type RootStackParams = {
   Search: undefined;
   FileDetail: { fileId: string };
   FolderDetail: { folderId: string };
-  Preview: { fileId: string };
+  Preview: {
+    fileId?: string;
+    externalUri?: string;
+    externalName?: string;
+    externalMimeType?: string;
+  };
   PdfReview: { imageUris: string[] };
   AllFiles: undefined;
   CapturedFiles: undefined;

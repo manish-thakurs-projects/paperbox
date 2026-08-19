@@ -238,9 +238,27 @@ const saveUriToCache = async (
 export function PreviewScreen({ route, navigation }: Props) {
   const { colors } = usePaperTheme();
   const styles = getStyles(colors);
-  const file = useVaultStore((s) =>
+  const vaultFile = useVaultStore((s) =>
     s.files.find((f) => f.id === route.params.fileId),
   );
+  const externalUri = route.params.externalUri;
+  const externalName = route.params.externalName || "document.pdf";
+  const file: VaultFile | undefined = vaultFile ||
+    (externalUri
+      ? {
+          id: `external-${externalUri}`,
+          name: externalName,
+          uri: externalUri,
+          mimeType: route.params.externalMimeType || "application/pdf",
+          size: 0,
+          extension: "pdf",
+          kind: "pdf",
+          createdAt: new Date().toISOString(),
+          isFavorite: false,
+          isPinned: false,
+          tags: [],
+        }
+      : undefined);
   const addConvertedPdf = useVaultStore((s) => s.addConvertedPdf);
   const savedConvertedPdf = useVaultStore((s) => {
     const source = s.files.find((f) => f.id === route.params.fileId);

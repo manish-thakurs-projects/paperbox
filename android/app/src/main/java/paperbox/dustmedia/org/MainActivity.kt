@@ -1,4 +1,4 @@
-package com.paperbox.vault
+package paperbox.dustmedia.org
 
 import android.os.Build
 import android.os.Bundle
@@ -12,11 +12,21 @@ import expo.modules.ReactActivityDelegateWrapper
 
 class MainActivity : ReactActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
+    // Capture a PDF opened from another app before React Native starts. The
+    // JavaScript bridge consumes this once it has mounted.
+    IncomingPdfStore.capture(this, intent)
+
     // Set the theme to AppTheme BEFORE onCreate to support
     // coloring the background, status bar, and navigation bar.
     // This is required for expo-splash-screen.
     setTheme(R.style.AppTheme);
     super.onCreate(null)
+  }
+
+  override fun onNewIntent(intent: android.content.Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    IncomingPdfStore.capture(this, intent)
   }
 
   /**

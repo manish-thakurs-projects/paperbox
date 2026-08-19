@@ -96,9 +96,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.paperbox.vault'
+    namespace 'paperbox.dustmedia.org'
     defaultConfig {
-        applicationId 'com.paperbox.vault'
+        applicationId 'paperbox.dustmedia.org'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 5

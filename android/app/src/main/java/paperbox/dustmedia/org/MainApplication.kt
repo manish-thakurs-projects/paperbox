@@ -1,4 +1,4 @@
-package com.paperbox.vault
+package paperbox.dustmedia.org
 
 import android.app.Application
 import android.content.res.Configuration
@@ -27,7 +27,7 @@ class MainApplication : Application(), ReactApplication {
               // add(MyReactNativePackage())
               try {
                 // register SAF helper package
-                add(paperbox.dustmedia.org.SAFPackage())
+                add(SAFPackage())
               } catch (e: Exception) {
                 // ignore if registration fails for some build variants
               }
@@ -37,6 +37,7 @@ class MainApplication : Application(), ReactApplication {
               } catch (e: Exception) {
                 // ignore if registration fails (package may already be autolinked)
               }
+              add(IncomingPdfPackage())
             }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
