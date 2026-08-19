@@ -16,20 +16,17 @@
         <ImageView
             android:layout_width="24dp"
             android:layout_height="24dp"
-            android:contentDescription="Create PDF"
-            android:src="@drawable/widget_pdf_icon"
+            android:contentDescription="Import"
+            android:src="@drawable/widget_add_icon"
             android:tint="@color/widget_text" />
 
         <TextView
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:gravity="center"
-            android:includeFontPadding="false"
-            android:maxLines="2"
-            android:text="Create PDF"
+            android:text="Import"
             android:textColor="@color/widget_text"
-            android:textSize="11sp"
+            android:textSize="13sp"
             android:textStyle="bold" />
     </LinearLayout>
 </FrameLayout>

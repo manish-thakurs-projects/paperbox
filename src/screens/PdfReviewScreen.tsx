@@ -1,8 +1,10 @@
 import React, { useLayoutEffect, useRef, useState, useEffect } from "react";
 import {
   ActivityIndicator,
+  Animated,
   BackHandler,
   Image,
+  LayoutAnimation,
   Modal,
   PanResponder,
   PermissionsAndroid,
@@ -13,6 +15,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  UIManager,
   View,
   useWindowDimensions,
 } from "react-native";
@@ -106,13 +109,25 @@ export function PdfReviewScreen({ navigation, route }: Props) {
   const [selectedPageIds, setSelectedPageIds] = useState<string[]>([]);
   const [deleteAlertVisible, setDeleteAlertVisible] = useState(false);
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isReordering, setIsReordering] = useState(false);
+  const dragPosition = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const dragScale = useRef(new Animated.Value(1)).current;
+  const dragOpacity = useRef(new Animated.Value(1)).current;
+  const dragStartIndexRef = useRef<number | null>(null);
+  const dragAnimationRef = useRef<Animated.CompositeAnimation | null>(null);
   const temporaryUrisRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     void loadPdfLib();
+  }, []);
+
+  useEffect(() => {
+    if (
+      Platform.OS === "android" &&
+      UIManager.setLayoutAnimationEnabledExperimental
+    ) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
   }, []);
 
   // menu and modal state
@@ -178,7 +193,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
   const pagesRef = useRef(pages);
   const isReorderingRef = useRef(isReordering);
   const draggedItemIdRef = useRef(draggedItemId);
-  const draggedIndexRef = useRef(draggedIndex);
+  const draggedIndexRef = useRef<number | null>(null);
   useEffect(() => {
     pagesRef.current = pages;
   }, [pages]);
@@ -188,10 +203,6 @@ export function PdfReviewScreen({ navigation, route }: Props) {
   useEffect(() => {
     draggedItemIdRef.current = draggedItemId;
   }, [draggedItemId]);
-  useEffect(() => {
-    draggedIndexRef.current = draggedIndex;
-  }, [draggedIndex]);
-
   useEffect(() => {
     let active = true;
     let temporaryUris: string[] = [];
@@ -290,7 +301,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
           return true;
         }
         if (isReordering) {
-          setIsReordering(false);
+          finishReorder();
           return true;
         }
         navigation.goBack();
@@ -799,8 +810,11 @@ export function PdfReviewScreen({ navigation, route }: Props) {
   const finishReorder = () => {
     setIsReordering(false);
     setDraggedItemId(null);
-    setDraggedIndex(null);
-    setDragOffset({ x: 0, y: 0 });
+    dragAnimationRef.current?.stop();
+    dragPosition.setValue({ x: 0, y: 0 });
+    dragScale.setValue(1);
+    dragOpacity.setValue(1);
+    dragStartIndexRef.current = null;
   };
 
   const togglePageSelection = (pageId: string) => {
@@ -837,6 +851,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
 
   const movePage = (fromIndex: number, toIndex: number) => {
     if (fromIndex === toIndex) return;
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setPages((current) => {
       if (
         fromIndex < 0 ||
@@ -867,7 +882,52 @@ export function PdfReviewScreen({ navigation, route }: Props) {
     );
     const row = Math.max(0, Math.floor(relativeY / itemHeight + shift));
     const index = row * columnCount + col;
-    return Math.min(pages.length - 1, Math.max(0, index));
+    return Math.min(pagesRef.current.length - 1, Math.max(0, index));
+  };
+
+  const getIndexOffset = (index: number) => ({
+    x: (index % columnCount) * itemWidth,
+    y: Math.floor(index / columnCount) * itemHeight,
+  });
+
+  const setDragPositionForGesture = (index: number, dx: number, dy: number) => {
+    const startIndex = dragStartIndexRef.current ?? index;
+    const startOffset = getIndexOffset(startIndex);
+    const currentOffset = getIndexOffset(index);
+    dragPosition.setValue({
+      x: dx + startOffset.x - currentOffset.x,
+      y: dy + startOffset.y - currentOffset.y,
+    });
+  };
+
+  const settleDrag = () => {
+    dragAnimationRef.current?.stop();
+    dragAnimationRef.current = Animated.parallel([
+      Animated.spring(dragPosition, {
+        toValue: { x: 0, y: 0 },
+        useNativeDriver: true,
+        tension: 70,
+        friction: 9,
+      }),
+      Animated.spring(dragScale, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 100,
+        friction: 9,
+      }),
+      Animated.timing(dragOpacity, {
+        toValue: 1,
+        duration: 140,
+        useNativeDriver: true,
+      }),
+    ]);
+    dragAnimationRef.current.start(() => {
+      setDraggedItemId(null);
+      draggedItemIdRef.current = null;
+      draggedIndexRef.current = null;
+      dragStartIndexRef.current = null;
+      dragAnimationRef.current = null;
+    });
   };
 
   const createPanResponder = (pageId: string) => {
@@ -880,16 +940,31 @@ export function PdfReviewScreen({ navigation, route }: Props) {
       onMoveShouldSetPanResponder: () => isReorderingRef.current,
       onPanResponderGrant: () => {
         if (!isReorderingRef.current) return;
+        dragAnimationRef.current?.stop();
+        dragPosition.setValue({ x: 0, y: 0 });
+        dragScale.setValue(1);
+        dragOpacity.setValue(1);
         draggedItemIdRef.current = pageId;
         setDraggedItemId(pageId);
         const startIndex = pagesRef.current.findIndex((p) => p.id === pageId);
+        dragStartIndexRef.current = startIndex === -1 ? null : startIndex;
         draggedIndexRef.current = startIndex === -1 ? null : startIndex;
-        setDraggedIndex(draggedIndexRef.current);
-        setDragOffset({ x: 0, y: 0 });
+        Animated.parallel([
+          Animated.spring(dragScale, {
+            toValue: 1.06,
+            useNativeDriver: true,
+            tension: 120,
+            friction: 8,
+          }),
+          Animated.timing(dragOpacity, {
+            toValue: 0.96,
+            duration: 100,
+            useNativeDriver: true,
+          }),
+        ]).start();
       },
       onPanResponderMove: (evt, gestureState) => {
         if (!isReorderingRef.current) return;
-        setDragOffset({ x: gestureState.dx, y: gestureState.dy });
         const resolvedIndex =
           draggedIndexRef.current === null
             ? pagesRef.current.findIndex((p) => p.id === pageId)
@@ -902,22 +977,18 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         if (targetIndex !== resolvedIndex) {
           movePage(resolvedIndex, targetIndex);
           draggedIndexRef.current = targetIndex;
-          setDraggedIndex(targetIndex);
         }
+        setDragPositionForGesture(
+          targetIndex,
+          gestureState.dx,
+          gestureState.dy,
+        );
       },
       onPanResponderRelease: () => {
-        setDraggedItemId(null);
-        draggedItemIdRef.current = null;
-        setDraggedIndex(null);
-        draggedIndexRef.current = null;
-        setDragOffset({ x: 0, y: 0 });
+        settleDrag();
       },
       onPanResponderTerminate: () => {
-        setDraggedItemId(null);
-        draggedItemIdRef.current = null;
-        setDraggedIndex(null);
-        draggedIndexRef.current = null;
-        setDragOffset({ x: 0, y: 0 });
+        settleDrag();
       },
     });
     panResponderMapRef.current.set(pageId, responder);
@@ -1007,7 +1078,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
               const isFirstColumn = index % columnCount === 0;
               const isFirstRow = index < columnCount;
               return (
-                <View
+                <Animated.View
                   key={page.id}
                   style={[
                     styles.pageCard,
@@ -1023,10 +1094,11 @@ export function PdfReviewScreen({ navigation, route }: Props) {
                       styles.pageCardDragged,
                       {
                         transform: [
-                          { translateX: dragOffset.x },
-                          { translateY: dragOffset.y },
-                          { scale: 1.15 },
+                          { translateX: dragPosition.x },
+                          { translateY: dragPosition.y },
+                          { scale: dragScale },
                         ],
+                        opacity: dragOpacity,
                       },
                     ],
                   ]}
@@ -1073,7 +1145,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
                     </View>
                   ) : null}
                   <Text style={styles.pageNumberBadge}>{index + 1}</Text>
-                </View>
+                </Animated.View>
               );
             })}
             {!isReordering ? (

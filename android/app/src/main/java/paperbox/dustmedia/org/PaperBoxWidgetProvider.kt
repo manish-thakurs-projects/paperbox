@@ -15,6 +15,7 @@ private const val WIDGET_REQUEST_QUICK_SCAN = 4104
 private const val WIDGET_REQUEST_QUICK_CREATE_PDF = 4105
 private const val WIDGET_REQUEST_QUICK_IMPORT = 4106
 private const val WIDGET_REQUEST_OPEN_FOLDERS = 4107
+private const val WIDGET_REQUEST_IMPORT = 4108
 
 abstract class ActionWidgetProvider : AppWidgetProvider() {
   protected abstract val layoutId: Int
@@ -52,6 +53,12 @@ class CreatePdfWidgetProvider : ActionWidgetProvider() {
   override val layoutId: Int = R.layout.widget_create_pdf
   override val widgetAction: String = WidgetActionStore.ACTION_CREATE_PDF
   override val requestCode: Int = WIDGET_REQUEST_CREATE_PDF
+}
+
+class ImportWidgetProvider : ActionWidgetProvider() {
+  override val layoutId: Int = R.layout.widget_import
+  override val widgetAction: String = WidgetActionStore.ACTION_IMPORT
+  override val requestCode: Int = WIDGET_REQUEST_IMPORT
 }
 
 class QuickActionsWidgetProvider : AppWidgetProvider() {
