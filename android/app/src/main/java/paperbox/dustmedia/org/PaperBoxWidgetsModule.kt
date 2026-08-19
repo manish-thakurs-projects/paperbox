@@ -33,9 +33,11 @@ class PaperBoxWidgetsModule(
         val item = folders.getMap(index) ?: continue
         val id = item.getString("id") ?: continue
         val name = item.getString("name") ?: "Untitled folder"
+        val fileCount = if (item.hasKey("fileCount")) item.getInt("fileCount") else 0
         json.put(JSONObject().apply {
           put("id", id)
           put("name", name)
+          put("fileCount", fileCount)
         })
       }
 

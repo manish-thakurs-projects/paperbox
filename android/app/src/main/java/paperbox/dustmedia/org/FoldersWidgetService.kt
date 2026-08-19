@@ -33,7 +33,8 @@ private class FolderRemoteViewsFactory(
   override fun getViewAt(position: Int): RemoteViews? {
     val folder = folders.getOrNull(position) ?: return null
     return RemoteViews(context.packageName, R.layout.widget_folder_row).apply {
-      setTextViewText(R.id.folder_row, folder.name)
+      setTextViewText(R.id.folder_name, folder.name)
+      setTextViewText(R.id.folder_count, "${folder.fileCount} files")
       setOnClickFillInIntent(
         R.id.folder_row,
         Intent().putExtra(WidgetActionStore.EXTRA_FOLDER_ID, folder.id),
@@ -58,7 +59,7 @@ private class FolderRemoteViewsFactory(
         val item = array.optJSONObject(index) ?: return@mapNotNull null
         val id = item.optString("id").takeIf { it.isNotBlank() } ?: return@mapNotNull null
         val name = item.optString("name", "Untitled folder")
-        FolderWidgetItem(id, name)
+        FolderWidgetItem(id, name, item.optInt("fileCount", 0))
       }
     } catch (_: Exception) {
       emptyList()
@@ -69,4 +70,5 @@ private class FolderRemoteViewsFactory(
 private data class FolderWidgetItem(
   val id: String,
   val name: String,
+  val fileCount: Int,
 )

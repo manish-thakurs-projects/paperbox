@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 20,
     right: 20,
-    bottom: 28,
+    bottom: 102,
     alignItems: "center",
   },
   toast: {

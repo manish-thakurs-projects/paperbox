@@ -29,6 +29,7 @@ export default function App() {
   const theme = useSettingsStore((s) => s.theme);
   const lockEnabled = useSettingsStore((s) => s.lockEnabled);
   const folders = useVaultStore((s) => s.folders);
+  const files = useVaultStore((s) => s.files);
   const vaultReady = useVaultStore((s) => s.ready);
   const setLockEnabled = useSettingsStore((s) => s.setLockEnabled);
   const hydrate = useVaultStore((s) => s.hydrate);
@@ -61,8 +62,8 @@ export default function App() {
 
   useEffect(() => {
     if (!vaultReady) return;
-    void syncWidgetFolders(folders);
-  }, [folders, vaultReady]);
+    void syncWidgetFolders(folders, files);
+  }, [files, folders, vaultReady]);
 
   useEffect(() => {
     let active = true;
@@ -119,6 +120,8 @@ export default function App() {
         screen: "Home",
         params: { widgetAction: "import" },
       });
+    } else if (pendingWidgetAction.action === "paperbox.widget.OPEN_FOLDERS") {
+      navigationRef.navigate("Vault", { screen: "Folders" });
     } else if (pendingWidgetAction.folderId) {
       navigationRef.navigate("FolderDetail", {
         folderId: pendingWidgetAction.folderId,

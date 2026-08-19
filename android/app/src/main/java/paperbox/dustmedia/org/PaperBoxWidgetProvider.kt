@@ -14,6 +14,7 @@ private const val WIDGET_REQUEST_FOLDERS = 4103
 private const val WIDGET_REQUEST_QUICK_SCAN = 4104
 private const val WIDGET_REQUEST_QUICK_CREATE_PDF = 4105
 private const val WIDGET_REQUEST_QUICK_IMPORT = 4106
+private const val WIDGET_REQUEST_OPEN_FOLDERS = 4107
 
 abstract class ActionWidgetProvider : AppWidgetProvider() {
   protected abstract val layoutId: Int
@@ -109,6 +110,16 @@ class FoldersWidgetProvider : AppWidgetProvider() {
       val serviceIntent = Intent(context, FoldersWidgetService::class.java)
       views.setRemoteAdapter(R.id.folder_list, serviceIntent)
       views.setEmptyView(R.id.folder_list, R.id.folders_empty)
+
+      val foldersIntent = Intent(context, MainActivity::class.java).apply {
+        action = WidgetActionStore.ACTION_OPEN_FOLDERS
+        addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+      }
+      val foldersFlags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+      views.setOnClickPendingIntent(
+        R.id.folders_view_all,
+        PendingIntent.getActivity(context, WIDGET_REQUEST_OPEN_FOLDERS, foldersIntent, foldersFlags),
+      )
 
       val clickIntent = Intent(context, MainActivity::class.java).apply {
         action = WidgetActionStore.ACTION_OPEN_FOLDER
