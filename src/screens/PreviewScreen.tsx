@@ -46,7 +46,8 @@ import {
   convertOfficeFileToPdf,
   isOfficeExtension,
 } from "../services/officeToPdfService";
-import { VaultFile } from "../types";
+import { shouldShowExternalPdfOption } from "../services/externalPdfService";
+import { PdfDraft, VaultFile } from "../types";
 
 type Props = NativeStackScreenProps<RootStackParams, "Preview">;
 
@@ -260,6 +261,7 @@ export function PreviewScreen({ route, navigation }: Props) {
         }
       : undefined);
   const addConvertedPdf = useVaultStore((s) => s.addConvertedPdf);
+  const addPdfDraft = useVaultStore((s) => s.addPdfDraft);
   const savedConvertedPdf = useVaultStore((s) => {
     const source = s.files.find((f) => f.id === route.params.fileId);
     return source?.convertedPdfId
@@ -284,6 +286,7 @@ export function PreviewScreen({ route, navigation }: Props) {
     file.extension || extensionFromMimeType(file.mimeType) || extFromUri(uri)
   ).toLowerCase();
   const isOfficeFile = isOfficeExtension(officeExtension);
+  const isPdfFile = file.kind === "pdf" || officeExtension === "pdf";
 
   const [loading, setLoading] = useState<boolean>(false);
   const [localUri, setLocalUri] = useState<string | null>(null);
@@ -293,7 +296,11 @@ export function PreviewScreen({ route, navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [zoomVisible, setZoomVisible] = useState<boolean>(false);
   const [pdfOpened, setPdfOpened] = useState(false);
-  const [downloading, setDownloading] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [showExternalPdfOption, setShowExternalPdfOption] = useState<boolean | null>(
+    Platform.OS === "android" ? null : true,
+  );
   const videoRef = useRef<Video | null>(null);
 
   // reloadKey forces re-run of preview preparation
@@ -316,79 +323,29 @@ export function PreviewScreen({ route, navigation }: Props) {
         fontSize: 18,
         fontWeight: "500",
       },
-      headerRight: () => (
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
+      headerRight: () =>
+        isPdfFile || convertedFilename ? (
           <Pressable
-            onPress={async () => {
-              if (downloading || !file) return;
-              setDownloading(true);
-              try {
-                const saved = await downloadFile(file);
-                Alert.alert("Download complete", `Saved to ${saved}`);
-              } catch (e: any) {
-                if (
-                  e &&
-                  typeof e.message === "string" &&
-                  e.message.includes("No folder selected")
-                ) {
-                  Alert.alert(
-                    "Download cancelled",
-                    "No folder selected for saving files.",
-                  );
-                } else if (e && typeof e.message === "string") {
-                  Alert.alert("Download failed", e.message);
-                } else {
-                  Alert.alert(
-                    "Download failed",
-                    "Unable to save file to device.",
-                  );
-                }
-              } finally {
-                setDownloading(false);
-              }
-            }}
-            style={{ paddingHorizontal: 12 }}
-            hitSlop={8}
-          >
-            <Feather
-              name={downloading ? "download-cloud" : "download"}
-              size={20}
-              color={colors.text}
-            />
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              void openExternally();
-            }}
-            style={{ paddingHorizontal: 12 }}
+            onPress={() => setMenuVisible(true)}
+            disabled={Boolean(actionLoading) || loading}
+            style={styles.headerMenuButton}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Open in another app"
+            accessibilityLabel="PDF actions"
           >
-            <Feather name="external-link" size={20} color={colors.text} />
+            <Feather name="more-vertical" size={22} color={colors.text} />
           </Pressable>
-          <Pressable
-            onPress={() => {
-              setLocalUri(null);
-              setConvertedFilename(null);
-              setError(null);
-              setReloadKey((k) => k + 1);
-            }}
-            style={{ paddingHorizontal: 12 }}
-          >
-            <Feather name="refresh-ccw" size={20} color={colors.text} />
-          </Pressable>
-        </View>
-      ),
+        ) : null,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     navigation,
     colors.text,
     file,
-    downloading,
+    actionLoading,
     loading,
     isOfficeFile,
+    isPdfFile,
     convertedFilename,
     name,
   ]);
@@ -503,6 +460,92 @@ export function PreviewScreen({ route, navigation }: Props) {
   const isAudio = ["mp3", "m4a", "wav", "aac", "ogg"].includes(ext);
   const isPdfPreview = isPdf || Boolean(convertedFilename);
   const previewFilename = convertedFilename || filename;
+
+  useEffect(() => {
+    let active = true;
+    if (!isPdfPreview) {
+      setShowExternalPdfOption(true);
+      return () => {
+        active = false;
+      };
+    }
+
+    setShowExternalPdfOption(Platform.OS === "android" ? null : true);
+    void shouldShowExternalPdfOption().then((shouldShow) => {
+      if (active) setShowExternalPdfOption(shouldShow);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [isPdfPreview, uri]);
+
+  const closeActionMenu = () => setMenuVisible(false);
+
+  const refreshPreview = () => {
+    closeActionMenu();
+    setError(null);
+    if (!isOfficeFile) setLoading(true);
+    setLocalUri(null);
+    setConvertedFilename(null);
+    setReloadKey((key) => key + 1);
+  };
+
+  const downloadFromMenu = async () => {
+    if (actionLoading || !file) return;
+    closeActionMenu();
+    setActionLoading("Downloading…");
+    try {
+      const saved = await downloadFile(file);
+      Alert.alert("Download complete", `Saved to ${saved}`);
+    } catch (e: any) {
+      if (
+        e &&
+        typeof e.message === "string" &&
+        e.message.includes("No folder selected")
+      ) {
+        Alert.alert(
+          "Download cancelled",
+          "No folder selected for saving files.",
+        );
+      } else if (e && typeof e.message === "string") {
+        Alert.alert("Download failed", e.message);
+      } else {
+        Alert.alert("Download failed", "Unable to save file to device.");
+      }
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const addPageToPdf = async () => {
+    if (actionLoading || !vaultFile || !isPdfPreview) return;
+    closeActionMenu();
+    setActionLoading("Preparing page editor…");
+    try {
+      const now = new Date().toISOString();
+      const draft: PdfDraft = {
+        id: `draft-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        name: `Edit-${vaultFile.name}`,
+        pages: vaultFile.pdfPages ? [...vaultFile.pdfPages] : [],
+        createdAt: now,
+        updatedAt: now,
+        sourcePdfId: vaultFile.id,
+        includesSourcePages: Boolean(
+          vaultFile.pdfPages?.length && !vaultFile.pdfHasUnextractedBase,
+        ),
+        basePageCount: vaultFile.pdfHasUnextractedBase
+          ? vaultFile.pdfPages?.length ?? 0
+          : 0,
+      };
+      await addPdfDraft(draft);
+      navigation.navigate("PdfReview", { draftId: draft.id });
+    } catch {
+      Alert.alert("Could not add page", "Unable to prepare this PDF for editing.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   const convertToPdf = async () => {
     if (savedConvertedPdf) {
@@ -1036,6 +1079,78 @@ export function PreviewScreen({ route, navigation }: Props) {
     }
   };
 
+  const openExternallyWithLoader = async () => {
+    if (actionLoading) return;
+    closeActionMenu();
+    setActionLoading("Opening in another app…");
+    try {
+      await openExternally();
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const pdfActionMenu = isPdfPreview ? (
+    <Modal
+      visible={menuVisible}
+      transparent
+      animationType="fade"
+      onRequestClose={closeActionMenu}
+    >
+      <View style={styles.pdfMenuOverlay}>
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={closeActionMenu}
+        />
+        <View style={styles.pdfMenuContainer}>
+          <TouchableOpacity style={styles.pdfMenuItem} onPress={refreshPreview}>
+            <Feather name="refresh-cw" size={18} color={colors.text} />
+            <Text style={styles.pdfMenuItemText}>Refresh</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.pdfMenuItem}
+            onPress={() => void downloadFromMenu()}
+          >
+            <Feather name="download" size={18} color={colors.text} />
+            <Text style={styles.pdfMenuItemText}>Download</Text>
+          </TouchableOpacity>
+          {showExternalPdfOption ? (
+            <TouchableOpacity
+              style={styles.pdfMenuItem}
+              onPress={() => void openExternallyWithLoader()}
+            >
+              <Feather name="external-link" size={18} color={colors.text} />
+              <Text style={styles.pdfMenuItemText}>Open in other app</Text>
+            </TouchableOpacity>
+          ) : null}
+          {vaultFile ? (
+            <TouchableOpacity
+              style={styles.pdfMenuItem}
+              onPress={() => void addPageToPdf()}
+            >
+              <Feather name="file-plus" size={18} color={colors.text} />
+              <Text style={styles.pdfMenuItemText}>Add page</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </View>
+    </Modal>
+  ) : null;
+
+  const actionLoader = actionLoading ? (
+    <Modal visible transparent animationType="fade" onRequestClose={() => {}}>
+      <View style={styles.actionLoaderOverlay}>
+        <View style={styles.actionLoaderCard}>
+          <ActivityIndicator size="large" color={colors.text} />
+          <Text style={styles.actionLoaderTitle}>{actionLoading}</Text>
+          <Text style={styles.actionLoaderMessage}>
+            Please wait while PaperBox finishes this action.
+          </Text>
+        </View>
+      </View>
+    </Modal>
+  ) : null;
+
   if (loading) {
     return (
       <Screen style={styles.content}>
@@ -1158,7 +1273,7 @@ export function PreviewScreen({ route, navigation }: Props) {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.primaryButton, styles.secondaryButton]}
-            onPress={() => void openExternally()}
+            onPress={() => void openExternallyWithLoader()}
             activeOpacity={0.8}
           >
             <Feather name="external-link" size={18} color={colors.text} />
@@ -1177,12 +1292,13 @@ export function PreviewScreen({ route, navigation }: Props) {
     if (target) {
       const pdfUri = normalizeFileUri(target);
       return (
-        <Screen style={styles.pdfContent}>
-          <PdfViewer
-            uri={pdfUri}
-            filename={previewFilename}
-            colors={colors}
-            onError={async (e) => {
+        <>
+          <Screen style={styles.pdfContent}>
+            <PdfViewer
+              uri={pdfUri}
+              filename={previewFilename}
+              colors={colors}
+              onError={async (e) => {
               try {
               } catch (_) {}
 
@@ -1252,30 +1368,37 @@ export function PreviewScreen({ route, navigation }: Props) {
               );
               // Attempt external open as fallback
               void openExternally();
-            }}
-            onOpenExternal={() => {
-              void openExternally();
-            }}
-          />
-        </Screen>
+              }}
+              onOpenExternal={() => {
+                void openExternallyWithLoader();
+              }}
+            />
+          </Screen>
+          {pdfActionMenu}
+          {actionLoader}
+        </>
       );
     }
 
     // No target available — show fallback UI that allows external open / share
     return (
-      <Screen style={styles.pdfContent}>
-        <View style={styles.center}>
-          <Feather name="file-text" size={64} color={colors.text} />
-          <Text style={styles.title}>{file.name}</Text>
-          <Text style={styles.copy}>
-            PDFs open in your device's default viewer.
-          </Text>
+      <>
+        <Screen style={styles.pdfContent}>
+          <View style={styles.center}>
+            <Feather name="file-text" size={64} color={colors.text} />
+            <Text style={styles.title}>{file.name}</Text>
+            <Text style={styles.copy}>
+              PDFs open in your device's default viewer.
+            </Text>
 
-          <Text style={[styles.copy, { marginTop: 10 }]}>
-            Use the Refresh action in the header to re-prepare this preview.
-          </Text>
-        </View>
-      </Screen>
+            <Text style={[styles.copy, { marginTop: 10 }]}>
+              Use the Refresh action in the header to re-prepare this preview.
+            </Text>
+          </View>
+        </Screen>
+        {pdfActionMenu}
+        {actionLoader}
+      </>
     );
   }
 
@@ -1306,6 +1429,14 @@ const getStyles = (colors: any) =>
       flexGrow: 1,
       padding: 0,
       backgroundColor: colors.background,
+    },
+    headerMenuButton: {
+      width: 40,
+      height: 40,
+      marginRight: 6,
+      borderRadius: 20,
+      alignItems: "center",
+      justifyContent: "center",
     },
     center: {
       flex: 1,
@@ -1377,6 +1508,69 @@ const getStyles = (colors: any) =>
       fontSize: 15,
       fontWeight: "600",
       marginLeft: 8,
+    },
+    pdfMenuOverlay: {
+      flex: 1,
+      alignItems: "flex-end",
+      paddingTop: 56,
+      paddingRight: 8,
+      backgroundColor: withAlpha(colors.text, 0.28),
+    },
+    pdfMenuContainer: {
+      width: 220,
+      paddingVertical: 6,
+      borderRadius: 16,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      shadowColor: colors.text,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.16,
+      shadowRadius: 18,
+      elevation: 10,
+    },
+    pdfMenuItem: {
+      minHeight: 48,
+      paddingHorizontal: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    pdfMenuItemText: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    actionLoaderOverlay: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 24,
+      backgroundColor: withAlpha(colors.text, 0.45),
+    },
+    actionLoaderCard: {
+      width: "100%",
+      maxWidth: 360,
+      padding: 28,
+      borderRadius: 24,
+      alignItems: "center",
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      elevation: 12,
+    },
+    actionLoaderTitle: {
+      marginTop: 18,
+      marginBottom: 8,
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: "800",
+    },
+    actionLoaderMessage: {
+      color: colors.secondary,
+      fontSize: 14,
+      lineHeight: 20,
+      textAlign: "center",
     },
     secondaryButton: {
       marginTop: 12,

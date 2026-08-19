@@ -22,7 +22,7 @@ const Alert = {
 };
 import { usePaperTheme } from "../theme/usePaperTheme";
 import { withAlpha } from "../theme/utils";
-import { VaultFile } from "../types";
+import { PdfDraft, VaultFile } from "../types";
 import RNFS from "react-native-fs";
 import * as FileSystem from "expo-file-system/legacy";
 import { decryptVaultFileForUse } from "../services/vaultStorage";
@@ -30,7 +30,7 @@ import { downloadFile } from "../services/downloadService";
 
 interface FileActionModalProps {
   visible: boolean;
-  file: VaultFile | null;
+  file: VaultFile | PdfDraft | null;
   onRequestClose: () => void;
   onToggleFavorite: () => void;
   onTogglePin: () => void;
@@ -41,6 +41,7 @@ interface FileActionModalProps {
   onRename: (name: string) => void;
   onRemoveFromFolder?: () => void;
   onDownload?: () => void;
+  onOpenDraft?: () => void;
 }
 
 export function FileActionModal({
@@ -56,6 +57,7 @@ export function FileActionModal({
   onRename,
   onRemoveFromFolder,
   onDownload,
+  onOpenDraft,
 }: FileActionModalProps) {
   const { colors } = usePaperTheme();
   const s = styles(colors);
@@ -64,6 +66,8 @@ export function FileActionModal({
   const [shareLoading, setShareLoading] = useState(false);
   const [downloadLoading, setDownloadLoading] = useState(false);
   const inputRef = useRef<TextInput | null>(null);
+  const isDraft = Boolean(file && "pages" in file);
+  const vaultFile = file && !("pages" in file) ? file : null;
 
   useEffect(() => {
     if (!file) {
@@ -172,7 +176,7 @@ export function FileActionModal({
               style={s.modalContent}
               onPress={(event) => event.stopPropagation()}
             >
-              <Text style={s.modalTitle}>File actions</Text>
+              <Text style={s.modalTitle}>{isDraft ? "Draft actions" : "File actions"}</Text>
               {file ? (
                 <>
                   <Text numberOfLines={1} style={s.modalFileName}>
@@ -186,108 +190,122 @@ export function FileActionModal({
                       <Text style={s.actionLabel}>Info</Text>
                     </Pressable>
                     <Pressable style={s.actionItem} onPress={openRename}>
-                      <Text style={s.actionLabel}>Rename file</Text>
-                    </Pressable>
-                    <Pressable style={s.actionItem} onPress={onToggleFavorite}>
                       <Text style={s.actionLabel}>
-                        {file.isFavorite
-                          ? "Remove favorite"
-                          : "Add to favorites"}
+                        {isDraft ? "Rename draft" : "Rename file"}
                       </Text>
                     </Pressable>
-                    <Pressable style={s.actionItem} onPress={onTogglePin}>
-                      <Text style={s.actionLabel}>
-                        {file.isPinned ? "Unpin" : "Pin"}
-                      </Text>
-                    </Pressable>
-                    <Pressable style={s.actionItem} onPress={onOpenMoveModal}>
-                      <Text style={s.actionLabel}>Move to folders</Text>
-                    </Pressable>
-                    {onRemoveFromFolder ? (
-                      <Pressable
-                        style={s.actionItem}
-                        onPress={onRemoveFromFolder}
-                      >
-                        <Text style={s.actionLabel}>Remove from folder</Text>
-                      </Pressable>
-                    ) : null}
-                    <Pressable
-                      style={s.actionItem}
-                      onPress={async () => {
-                        if (!onShare) return;
-                        try {
-                          setShareLoading(true);
-                          await onShare();
-                        } catch (e) {
-                          // caller handles errors
-                        } finally {
-                          setShareLoading(false);
-                        }
-                      }}
-                    >
-                      {shareLoading ? (
-                        <>
-                          <ActivityIndicator size="small" color={colors.text} />
-                          <Text style={[s.actionLabel, { marginLeft: 8 }]}>
-                            Decrypting...
+                    {isDraft ? (
+                      onOpenDraft ? (
+                        <Pressable style={s.actionItem} onPress={onOpenDraft}>
+                          <Text style={s.actionLabel}>Open draft</Text>
+                        </Pressable>
+                      ) : null
+                    ) : (
+                      <>
+                        <Pressable style={s.actionItem} onPress={onToggleFavorite}>
+                          <Text style={s.actionLabel}>
+                            {vaultFile?.isFavorite
+                              ? "Remove favorite"
+                              : "Add to favorites"}
                           </Text>
-                        </>
-                      ) : (
-                        <Text style={s.actionLabel}>Share</Text>
-                      )}
-                    </Pressable>
+                        </Pressable>
+                        <Pressable style={s.actionItem} onPress={onTogglePin}>
+                          <Text style={s.actionLabel}>
+                            {vaultFile?.isPinned ? "Unpin" : "Pin"}
+                          </Text>
+                        </Pressable>
+                        <Pressable style={s.actionItem} onPress={onOpenMoveModal}>
+                          <Text style={s.actionLabel}>Move to folders</Text>
+                        </Pressable>
+                        {onRemoveFromFolder ? (
+                          <Pressable
+                            style={s.actionItem}
+                            onPress={onRemoveFromFolder}
+                          >
+                            <Text style={s.actionLabel}>Remove from folder</Text>
+                          </Pressable>
+                        ) : null}
+                        <Pressable
+                          style={s.actionItem}
+                          onPress={async () => {
+                            if (!onShare) return;
+                            try {
+                              setShareLoading(true);
+                              await onShare();
+                            } catch (e) {
+                              // caller handles errors
+                            } finally {
+                              setShareLoading(false);
+                            }
+                          }}
+                        >
+                          {shareLoading ? (
+                            <>
+                              <ActivityIndicator size="small" color={colors.text} />
+                              <Text style={[s.actionLabel, { marginLeft: 8 }]}>
+                                Decrypting...
+                              </Text>
+                            </>
+                          ) : (
+                            <Text style={s.actionLabel}>Share</Text>
+                          )}
+                        </Pressable>
+                      </>
+                    )}
                     <Pressable style={s.actionItem} onPress={onDelete}>
                       <Text style={[s.actionLabel, s.destructiveAction]}>
-                        Delete from vault
+                        {isDraft ? "Delete draft" : "Delete from vault"}
                       </Text>
                     </Pressable>
 
-                    <Pressable
-                      style={s.actionItem}
-                      onPress={async () => {
-                        if (!file) return;
-                        setDownloadLoading(true);
-                        try {
-                          const saved = await downloadFile(file);
-                          Alert.alert("Download complete", `Saved to ${saved}`);
+                    {!isDraft ? (
+                      <Pressable
+                        style={s.actionItem}
+                        onPress={async () => {
+                          if (!vaultFile) return;
+                          setDownloadLoading(true);
                           try {
-                            onDownload && onDownload();
-                          } catch (_) {}
-                        } catch (e: any) {
-                          if (
-                            e &&
-                            typeof e.message === "string" &&
-                            e.message.includes("No folder selected")
-                          ) {
-                            Alert.alert(
-                              "Download cancelled",
-                              "No folder selected for saving files.",
-                            );
-                          } else if (e && typeof e.message === "string") {
-                            Alert.alert("Download failed", e.message);
-                          } else {
-                            Alert.alert(
-                              "Download failed",
-                              "Unable to save file to device.",
-                            );
+                            const saved = await downloadFile(vaultFile);
+                            Alert.alert("Download complete", `Saved to ${saved}`);
+                            try {
+                              onDownload && onDownload();
+                            } catch (_) {}
+                          } catch (e: any) {
+                            if (
+                              e &&
+                              typeof e.message === "string" &&
+                              e.message.includes("No folder selected")
+                            ) {
+                              Alert.alert(
+                                "Download cancelled",
+                                "No folder selected for saving files.",
+                              );
+                            } else if (e && typeof e.message === "string") {
+                              Alert.alert("Download failed", e.message);
+                            } else {
+                              Alert.alert(
+                                "Download failed",
+                                "Unable to save file to device.",
+                              );
+                            }
+                          } finally {
+                            setDownloadLoading(false);
+                            onRequestClose();
                           }
-                        } finally {
-                          setDownloadLoading(false);
-                          onRequestClose();
-                        }
-                      }}
-                    >
-                      {downloadLoading ? (
-                        <>
-                          <ActivityIndicator size="small" color={colors.text} />
-                          <Text style={[s.actionLabel, { marginLeft: 8 }]}>
-                            Decrypting...
-                          </Text>
-                        </>
-                      ) : (
-                        <Text style={s.actionLabel}>Download file</Text>
-                      )}
-                    </Pressable>
+                        }}
+                      >
+                        {downloadLoading ? (
+                          <>
+                            <ActivityIndicator size="small" color={colors.text} />
+                            <Text style={[s.actionLabel, { marginLeft: 8 }]}>
+                              Decrypting...
+                            </Text>
+                          </>
+                        ) : (
+                          <Text style={s.actionLabel}>Download file</Text>
+                        )}
+                      </Pressable>
+                    ) : null}
                   </ScrollView>
                   <Pressable
                     style={[s.modalButton, s.modalCancelButton]}

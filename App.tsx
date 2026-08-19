@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { AppState } from "react-native";
 import {
   NavigationContainer,
@@ -19,42 +19,51 @@ import {
   consumeIncomingPdf,
   IncomingPdf,
 } from "@/services/incomingPdfService";
+import {
+  consumePendingWidgetAction,
+  PendingWidgetAction,
+  syncWidgetFolders,
+} from "@/services/widgetService";
 
 export default function App() {
   const theme = useSettingsStore((s) => s.theme);
   const lockEnabled = useSettingsStore((s) => s.lockEnabled);
-  const lockSuppressed = useSettingsStore((s) => s.lockSuppressed);
+  const folders = useVaultStore((s) => s.folders);
+  const vaultReady = useVaultStore((s) => s.ready);
   const setLockEnabled = useSettingsStore((s) => s.setLockEnabled);
   const hydrate = useVaultStore((s) => s.hydrate);
   const [authenticated, setAuthenticated] = useState(!lockEnabled);
   const [authAvailable, setAuthAvailable] = useState<boolean | null>(null);
   const [navigationReady, setNavigationReady] = useState(false);
   const [incomingPdf, setIncomingPdf] = useState<IncomingPdf | null>(null);
-  const appState = useRef(AppState.currentState);
+  const [pendingWidgetAction, setPendingWidgetAction] =
+    useState<PendingWidgetAction | null>(null);
 
   const readIncomingPdf = async () => {
     const document = await consumeIncomingPdf();
     if (document?.uri) setIncomingPdf(document);
   };
 
+  const readWidgetAction = async () => {
+    const action = await consumePendingWidgetAction();
+    if (action) setPendingWidgetAction(action);
+  };
+
   useEffect(() => {
-    // Clear any leftover decrypted cache from prior runs before hydrating the vault
-    // to minimize risk of plaintext remnants on disk.
-    (async () => {
-      try {
-        await clearDecryptedCache();
-      } catch (e) {
-        try {
-        } catch (_) {}
-      }
-      // Now hydrate the in-memory vault/index.
-      hydrate();
-    })();
+    // These operations touch independent storage locations, so start them in
+    // parallel to reduce time-to-first-screen after launch.
+    void clearDecryptedCache();
+    void hydrate();
   }, [hydrate]);
 
   useEffect(() => {
     setAuthenticated(!lockEnabled);
   }, [lockEnabled]);
+
+  useEffect(() => {
+    if (!vaultReady) return;
+    void syncWidgetFolders(folders);
+  }, [folders, vaultReady]);
 
   useEffect(() => {
     let active = true;
@@ -72,14 +81,13 @@ export default function App() {
   }, [lockEnabled, setLockEnabled]);
 
   useEffect(() => {
-    appState.current = AppState.currentState;
-  }, []);
-
-  useEffect(() => {
     void readIncomingPdf();
+    void readWidgetAction();
     const subscription = AppState.addEventListener("change", (nextState) => {
-      appState.current = nextState;
-      if (nextState === "active") void readIncomingPdf();
+      if (nextState === "active") {
+        void readIncomingPdf();
+        void readWidgetAction();
+      }
     });
     return () => subscription.remove();
   }, []);
@@ -94,22 +102,39 @@ export default function App() {
     setIncomingPdf(null);
   }, [authenticated, incomingPdf, navigationReady]);
 
-  // Clear decrypted cache on app lifecycle changes: when app backgrounds or resumes
-  // this reduces the window where plaintext temp files can remain on disk.
+  useEffect(() => {
+    if (!pendingWidgetAction || !navigationReady || !authenticated) return;
+
+    if (pendingWidgetAction.action === "paperbox.widget.SCAN") {
+      navigationRef.navigate("Vault", {
+        screen: "Camera",
+        params: { widgetAction: "scan" },
+      });
+    } else if (pendingWidgetAction.action === "paperbox.widget.CREATE_PDF") {
+      navigationRef.navigate("Vault", {
+        screen: "Camera",
+        params: { widgetAction: "createPdf" },
+      });
+    } else if (pendingWidgetAction.action === "paperbox.widget.IMPORT") {
+      navigationRef.navigate("Vault", {
+        screen: "Home",
+        params: { widgetAction: "import" },
+      });
+    } else if (pendingWidgetAction.folderId) {
+      navigationRef.navigate("FolderDetail", {
+        folderId: pendingWidgetAction.folderId,
+      });
+    }
+
+    setPendingWidgetAction(null);
+  }, [authenticated, navigationReady, pendingWidgetAction]);
+
+  // Clear decrypted cache when app backgrounds to reduce the window where
+  // plaintext temp files can remain on disk without doing work on every focus.
   useEffect(() => {
     const handler = (nextState: string) => {
-      try {
-        // Clear on background and on resume (active) to cover both transitions.
-        if (
-          nextState === "background" ||
-          nextState === "inactive" ||
-          nextState === "active"
-        ) {
-          void clearDecryptedCache();
-        }
-      } catch (e) {
-        try {
-        } catch (_) {}
+      if (nextState === "background") {
+        void clearDecryptedCache();
       }
     };
 

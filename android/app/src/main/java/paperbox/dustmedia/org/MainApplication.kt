@@ -38,6 +38,7 @@ class MainApplication : Application(), ReactApplication {
                 // ignore if registration fails (package may already be autolinked)
               }
               add(IncomingPdfPackage())
+              add(PaperBoxWidgetsPackage())
             }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"

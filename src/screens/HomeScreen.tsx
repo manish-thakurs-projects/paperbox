@@ -17,6 +17,7 @@ const Alert = {
 };
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { BottomTabNavigationProp, BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { RootStackParams } from "../navigation/types";
 import { Screen } from "../components/Screen";
 import { FileRow } from "../components/FileRow";
@@ -30,21 +31,29 @@ import { useVaultStore } from "../store/useVaultStore";
 import { pickFiles } from "../services/importService";
 import { fileSize, getFolderIdsForFile } from "../utils/files";
 import { shareVaultFile } from "../services/shareService";
-import { VaultFile } from "../types";
+import { PdfDraft, VaultFile } from "../types";
+import type { BottomTabParams } from "../navigation/types";
 
-export function HomeScreen() {
+type HomeProps = BottomTabScreenProps<BottomTabParams, "Home">;
+
+export function HomeScreen({ route }: HomeProps) {
   const navigation =
       useNavigation<NativeStackNavigationProp<RootStackParams>>(),
+    tabNavigation =
+      useNavigation<BottomTabNavigationProp<BottomTabParams>>(),
     { colors } = usePaperTheme(),
     s = styles(colors),
     files = useVaultStore((x) => x.files),
     folders = useVaultStore((x) => x.folders),
+    drafts = useVaultStore((x) => x.drafts),
     addFiles = useVaultStore((x) => x.addFiles),
     toggleFavorite = useVaultStore((x) => x.toggleFavorite),
     togglePin = useVaultStore((x) => x.togglePin),
     renameFile = useVaultStore((x) => x.renameFile),
     setFileFolderMembership = useVaultStore((x) => x.setFileFolderMembership),
-    removeFile = useVaultStore((x) => x.removeFile);
+    removeFile = useVaultStore((x) => x.removeFile),
+    deletePdfDraft = useVaultStore((x) => x.deletePdfDraft),
+    renamePdfDraft = useVaultStore((x) => x.renamePdfDraft);
 
   const [actionFileId, setActionFileId] = React.useState<string | null>(null);
   const [actionsVisible, setActionsVisible] = React.useState(false);
@@ -61,12 +70,14 @@ export function HomeScreen() {
     React.useState(false);
   const [importing, setImporting] = React.useState(false);
 
-  const actionFile = React.useMemo(
+  const actionFile = React.useMemo<VaultFile | PdfDraft | null>(
     () =>
       actionFileId
-        ? (files.find((file) => file.id === actionFileId) ?? null)
+        ? (files.find((file) => file.id === actionFileId) ??
+          drafts.find((draft) => draft.id === actionFileId) ??
+          null)
         : null,
-    [files, actionFileId],
+    [files, drafts, actionFileId],
   );
 
   const upload = async () => {
@@ -81,13 +92,33 @@ export function HomeScreen() {
     }
   };
 
+  const widgetAction = route.params?.widgetAction;
+  React.useEffect(() => {
+    if (widgetAction !== "import") return;
+    tabNavigation.setParams({ widgetAction: undefined });
+    void upload();
+    // Consume the widget request before opening the picker so returning to the
+    // Home tab cannot trigger the same import twice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabNavigation, widgetAction]);
+
   const goToSearch = () => navigation.navigate("Search");
 
-  const recent = files.slice(0, 5),
-    used = files.reduce((n, f) => n + f.size, 0),
-    visibleFiles = recent;
+  const recentItems = React.useMemo<
+    Array<VaultFile | PdfDraft>
+  >(
+    () =>
+      [...files, ...drafts]
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        )
+        .slice(0, 5),
+    [files, drafts],
+  );
+  const used = files.reduce((n, f) => n + f.size, 0);
 
-  const openFileActions = (file: VaultFile) => {
+  const openFileActions = (file: VaultFile | PdfDraft) => {
     setActionFileId(file.id);
     setActionsVisible(true);
   };
@@ -106,14 +137,14 @@ export function HomeScreen() {
       return;
     }
 
-    if (!actionFile) return;
+    if (!actionFile || "pages" in actionFile) return;
     setSelectedFolderIds(getFolderIdsForFile(actionFile));
     setMoveVisible(true);
     setActionsVisible(false);
   };
 
   const saveFolderSelection = () => {
-    if (!actionFile) return;
+    if (!actionFile || "pages" in actionFile) return;
     setFileFolderMembership(actionFile.id, selectedFolderIds);
     setIsSelectionMove(false);
     setMoveVisible(false);
@@ -126,7 +157,11 @@ export function HomeScreen() {
 
   const confirmDeleteFile = () => {
     if (!actionFile || !confirmDeleteFileId) return;
-    removeFile(confirmDeleteFileId);
+    if (drafts.some((draft) => draft.id === confirmDeleteFileId)) {
+      void deletePdfDraft(confirmDeleteFileId);
+    } else {
+      void removeFile(confirmDeleteFileId);
+    }
     closeActions();
     setConfirmDeleteFileId(null);
   };
@@ -148,7 +183,9 @@ export function HomeScreen() {
   const clearRowSelection = () => setSelectedRowIds([]);
 
   const selectAllRows = () =>
-    setSelectedRowIds(visibleFiles.map((file) => file.id));
+    setSelectedRowIds(
+      recentItems.map((item) => item.id),
+    );
 
   const deleteSelectedRows = () => {
     if (!selectedRowIds.length) return;
@@ -156,7 +193,13 @@ export function HomeScreen() {
   };
 
   const confirmDeleteSelectedRows = () => {
-    selectedRowIds.forEach((fileId) => removeFile(fileId));
+    selectedRowIds.forEach((fileId) => {
+      if (drafts.some((draft) => draft.id === fileId)) {
+        void deletePdfDraft(fileId);
+      } else {
+        void removeFile(fileId);
+      }
+    });
     clearRowSelection();
     setConfirmDeleteSelectionVisible(false);
   };
@@ -167,6 +210,13 @@ export function HomeScreen() {
 
   const openSelectionMoveModal = () => {
     if (!selectedRowIds.length) return;
+    if (!selectedRowIds.some((id) => files.some((file) => file.id === id))) {
+      Alert.alert(
+        "Nothing to move",
+        "PDF drafts can be opened, renamed, or deleted after selection.",
+      );
+      return;
+    }
     if (!folders.length) {
       Alert.alert(
         "No folders available",
@@ -186,7 +236,9 @@ export function HomeScreen() {
       return;
     }
     selectedRowIds.forEach((fileId) => {
-      setFileFolderMembership(fileId, selectedFolderIds);
+      if (files.some((file) => file.id === fileId)) {
+        setFileFolderMembership(fileId, selectedFolderIds);
+      }
     });
     clearRowSelection();
     setIsSelectionMove(false);
@@ -195,18 +247,36 @@ export function HomeScreen() {
 
   const renameFileAction = (name: string) => {
     if (!actionFile) return;
-    renameFile(actionFile.id, name);
+    if ("pages" in actionFile) {
+      renamePdfDraft(actionFile.id, name);
+    } else {
+      renameFile(actionFile.id, name);
+    }
     closeActions();
   };
 
   const goToInfo = () => {
     if (!actionFile) return;
     closeActions();
-    navigation.navigate("FileDetail", { fileId: actionFile.id });
+    if ("pages" in actionFile) {
+      Alert.alert(
+        "Draft details",
+        `${actionFile.pages.length} page${actionFile.pages.length === 1 ? "" : "s"} ready to review.`,
+      );
+    } else {
+      navigation.navigate("FileDetail", { fileId: actionFile.id });
+    }
+  };
+
+  const openDraft = () => {
+    if (!actionFile || !("pages" in actionFile)) return;
+    const draftId = actionFile.id;
+    closeActions();
+    navigation.navigate("PdfReview", { draftId });
   };
 
   const shareFile = async () => {
-    if (!actionFile) return;
+    if (!actionFile || "pages" in actionFile) return;
 
     try {
       await shareVaultFile(actionFile);
@@ -228,13 +298,13 @@ export function HomeScreen() {
   };
 
   const toggleFavoriteState = () => {
-    if (!actionFile) return;
+    if (!actionFile || "pages" in actionFile) return;
     toggleFavorite(actionFile.id);
     closeActions();
   };
 
   const togglePinState = () => {
-    if (!actionFile) return;
+    if (!actionFile || "pages" in actionFile) return;
     togglePin(actionFile.id);
     closeActions();
   };
@@ -286,7 +356,7 @@ export function HomeScreen() {
           </Pressable>
         ) : null}
       </View>
-      {visibleFiles.length ? (
+      {recentItems.length ? (
         <View>
           {rowSelectionMode ? (
             <View style={s.selectionBar}>
@@ -321,20 +391,26 @@ export function HomeScreen() {
               </View>
             </View>
           ) : null}
-          {visibleFiles.map((f) => (
-            <FileRow
-              key={f.id}
-              file={f}
-              selected={selectedRowIds.includes(f.id)}
-              onPress={() =>
-                rowSelectionMode
-                  ? toggleRowSelection(f.id)
-                  : navigation.navigate("Preview", { fileId: f.id })
-              }
-              onLongPress={() => toggleRowSelection(f.id)}
-              onMore={() => openFileActions(f)}
-            />
-          ))}
+          {recentItems.map((item) => {
+            const isDraft = "pages" in item;
+            return (
+              <FileRow
+                key={item.id}
+                file={item}
+                selected={selectedRowIds.includes(item.id)}
+                selectionMode={rowSelectionMode}
+                onPress={() =>
+                    rowSelectionMode
+                      ? toggleRowSelection(item.id)
+                      : isDraft
+                        ? navigation.navigate("PdfReview", { draftId: item.id })
+                        : navigation.navigate("Preview", { fileId: item.id })
+                }
+                onLongPress={() => toggleRowSelection(item.id)}
+                onMore={() => openFileActions(item)}
+              />
+            );
+          })}
         </View>
       ) : (
         <EmptyState
@@ -354,6 +430,7 @@ export function HomeScreen() {
         onShare={shareFile}
         onDelete={deleteFile}
         onInfo={goToInfo}
+        onOpenDraft={openDraft}
         onDownload={() => { closeActions(); }}
       />
       <FolderMoveModal

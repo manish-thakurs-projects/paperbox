@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { Folder, VaultFile } from "../types";
+import { Folder, PdfDraft, PdfDraftPage, VaultFile } from "../types";
 import {
   deleteVaultFile,
   loadVault,
@@ -10,10 +10,16 @@ import { getFolderIdsForFile, sanitizeVaultName } from "../utils/files";
 type State = {
   files: VaultFile[];
   folders: Folder[];
+  drafts: PdfDraft[];
   ready: boolean;
   hydrate: () => Promise<void>;
   addFiles: (items: VaultFile[]) => void;
   addConvertedPdf: (sourceId: string, pdf: VaultFile) => void;
+  addPdfDraft: (draft: PdfDraft) => Promise<void>;
+  updatePdfDraftPages: (id: string, pages: PdfDraftPage[]) => Promise<void>;
+  removePdfDraft: (id: string) => void;
+  deletePdfDraft: (id: string) => Promise<void>;
+  renamePdfDraft: (id: string, name: string) => void;
   addFolder: (name: string, parentId?: string) => void;
   addFolders: (items: Folder[]) => void;
   toggleFavorite: (id: string) => void;
@@ -46,13 +52,73 @@ const normalizeFile = (file: VaultFile): VaultFile => {
 
 const normalizeFiles = (files: VaultFile[]) => files.map(normalizeFile);
 
-const persist = (files: VaultFile[], folders: Folder[]) =>
-  void saveVault({ files: normalizeFiles(files), folders });
+export const useVaultStore = create<State>((set, get) => {
+  type PersistSnapshot = {
+    files: VaultFile[];
+    folders: Folder[];
+    drafts: PdfDraft[];
+  };
+  type PersistWaiter = {
+    resolve: () => void;
+    reject: (error: unknown) => void;
+  };
 
-export const useVaultStore = create<State>((set, get) => ({
-  files: [],
-  folders: [],
-  ready: false,
+  // Mutations can happen in bursts (bulk moves, imports, page edits). Queue the
+  // latest snapshot and write once instead of encrypting the entire vault for
+  // every individual state update.
+  let pendingSnapshot: PersistSnapshot | null = null;
+  let persistTimer: ReturnType<typeof setTimeout> | null = null;
+  let persistInFlight = false;
+  let persistWaiters: PersistWaiter[] = [];
+
+  const flushPersist = async () => {
+    if (persistInFlight) return;
+    persistInFlight = true;
+    try {
+      while (pendingSnapshot) {
+        const snapshot = pendingSnapshot;
+        pendingSnapshot = null;
+        const waiters = persistWaiters;
+        persistWaiters = [];
+
+        try {
+          await saveVault(snapshot);
+          waiters.forEach(({ resolve }) => resolve());
+        } catch (error) {
+          waiters.forEach(({ reject }) => reject(error));
+        }
+      }
+    } finally {
+      persistInFlight = false;
+    }
+  };
+
+  const persist = (
+    files: VaultFile[],
+    folders: Folder[],
+    drafts: PdfDraft[] = get().drafts,
+  ): Promise<void> => {
+    pendingSnapshot = {
+      files: normalizeFiles(files),
+      folders,
+      drafts,
+    };
+
+    return new Promise<void>((resolve, reject) => {
+      persistWaiters.push({ resolve, reject });
+      if (persistTimer) clearTimeout(persistTimer);
+      persistTimer = setTimeout(() => {
+        persistTimer = null;
+        void flushPersist();
+      }, 60);
+    });
+  };
+
+  return {
+    files: [],
+    folders: [],
+    drafts: [],
+    ready: false,
   hydrate: async () => {
     // Migrate any files that were accidentally persisted in cache into the vault first
     try {
@@ -65,14 +131,23 @@ export const useVaultStore = create<State>((set, get) => ({
 
     const data = await loadVault();
     const files = normalizeFiles(data.files ?? []);
-    set({ files, folders: data.folders ?? [], ready: true });
+    set({
+      files,
+      folders: data.folders ?? [],
+      drafts: data.drafts ?? [],
+      ready: true,
+    });
   },
   addFiles: (items) => {
     const sanitizedItems = items.map((item) => ({
       ...item,
       name: sanitizeVaultName(item.name, "Untitled"),
     }));
-    const files = normalizeFiles([...sanitizedItems, ...get().files]);
+    const itemIds = new Set(sanitizedItems.map((item) => item.id));
+    const files = normalizeFiles([
+      ...sanitizedItems,
+      ...get().files.filter((file) => !itemIds.has(file.id)),
+    ]);
     set({ files });
     persist(files, get().folders);
   },
@@ -190,6 +265,11 @@ export const useVaultStore = create<State>((set, get) => ({
         await deleteVaultFile(file.uri);
       } catch (error) {
       }
+      if (file.pdfPages?.length) {
+        await Promise.all(
+          file.pdfPages.map((page) => deleteVaultFile(page.uri)),
+        );
+      }
     }
     const files = normalizeFiles(get().files.filter((f) => f.id !== id));
     set({ files });
@@ -204,6 +284,54 @@ export const useVaultStore = create<State>((set, get) => ({
     ]);
     set({ files });
     persist(files, get().folders);
+  },
+  addPdfDraft: async (draft) => {
+    const drafts = [draft, ...get().drafts.filter((item) => item.id !== draft.id)];
+    set({ drafts });
+    await persist(get().files, get().folders, drafts);
+  },
+  updatePdfDraftPages: async (id, pages) => {
+    const drafts = get().drafts.map((draft) =>
+      draft.id === id
+        ? { ...draft, pages, updatedAt: new Date().toISOString() }
+        : draft,
+    );
+    set({ drafts });
+    await persist(get().files, get().folders, drafts);
+  },
+  removePdfDraft: (id) => {
+    const drafts = get().drafts.filter((draft) => draft.id !== id);
+    set({ drafts });
+    persist(get().files, get().folders, drafts);
+  },
+  deletePdfDraft: async (id) => {
+    const draft = get().drafts.find((item) => item.id === id);
+    if (draft) {
+      // A generated PDF can retain the draft's encrypted pages as its edit
+      // source. Only remove page blobs that are not referenced by a vault PDF.
+      const referencedUris = new Set(
+        get()
+          .files.flatMap((file) => file.pdfPages ?? [])
+          .map((page) => page.uri),
+      );
+      await Promise.all(
+        draft.pages
+          .filter((page) => !referencedUris.has(page.uri))
+          .map((page) => deleteVaultFile(page.uri).catch(() => {})),
+      );
+    }
+    const drafts = get().drafts.filter((draft) => draft.id !== id);
+    set({ drafts });
+    await persist(get().files, get().folders, drafts);
+  },
+  renamePdfDraft: (id, name) => {
+    const drafts = get().drafts.map((draft) =>
+      draft.id === id
+        ? { ...draft, name: sanitizeVaultName(name, "Untitled PDF") }
+        : draft,
+    );
+    set({ drafts });
+    persist(get().files, get().folders, drafts);
   },
   removeFileFromFolder: (id, folderId) => {
     const files = normalizeFiles(
@@ -257,4 +385,5 @@ export const useVaultStore = create<State>((set, get) => ({
     set({ folders });
     persist(get().files, folders);
   },
-}));
+  };
+});

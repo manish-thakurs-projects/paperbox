@@ -1,1 +1,7 @@
-<resources/>
+<resources>
+  <color name="widget_background">#1C1C1E</color>
+  <color name="widget_row_background">#2C2C2E</color>
+  <color name="widget_border">#4A4A4C</color>
+  <color name="widget_text">#FFFFFF</color>
+  <color name="widget_secondary_text">#B8B8BD</color>
+</resources>

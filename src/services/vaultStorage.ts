@@ -4,7 +4,7 @@ import * as SecureStore from "expo-secure-store";
 import { Platform, PermissionsAndroid } from "react-native";
 import RNFS from "react-native-fs";
 import saf from "../libs/saf";
-import { Folder, VaultFile } from "../types";
+import { Folder, PdfDraft, VaultFile } from "../types";
 
 // SecureStore defensive wrapper: if the native ExpoSecureStore module isn't available at runtime,
 // fall back to AsyncStorage so the app doesn't crash in development. Falling back weakens
@@ -92,15 +92,16 @@ const EXTERNAL_VAULT_DIR =
 const EXTERNAL_KEY_META = `${EXTERNAL_VAULT_DIR}key.meta.json`;
 const normalizeVault = (
   value: unknown,
-): { files: VaultFile[]; folders: Folder[] } => {
+): { files: VaultFile[]; folders: Folder[]; drafts: PdfDraft[] } => {
   if (!value || typeof value !== "object") {
-    return { files: [], folders: [] };
+    return { files: [], folders: [], drafts: [] };
   }
 
   const candidate = value as {
     files?: VaultFile[];
     folders?: Folder[];
-    vault?: { files?: VaultFile[]; folders?: Folder[] };
+    drafts?: PdfDraft[];
+    vault?: { files?: VaultFile[]; folders?: Folder[]; drafts?: PdfDraft[] };
   };
 
   const files = Array.isArray(candidate.files)
@@ -115,7 +116,13 @@ const normalizeVault = (
       ? candidate.vault.folders
       : [];
 
-  return { files, folders };
+  const drafts = Array.isArray(candidate.drafts)
+    ? candidate.drafts
+    : Array.isArray(candidate.vault?.drafts)
+      ? candidate.vault.drafts
+      : [];
+
+  return { files, folders, drafts };
 };
 
 const bytesToBase64 = (bytes: Uint8Array) => {
@@ -326,26 +333,40 @@ const getCrypto = () => {
 
 // No passphrase onboarding in this build. Use SecureStore-backed key (legacy) for encryption.
 let runtimeVaultKey: CryptoKey | null = null;
+let runtimeVaultKeyPromise: Promise<CryptoKey> | null = null;
 
 const getVaultKey = async (): Promise<CryptoKey> => {
   const crypto = getCrypto();
   if (runtimeVaultKey) return runtimeVaultKey;
+  if (runtimeVaultKeyPromise) return runtimeVaultKeyPromise;
 
-  // Fall back to SecureStore-backed key (legacy). Note: this key will be lost on uninstall.
-  let material = await secureGetItem(KEY_ALIAS);
-  if (!material) {
-    const random = crypto.getRandomValues(new Uint8Array(32));
-    material = bytesToBase64(random);
-    await secureSetItem(KEY_ALIAS, material);
+  // Share one initialization promise so concurrent reads/writes do not each
+  // hit SecureStore and import the same AES key independently.
+  runtimeVaultKeyPromise = (async () => {
+    // Fall back to SecureStore-backed key (legacy). Note: this key will be lost on uninstall.
+    let material = await secureGetItem(KEY_ALIAS);
+    if (!material) {
+      const random = crypto.getRandomValues(new Uint8Array(32));
+      material = bytesToBase64(random);
+      await secureSetItem(KEY_ALIAS, material);
+    }
+
+    const importedKey = await (crypto.subtle as any).importKey(
+      "raw",
+      base64ToBytes(material),
+      { name: "AES-GCM" },
+      false,
+      ["encrypt", "decrypt"],
+    );
+    runtimeVaultKey = importedKey;
+    return importedKey;
+  })();
+
+  try {
+    return await runtimeVaultKeyPromise;
+  } finally {
+    runtimeVaultKeyPromise = null;
   }
-
-  return (crypto.subtle as any).importKey(
-    "raw",
-    base64ToBytes(material),
-    { name: "AES-GCM" },
-    false,
-    ["encrypt", "decrypt"],
-  );
 };
 
 const encryptVault = async (value: string): Promise<string> => {
@@ -368,7 +389,7 @@ const encryptVault = async (value: string): Promise<string> => {
 
 const decryptVault = async (
   value: string,
-): Promise<{ files: VaultFile[]; folders: Folder[] }> => {
+): Promise<{ files: VaultFile[]; folders: Folder[]; drafts: PdfDraft[] }> => {
   const blob = JSON.parse(value) as {
     version?: number;
     iv?: string;
@@ -425,6 +446,7 @@ const writeDurableBackup = async (encrypted: string) => {
 const readDurableBackup = async (): Promise<{
   files: VaultFile[];
   folders: Folder[];
+  drafts: PdfDraft[];
 } | null> => {
   if (Platform.OS !== "android") return null;
 
@@ -459,9 +481,9 @@ const readDurableBackup = async (): Promise<{
 
 const readStoredVault = async (
   raw: string | null,
-): Promise<{ files: VaultFile[]; folders: Folder[] }> => {
+): Promise<{ files: VaultFile[]; folders: Folder[]; drafts: PdfDraft[] }> => {
   if (!raw) {
-    return { files: [], folders: [] };
+    return { files: [], folders: [], drafts: [] };
   }
 
   try {
@@ -476,7 +498,7 @@ const readStoredVault = async (
     }
     return normalizeVault(parsed);
   } catch {
-    return { files: [], folders: [] };
+    return { files: [], folders: [], drafts: [] };
   }
 };
 
@@ -653,6 +675,7 @@ export async function persistVaultFile(
   sourceUri: string,
   nameHint: string,
   extension: string,
+  deleteSource = true,
 ): Promise<string> {
   const safeName = `${nameHint || "vault-item"}`.replace(
     /[^a-zA-Z0-9._-]/g,
@@ -713,6 +736,7 @@ export async function persistVaultFile(
     if (
       sourceUri &&
       sourceUri !== destinationUri &&
+      deleteSource &&
       sourceUri.startsWith("file://")
     ) {
       await FileSystem.deleteAsync(sourceUri, { idempotent: true });
@@ -753,6 +777,7 @@ export async function clearDecryptedCache(): Promise<void> {
 export async function loadVault(): Promise<{
   files: VaultFile[];
   folders: Folder[];
+  drafts: PdfDraft[];
 }> {
   const durable = await readDurableBackup();
   if (durable) {
@@ -766,6 +791,7 @@ export async function loadVault(): Promise<{
 export async function saveVault(data: {
   files: VaultFile[];
   folders: Folder[];
+  drafts?: PdfDraft[];
 }) {
   const payload = JSON.stringify(data);
   const encrypted = await encryptVault(payload);

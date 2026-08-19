@@ -1,4 +1,4 @@
-import JSZip from "jszip";
+import type JSZip from "jszip";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system/legacy";
 import { Platform } from "react-native";
@@ -213,6 +213,7 @@ export async function shareVaultFiles(files: VaultFile[]): Promise<void> {
     return;
   }
 
+  const { default: JSZip } = await import("jszip");
   const zip = new JSZip();
   const cleanupUris: string[] = [];
   try {

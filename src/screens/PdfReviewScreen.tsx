@@ -28,7 +28,6 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as Print from "expo-print";
-import { PDFDocument } from "pdf-lib";
 import DocumentScanner, {
   ResponseType,
   ScanDocumentResponseStatus,
@@ -41,7 +40,15 @@ import { useSettingsStore } from "../store/useSettingsStore";
 import { useVaultStore } from "../store/useVaultStore";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { RootStackParams } from "../navigation/types";
-import { persistVaultFile } from "../services/vaultStorage";
+import {
+  decryptVaultFileForUse,
+  persistVaultFile,
+} from "../services/vaultStorage";
+import {
+  decryptPdfDraftPage,
+  deletePdfDraftPages,
+  persistPdfDraftPage,
+} from "../services/pdfDraftService";
 
 const showRetrySaveDialog = async (message: string) => {
   const idx = await showAlert(
@@ -80,10 +87,12 @@ const createPreviewUri = async (uri: string) => {
 };
 
 export function PdfReviewScreen({ navigation, route }: Props) {
-  const { imageUris } = route.params;
+  const { imageUris = [], draftId } = route.params;
   const { width } = useWindowDimensions();
   const [isSaving, setIsSaving] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [isAddingPages, setIsAddingPages] = useState(false);
+  const [isLoadingDraft, setIsLoadingDraft] = useState(Boolean(draftId));
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(
     null,
   );
@@ -91,12 +100,16 @@ export function PdfReviewScreen({ navigation, route }: Props) {
   const [pages, setPages] = useState<ReviewPage[]>(
     imageUris.map((uri, index) => ({ id: `${index}-${uri}`, uri })),
   );
+  const draft = useVaultStore((s) =>
+    draftId ? s.drafts.find((item) => item.id === draftId) ?? null : null,
+  );
   const [selectedPageIds, setSelectedPageIds] = useState<string[]>([]);
   const [deleteAlertVisible, setDeleteAlertVisible] = useState(false);
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isReordering, setIsReordering] = useState(false);
+  const temporaryUrisRef = useRef<Set<string>>(new Set());
 
   // menu and modal state
   const [menuVisible, setMenuVisible] = useState(false);
@@ -175,6 +188,83 @@ export function PdfReviewScreen({ navigation, route }: Props) {
     draggedIndexRef.current = draggedIndex;
   }, [draggedIndex]);
 
+  useEffect(() => {
+    let active = true;
+    let temporaryUris: string[] = [];
+
+    if (!draftId) {
+      setIsLoadingDraft(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    const draftToLoad = useVaultStore
+      .getState()
+      .drafts.find((item) => item.id === draftId);
+
+    if (!draftToLoad) {
+      setIsLoadingDraft(false);
+      return;
+    }
+
+    setIsLoadingDraft(true);
+    (async () => {
+      try {
+        const hydratedPages: ReviewPage[] = [];
+        for (const page of draftToLoad.pages) {
+          const uri = await decryptPdfDraftPage(page);
+          temporaryUris.push(uri);
+          temporaryUrisRef.current.add(uri);
+          hydratedPages.push({ id: page.id, uri });
+        }
+
+        if (!active) {
+          await Promise.all(
+            temporaryUris.map((uri) =>
+              FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {}),
+            ),
+          );
+          return;
+        }
+
+        setPages(hydratedPages);
+      } catch {
+        if (active) {
+          setPages([]);
+          Alert.alert(
+            "Could not open draft",
+            "The saved scan is unavailable. You can delete this draft from the recent captures list.",
+          );
+        }
+      } finally {
+        if (active) setIsLoadingDraft(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+      void Promise.all(
+        [...new Set([...temporaryUris, ...temporaryUrisRef.current])].map((uri) =>
+          FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {}),
+        ),
+      ).finally(() => temporaryUrisRef.current.clear());
+    };
+  }, [draftId]);
+
+  useEffect(
+    () => () => {
+      const temporaryUris = [...temporaryUrisRef.current];
+      temporaryUrisRef.current.clear();
+      void Promise.all(
+        temporaryUris.map((uri) =>
+          FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {}),
+        ),
+      );
+    },
+    [],
+  );
+
   // PanResponder cache per page id
   const panResponderMapRef = useRef(
     new Map<string, ReturnType<typeof PanResponder.create>>(),
@@ -211,6 +301,8 @@ export function PdfReviewScreen({ navigation, route }: Props) {
   );
 
   const addFiles = useVaultStore((s) => s.addFiles);
+  const updatePdfDraftPages = useVaultStore((s) => s.updatePdfDraftPages);
+  const removePdfDraft = useVaultStore((s) => s.removePdfDraft);
   const setLockSuppressed = useSettingsStore((s) => s.setLockSuppressed);
   const { mode, colors } = usePaperTheme();
   const styles = getStyles(colors, itemWidth, itemHeight, width);
@@ -288,7 +380,6 @@ export function PdfReviewScreen({ navigation, route }: Props) {
 
       const result = await DocumentScanner.scanDocument({
         responseType: ResponseType.ImageFilePath,
-        maxNumDocuments: 10,
       });
 
       if (result.status === ScanDocumentResponseStatus.Cancel) {
@@ -302,18 +393,67 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         return;
       }
 
-      const newPages = await Promise.all(
-        scannedImages.map(async (uri, index) => ({
-          id: `${Date.now()}-${index}-${uri}`,
-          uri,
-          previewUri: await createPreviewUri(uri),
-        })),
-      );
+      // Keep the review screen blocked while the scanned files are encrypted,
+      // previewed, and written back into the draft.
+      setIsAddingPages(true);
 
-      setPages((current) => [...current, ...newPages]);
+      const currentDraft = draftId
+        ? useVaultStore.getState().drafts.find((item) => item.id === draftId)
+        : null;
+
+      if (draftId && currentDraft) {
+        const persistedPages = [];
+        try {
+          for (const [offset, uri] of scannedImages.entries()) {
+            persistedPages.push(
+              await persistPdfDraftPage(
+                uri,
+                draftId,
+                currentDraft.pages.length + offset,
+              ),
+            );
+          }
+
+          const newPages = await Promise.all(
+            persistedPages.map(async (page) => {
+              const decryptedUri = await decryptPdfDraftPage(page);
+              temporaryUrisRef.current.add(decryptedUri);
+              return {
+                id: page.id,
+                uri: decryptedUri,
+                previewUri: await createPreviewUri(decryptedUri),
+              };
+            }),
+          );
+          await updatePdfDraftPages(draftId, [
+            ...currentDraft.pages,
+            ...persistedPages,
+          ]);
+          setPages((current) => [...current, ...newPages]);
+        } catch {
+          await deletePdfDraftPages(persistedPages);
+          await Promise.all(
+            scannedImages.map((uri) =>
+              FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {}),
+            ),
+          );
+          throw new Error("Unable to save scanned pages to the draft");
+        }
+      } else {
+        const newPages = await Promise.all(
+          scannedImages.map(async (uri, index) => ({
+            id: `${Date.now()}-${index}-${uri}`,
+            uri,
+            previewUri: await createPreviewUri(uri),
+          })),
+        );
+
+        setPages((current) => [...current, ...newPages]);
+      }
     } catch (error) {
       Alert.alert("Scan failed", "Unable to scan documents. Please try again.");
     } finally {
+      setIsAddingPages(false);
       setIsScanning(false);
       setLockSuppressed(false);
     }
@@ -438,12 +578,36 @@ export function PdfReviewScreen({ navigation, route }: Props) {
       return;
     }
 
+    let sourcePdfTempUri: string | null = null;
+    let sourcePdfOriginalUri: string | null = null;
     try {
       setIsSaving(true);
+      // Load the PDF engine only when a PDF is actually being created. This
+      // keeps the scanner/review screen lighter during normal app startup.
+      const { PDFDocument } = await import("pdf-lib");
+
+      const sourcePdf = draft?.sourcePdfId
+        ? useVaultStore
+            .getState()
+            .files.find((file) => file.id === draft.sourcePdfId)
+        : null;
+      sourcePdfOriginalUri = sourcePdf?.uri ?? null;
+      const appendToExistingPdf = Boolean(
+        draft?.sourcePdfId && draft.includesSourcePages === false,
+      );
+
+      if (appendToExistingPdf && !sourcePdf) {
+        throw new Error("The original PDF is no longer available.");
+      }
+
+      const pagesToAppend = appendToExistingPdf
+        ? pages.slice(Math.min(draft?.basePageCount ?? 0, pages.length))
+        : pages;
+      const pageUrisToAppend = pagesToAppend.map((page) => page.uri);
 
       // Generate a one-page PDF per image sized to the image's own aspect ratio
       const pagePdfUris = await Promise.all(
-        pageUris.map((uri) => generateImagePagePdf(uri)),
+        pageUrisToAppend.map((uri) => generateImagePagePdf(uri)),
       );
 
       // Merge all single-page PDFs into a single document, preserving page sizes
@@ -461,6 +625,21 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         return bytes;
       };
 
+      if (appendToExistingPdf && sourcePdf) {
+        sourcePdfTempUri = await decryptVaultFileForUse(sourcePdf);
+        const sourceBase64 = await FileSystem.readAsStringAsync(
+          sourcePdfTempUri,
+          { encoding: FileSystem.EncodingType.Base64 },
+        );
+        const sourceBytes = base64ToUint8Array(sourceBase64);
+        const sourceDoc = await PDFDocument.load(sourceBytes);
+        const sourcePages = await mergedPdf.copyPages(
+          sourceDoc,
+          sourceDoc.getPageIndices(),
+        );
+        sourcePages.forEach((page) => mergedPdf.addPage(page));
+      }
+
       for (const pagePdfUri of pagePdfUris) {
         const pageBase64 = await FileSystem.readAsStringAsync(pagePdfUri, {
           encoding: FileSystem.EncodingType.Base64,
@@ -473,7 +652,11 @@ export function PdfReviewScreen({ navigation, route }: Props) {
 
       const mergedBytes = await mergedPdf.save();
       const mergedBase64 = uint8ArrayToBase64(mergedBytes);
-      const filename = `Scan-${Date.now()}.pdf`;
+      const filename = sourcePdf
+        ? sourcePdf.name.toLowerCase().endsWith(".pdf")
+          ? sourcePdf.name
+          : `${sourcePdf.name}.pdf`
+        : `Scan-${Date.now()}.pdf`;
       const tempPdfUri = `${FileSystem.cacheDirectory}${filename}`;
       await FileSystem.writeAsStringAsync(tempPdfUri, mergedBase64, {
         encoding: FileSystem.EncodingType.Base64,
@@ -484,7 +667,7 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         FileSystem.deleteAsync(u, { idempotent: true }).catch(() => {}),
       );
 
-      const fileId = `${Date.now()}-${Math.random()}`;
+      const fileId = sourcePdf?.id ?? `${Date.now()}-${Math.random()}`;
 
       // Persist the PDF with retry prompt on errors. Do not silently fall back to plaintext.
       let encryptedUri: string | null = null;
@@ -520,16 +703,32 @@ export function PdfReviewScreen({ navigation, route }: Props) {
           extension: "pdf",
           kind: "pdf",
           createdAt: new Date().toISOString(),
-          isFavorite: false,
-          isPinned: false,
           tags: [],
-          source: "camera",
+          source: sourcePdf?.source ?? "camera",
+          folderId: sourcePdf?.folderId,
+          folderIds: sourcePdf?.folderIds,
+          isFavorite: sourcePdf?.isFavorite ?? false,
+          isPinned: sourcePdf?.isPinned ?? false,
+          pdfPages: draft?.pages.length ? draft.pages : undefined,
+          pdfHasUnextractedBase: appendToExistingPdf || undefined,
         },
       ]);
+      if (draftId) {
+        removePdfDraft(draftId);
+      }
       navigation.navigate("Preview", { fileId });
     } catch (error) {
       Alert.alert("PDF creation failed", "Please try again.");
     } finally {
+      if (
+        sourcePdfTempUri &&
+        sourcePdfTempUri.startsWith("file://") &&
+        sourcePdfTempUri !== sourcePdfOriginalUri
+      ) {
+        await FileSystem.deleteAsync(sourcePdfTempUri, {
+          idempotent: true,
+        }).catch(() => {});
+      }
       setIsSaving(false);
     }
   };
@@ -790,7 +989,15 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         </View>
       ) : null}
 
-      {hasPages ? (
+      {isLoadingDraft ? (
+        <View style={styles.emptyState}>
+          <ActivityIndicator size="large" color={colors.text} />
+          <Text style={styles.emptyTitle}>Loading draft…</Text>
+          <Text style={styles.emptySubtitle}>
+            Restoring your scanned page securely.
+          </Text>
+        </View>
+      ) : hasPages ? (
         <ScrollView
           style={styles.scrollArea}
           contentContainerStyle={styles.pagesGridContent}
@@ -940,10 +1147,11 @@ export function PdfReviewScreen({ navigation, route }: Props) {
         <TouchableOpacity
           style={[
             styles.primaryButton,
-            (isSaving || !hasPages) && styles.primaryButtonDisabled,
+            (isSaving || isLoadingDraft || !hasPages) &&
+              styles.primaryButtonDisabled,
           ]}
           onPress={createPdf}
-          disabled={isSaving || !hasPages}
+          disabled={isSaving || isLoadingDraft || !hasPages}
         >
           {isSaving ? (
             <ActivityIndicator size="small" color={colors.background} />
@@ -974,6 +1182,23 @@ export function PdfReviewScreen({ navigation, route }: Props) {
           />
         </TouchableOpacity>
       </View>
+
+      <Modal
+        visible={isAddingPages}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {}}
+      >
+        <View style={styles.progressOverlay}>
+          <View style={styles.progressCard}>
+            <ActivityIndicator size="large" color={colors.text} />
+            <Text style={styles.progressTitle}>Saving pages…</Text>
+            <Text style={styles.progressMessage}>
+              Encrypting and adding your scanned pages securely.
+            </Text>
+          </View>
+        </View>
+      </Modal>
 
       {/* Menu modal */}
       <Modal
@@ -1453,6 +1678,41 @@ const getStyles = (
       justifyContent: "center",
       alignItems: "center",
       paddingHorizontal: 24,
+    },
+    progressOverlay: {
+      flex: 1,
+      backgroundColor: withAlpha(c.text, 0.45),
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 24,
+    },
+    progressCard: {
+      width: "100%",
+      maxWidth: 360,
+      padding: 28,
+      borderRadius: 24,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      alignItems: "center",
+      shadowColor: withAlpha(c.text, 1),
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: 0.12,
+      shadowRadius: 24,
+      elevation: 12,
+    },
+    progressTitle: {
+      color: c.text,
+      fontSize: 18,
+      fontWeight: "800",
+      marginTop: 18,
+      marginBottom: 8,
+    },
+    progressMessage: {
+      color: c.secondary,
+      fontSize: 14,
+      lineHeight: 20,
+      textAlign: "center",
     },
     alertContainer: {
       width: "100%",

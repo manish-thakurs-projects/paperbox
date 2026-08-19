@@ -319,6 +319,7 @@ export function FolderDetailScreen({ route, navigation }: Props) {
               <FileRow
                 file={file}
                 selected={selectedRowIds.includes(file.id)}
+                selectionMode={rowSelectionMode}
                 onPress={() =>
                   rowSelectionMode
                     ? toggleRowSelection(file.id)

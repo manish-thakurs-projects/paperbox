@@ -1,5 +1,12 @@
 import React, { useMemo, useState } from "react";
 import { Text, View } from "react-native";
+import { showAlert } from "../services/alertService";
+
+const Alert = {
+  alert: (title?: string, message?: string, buttons?: any[]) => {
+    showAlert(title, message, buttons);
+  },
+};
 import { Screen } from "../components/Screen";
 import { FileRow } from "../components/FileRow";
 import { EmptyState } from "../components/EmptyState";
@@ -13,7 +20,7 @@ import { getFolderIdsForFile } from "../utils/files";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
 import { RootStackParams } from "../navigation/types";
-import { VaultFile } from "../types";
+import { PdfDraft, VaultFile } from "../types";
 import { StyleSheet, TouchableOpacity } from "react-native";
 
 export function CapturedFilesScreen() {
@@ -24,6 +31,7 @@ export function CapturedFilesScreen() {
 
   const files = useVaultStore((s) => s.files);
   const folders = useVaultStore((s) => s.folders);
+  const drafts = useVaultStore((s) => s.drafts);
   const toggleFavorite = useVaultStore((s) => s.toggleFavorite);
   const togglePin = useVaultStore((s) => s.togglePin);
   const renameFile = useVaultStore((s) => s.renameFile);
@@ -31,6 +39,8 @@ export function CapturedFilesScreen() {
     (s) => s.setFileFolderMembership,
   );
   const removeFile = useVaultStore((s) => s.removeFile);
+  const deletePdfDraft = useVaultStore((s) => s.deletePdfDraft);
+  const renamePdfDraft = useVaultStore((s) => s.renamePdfDraft);
 
   const [actionFileId, setActionFileId] = useState<string | null>(null);
   const [actionsVisible, setActionsVisible] = useState(false);
@@ -43,24 +53,29 @@ export function CapturedFilesScreen() {
   const [confirmDeleteSelectionVisible, setConfirmDeleteSelectionVisible] =
     useState(false);
 
-  const actionFile = useMemo(
+  const actionFile = useMemo<VaultFile | PdfDraft | null>(
     () =>
-      actionFileId ? (files.find((f) => f.id === actionFileId) ?? null) : null,
-    [files, actionFileId],
+      actionFileId
+        ? (files.find((f) => f.id === actionFileId) ??
+          drafts.find((draft) => draft.id === actionFileId) ??
+          null)
+        : null,
+    [files, drafts, actionFileId],
   );
 
   const capturedFiles = useMemo(
     () =>
-      [...files]
-        .filter((file) => file.source === "camera")
-        .sort(
-          (a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-        ),
-    [files],
+      [
+        ...files.filter((file) => file.source === "camera"),
+        ...drafts,
+      ].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      ),
+    [files, drafts],
   );
 
-  const openFileActions = (file: VaultFile) => {
+  const openFileActions = (file: VaultFile | PdfDraft) => {
     setActionFileId(file.id);
     setActionsVisible(true);
   };
@@ -74,14 +89,14 @@ export function CapturedFilesScreen() {
       setMoveVisible(false);
       return;
     }
-    if (!actionFile) return;
+    if (!actionFile || "pages" in actionFile) return;
     setSelectedFolderIds(getFolderIdsForFile(actionFile));
     setMoveVisible(true);
     setActionsVisible(false);
   };
 
   const saveFolderSelection = () => {
-    if (!actionFile) return;
+    if (!actionFile || "pages" in actionFile) return;
     setFileFolderMembership(actionFile.id, selectedFolderIds);
     setMoveVisible(false);
   };
@@ -93,7 +108,11 @@ export function CapturedFilesScreen() {
 
   const confirmDeleteFile = () => {
     if (!confirmDeleteFileId) return;
-    removeFile(confirmDeleteFileId);
+    if (drafts.some((draft) => draft.id === confirmDeleteFileId)) {
+      void deletePdfDraft(confirmDeleteFileId);
+    } else {
+      void removeFile(confirmDeleteFileId);
+    }
     closeActions();
     setConfirmDeleteFileId(null);
   };
@@ -102,18 +121,36 @@ export function CapturedFilesScreen() {
 
   const renameFileAction = (name: string) => {
     if (!actionFile) return;
-    renameFile(actionFile.id, name);
+    if ("pages" in actionFile) {
+      renamePdfDraft(actionFile.id, name);
+    } else {
+      renameFile(actionFile.id, name);
+    }
     closeActions();
   };
 
   const goToInfo = () => {
     if (!actionFile) return;
     closeActions();
-    navigation.navigate("FileDetail", { fileId: actionFile.id });
+    if ("pages" in actionFile) {
+      Alert.alert(
+        "Draft details",
+        `${actionFile.pages.length} page${actionFile.pages.length === 1 ? "" : "s"} ready to review.`,
+      );
+    } else {
+      navigation.navigate("FileDetail", { fileId: actionFile.id });
+    }
+  };
+
+  const openDraft = () => {
+    if (!actionFile || !("pages" in actionFile)) return;
+    const draftId = actionFile.id;
+    closeActions();
+    navigation.navigate("PdfReview", { draftId });
   };
 
   const shareFile = async () => {
-    if (!actionFile) return;
+    if (!actionFile || "pages" in actionFile) return;
     try {
       await shareVaultFile(actionFile);
     } catch (error) {
@@ -123,13 +160,13 @@ export function CapturedFilesScreen() {
   };
 
   const toggleFavoriteState = () => {
-    if (!actionFile) return;
+    if (!actionFile || "pages" in actionFile) return;
     toggleFavorite(actionFile.id);
     closeActions();
   };
 
   const togglePinState = () => {
-    if (!actionFile) return;
+    if (!actionFile || "pages" in actionFile) return;
     togglePin(actionFile.id);
     closeActions();
   };
@@ -146,18 +183,33 @@ export function CapturedFilesScreen() {
 
   const clearRowSelection = () => setSelectedRowIds([]);
   const selectAllFiles = () =>
-    setSelectedRowIds(capturedFiles.map((f) => f.id));
+    setSelectedRowIds(
+      capturedFiles.map((item) => item.id),
+    );
   const deleteSelectedRows = () => setConfirmDeleteSelectionVisible(true);
   const confirmDeleteSelectedRows = () => {
-    selectedRowIds.forEach((fileId) => removeFile(fileId));
+    selectedRowIds.forEach((fileId) => {
+      if (drafts.some((draft) => draft.id === fileId)) {
+        void deletePdfDraft(fileId);
+      } else {
+        void removeFile(fileId);
+      }
+    });
     clearRowSelection();
     setConfirmDeleteSelectionVisible(false);
   };
   const cancelDeleteSelectedRows = () =>
     setConfirmDeleteSelectionVisible(false);
   const openSelectionMoveModal = () => {
-    if (!folders.length) return;
     if (!selectedRowIds.length) return;
+    if (!selectedRowIds.some((id) => files.some((file) => file.id === id))) {
+      Alert.alert(
+        "Nothing to move",
+        "PDF drafts can be opened, renamed, or deleted after selection.",
+      );
+      return;
+    }
+    if (!folders.length) return;
     setSelectedFolderIds([]);
     setMoveVisible(true);
   };
@@ -166,9 +218,11 @@ export function CapturedFilesScreen() {
       setMoveVisible(false);
       return;
     }
-    selectedRowIds.forEach((fileId) =>
-      setFileFolderMembership(fileId, selectedFolderIds),
-    );
+    selectedRowIds.forEach((fileId) => {
+      if (files.some((file) => file.id === fileId)) {
+        setFileFolderMembership(fileId, selectedFolderIds);
+      }
+    });
     clearRowSelection();
     setMoveVisible(false);
   };
@@ -219,20 +273,26 @@ export function CapturedFilesScreen() {
             </View>
           ) : null}
 
-          {capturedFiles.map((file) => (
-            <FileRow
-              key={file.id}
-              file={file}
-              selected={selectedRowIds.includes(file.id)}
-              onPress={() =>
-                rowSelectionMode
-                  ? toggleRowSelection(file.id)
-                  : navigation.navigate("Preview", { fileId: file.id })
-              }
-              onLongPress={() => toggleRowSelection(file.id)}
-              onMore={() => openFileActions(file)}
-            />
-          ))}
+          {capturedFiles.map((item) => {
+            const isDraft = "pages" in item;
+            return (
+              <FileRow
+                key={item.id}
+                file={item}
+                selected={selectedRowIds.includes(item.id)}
+                selectionMode={rowSelectionMode}
+                onPress={() =>
+                    rowSelectionMode
+                      ? toggleRowSelection(item.id)
+                      : isDraft
+                        ? navigation.navigate("PdfReview", { draftId: item.id })
+                        : navigation.navigate("Preview", { fileId: item.id })
+                }
+                onLongPress={() => toggleRowSelection(item.id)}
+                onMore={() => openFileActions(item)}
+              />
+            );
+          })}
         </View>
       )}
 
@@ -247,6 +307,7 @@ export function CapturedFilesScreen() {
         onShare={shareFile}
         onDelete={deleteFile}
         onInfo={goToInfo}
+        onOpenDraft={openDraft}
         onDownload={() => {
           closeActions();
         }}

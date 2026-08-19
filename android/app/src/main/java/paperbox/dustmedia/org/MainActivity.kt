@@ -15,6 +15,7 @@ class MainActivity : ReactActivity() {
     // Capture a PDF opened from another app before React Native starts. The
     // JavaScript bridge consumes this once it has mounted.
     IncomingPdfStore.capture(this, intent)
+    WidgetActionStore.capture(intent)
 
     // Set the theme to AppTheme BEFORE onCreate to support
     // coloring the background, status bar, and navigation bar.
@@ -27,6 +28,7 @@ class MainActivity : ReactActivity() {
     super.onNewIntent(intent)
     setIntent(intent)
     IncomingPdfStore.capture(this, intent)
+    WidgetActionStore.capture(intent)
   }
 
   /**

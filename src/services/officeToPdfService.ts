@@ -1,6 +1,6 @@
 import * as FileSystem from "expo-file-system/legacy";
 import * as Print from "expo-print";
-import JSZip from "jszip";
+import type JSZip from "jszip";
 
 const OFFICE_EXTENSIONS = new Set([
   "doc",
@@ -209,6 +209,7 @@ export async function convertOfficeFileToPdf(
   const base64 = await FileSystem.readAsStringAsync(sourceUri, {
     encoding: FileSystem.EncodingType.Base64,
   });
+  const { default: JSZip } = await import("jszip");
   const zip = await JSZip.loadAsync(base64, { base64: true });
   let body: string;
   if (extension === "docx") body = await convertDocx(zip);

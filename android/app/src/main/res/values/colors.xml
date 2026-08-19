@@ -2,4 +2,9 @@
   <color name="splashscreen_background">#FFFFFF</color>
   <color name="colorPrimary">#023c69</color>
   <color name="colorPrimaryDark">#ffffff</color>
+  <color name="widget_background">#F7F7F8</color>
+  <color name="widget_row_background">#FFFFFF</color>
+  <color name="widget_border">#D1D1D6</color>
+  <color name="widget_text">#1C1C1E</color>
+  <color name="widget_secondary_text">#6E6E73</color>
 </resources>

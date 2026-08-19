@@ -1,5 +1,7 @@
+import type { NavigatorScreenParams } from "@react-navigation/native";
+
 export type RootStackParams = {
-  Vault: undefined;
+  Vault: NavigatorScreenParams<BottomTabParams> | undefined;
   Search: undefined;
   FileDetail: { fileId: string };
   FolderDetail: { folderId: string };
@@ -9,16 +11,16 @@ export type RootStackParams = {
     externalName?: string;
     externalMimeType?: string;
   };
-  PdfReview: { imageUris: string[] };
+  PdfReview: { imageUris?: string[]; draftId?: string };
   AllFiles: undefined;
   CapturedFiles: undefined;
   Privacy: undefined;
 };
 
 export type BottomTabParams = {
-  Home: undefined;
+  Home: { widgetAction?: "import" } | undefined;
   Folders: undefined;
-  Camera: undefined;
+  Camera: { widgetAction?: "scan" | "createPdf" } | undefined;
   Favorites: undefined;
   Settings: undefined;
 };

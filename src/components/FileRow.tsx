@@ -7,7 +7,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { VaultFile } from "../types";
+import { PdfDraft, VaultFile } from "../types";
 import { fileSize, relativeDate } from "../utils/files";
 import { radius } from "../theme/tokens";
 import { PaperColors, usePaperTheme } from "../theme/usePaperTheme";
@@ -28,15 +28,19 @@ export const FileRow = React.memo(function FileRow({
   onMore,
   onLongPress,
   selected,
+  selectionMode,
 }: {
-  file: VaultFile;
+  file: VaultFile | PdfDraft;
   onPress?: () => void;
   onMore?: () => void;
   onLongPress?: () => void;
   selected?: boolean;
+  selectionMode?: boolean;
 }) {
   const { colors } = usePaperTheme(),
-    s = styles(colors);
+    s = React.useMemo(() => styles(colors), [colors]);
+  const isDraft = "pages" in file;
+  const kind = isDraft ? "pdf" : file.kind;
   return (
     <Pressable
       onPress={onPress}
@@ -48,24 +52,29 @@ export const FileRow = React.memo(function FileRow({
       ]}
     >
       <View style={s.icon}>
-        <Feather name={icons[file.kind]} size={20} color={colors.text} />
+        <Feather name={icons[kind]} size={20} color={colors.text} />
       </View>
       <View style={s.copy}>
         <Text numberOfLines={1} style={s.name}>
           {file.name}
         </Text>
         <Text style={s.meta}>
-          {fileSize(file.size)} · {relativeDate(file.createdAt)}
+          {isDraft ? (
+            <Text style={s.draftLabel}>DRAFT</Text>
+          ) : (
+            fileSize(file.size)
+          )}{" "}
+          · {relativeDate(file.createdAt)}
         </Text>
       </View>
-      {file.isPinned && (
+      {!isDraft && file.isPinned && (
         <Feather name="bookmark" size={16} color={colors.text} />
       )}
       {selected ? (
         <View style={s.checkmark}>
           <Feather name="check" size={20} color={colors.inverse} />
         </View>
-      ) : (
+      ) : onMore ? (
         <Pressable
           hitSlop={10}
           onPress={(event: GestureResponderEvent) => {
@@ -75,9 +84,29 @@ export const FileRow = React.memo(function FileRow({
         >
           <Feather name="more-horizontal" size={20} color={colors.secondary} />
         </Pressable>
-      )}
+      ) : null}
     </Pressable>
   );
+}, (previous, next) => {
+  if (
+    previous.file !== next.file ||
+    previous.selected !== next.selected ||
+    previous.selectionMode !== next.selectionMode
+  ) {
+    return false;
+  }
+
+  // Screens without selection mode may provide callbacks that capture query
+  // or navigation state, so keep their normal prop comparison semantics.
+  if (next.selectionMode === undefined) {
+    return (
+      previous.onPress === next.onPress &&
+      previous.onMore === next.onMore &&
+      previous.onLongPress === next.onLongPress
+    );
+  }
+
+  return true;
 });
 
 const styles = (c: PaperColors) =>
@@ -108,6 +137,7 @@ const styles = (c: PaperColors) =>
     copy: { flex: 1, gap: 4 },
     name: { fontSize: 15, fontWeight: "600", color: c.text },
     meta: { fontSize: 12, color: c.secondary },
+    draftLabel: { color: c.destructive, fontWeight: "700" },
     checkmark: {
       width: 24,
       height: 24,

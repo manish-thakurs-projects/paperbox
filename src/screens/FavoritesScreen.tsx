@@ -400,8 +400,9 @@ export function FavoritesScreen() {
         favorites.map((f) => (
           <FileRow
             key={f.id}
-            file={f}
-            selected={selectedRowIds.includes(f.id)}
+                file={f}
+                selected={selectedRowIds.includes(f.id)}
+                selectionMode={rowSelectionMode}
             onPress={() =>
               rowSelectionMode ? toggleRowSelection(f.id) : goToPreview(f)
             }

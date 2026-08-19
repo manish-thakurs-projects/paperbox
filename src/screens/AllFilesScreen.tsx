@@ -221,6 +221,7 @@ export function AllFilesScreen() {
               key={file.id}
               file={file}
               selected={selectedRowIds.includes(file.id)}
+              selectionMode={rowSelectionMode}
               onPress={() =>
                 rowSelectionMode
                   ? toggleRowSelection(file.id)

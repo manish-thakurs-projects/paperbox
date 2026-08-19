@@ -12,15 +12,9 @@ import { CameraScreen } from "@/screens/CameraScreen";
 import { FavoritesScreen } from "../screens/FavoritesScreen";
 import { SettingsScreen } from "../screens/SettingsScreen";
 import { usePaperTheme } from "../theme/usePaperTheme";
-type Tabs = {
-  Home: undefined;
-  Folders: undefined;
-  Camera: undefined;
-  Favorites: undefined;
-  Settings: undefined;
-};
-const Tab = createBottomTabNavigator<Tabs>();
-const icons: Record<keyof Tabs, keyof typeof Feather.glyphMap> = {
+import type { BottomTabParams } from "./types";
+const Tab = createBottomTabNavigator<BottomTabParams>();
+const icons: Record<keyof BottomTabParams, keyof typeof Feather.glyphMap> = {
   Home: "home",
   Folders: "folder",
   Camera: "camera",

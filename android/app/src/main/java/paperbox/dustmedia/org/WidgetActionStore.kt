@@ -8,6 +8,7 @@ import com.facebook.react.bridge.WritableMap
 object WidgetActionStore {
   const val ACTION_SCAN = "paperbox.widget.SCAN"
   const val ACTION_CREATE_PDF = "paperbox.widget.CREATE_PDF"
+  const val ACTION_IMPORT = "paperbox.widget.IMPORT"
   const val ACTION_OPEN_FOLDER = "paperbox.widget.OPEN_FOLDER"
   const val EXTRA_FOLDER_ID = "paperbox.widget.FOLDER_ID"
 
@@ -26,6 +27,7 @@ object WidgetActionStore {
     val payload = when (action) {
       ACTION_SCAN -> Payload(ACTION_SCAN)
       ACTION_CREATE_PDF -> Payload(ACTION_CREATE_PDF)
+      ACTION_IMPORT -> Payload(ACTION_IMPORT)
       ACTION_OPEN_FOLDER -> {
         val folderId = intent.getStringExtra(EXTRA_FOLDER_ID) ?: return
         Payload(ACTION_OPEN_FOLDER, folderId)

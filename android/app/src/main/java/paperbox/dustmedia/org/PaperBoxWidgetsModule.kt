@@ -1,6 +1,8 @@
 package paperbox.dustmedia.org
 
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReactApplicationContext
@@ -47,6 +49,38 @@ class PaperBoxWidgetsModule(
       promise.resolve(null)
     } catch (error: Exception) {
       promise.reject("WIDGET_SYNC_ERROR", error)
+    }
+  }
+
+  @ReactMethod
+  fun shouldShowExternalPdfOption(promise: Promise) {
+    try {
+      val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+        addCategory(Intent.CATEGORY_DEFAULT)
+        type = "application/pdf"
+      }
+      val packageManager = reactContext.packageManager
+      val resolvedPackage = packageManager
+        .resolveActivity(viewIntent, PackageManager.MATCH_DEFAULT_ONLY)
+        ?.activityInfo
+        ?.packageName
+
+      val handlers = packageManager.queryIntentActivities(
+        viewIntent,
+        PackageManager.MATCH_DEFAULT_ONLY,
+      )
+      val hasExternalHandler = handlers.any {
+        it.activityInfo?.packageName != reactContext.packageName
+      }
+
+      // Hide the action when PaperBox is the selected/default PDF handler. If
+      // another handler is available and selected, keep the action visible.
+      promise.resolve(
+        hasExternalHandler && resolvedPackage != reactContext.packageName,
+      )
+    } catch (error: Exception) {
+      // Failing open keeps the action available on unusual Android providers.
+      promise.resolve(true)
     }
   }
 }
