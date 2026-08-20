@@ -1,5 +1,6 @@
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:initialLayout="@layout/widget_create_pdf"
+    android:previewImage="@drawable/widget_create_pdf_art"
     android:minHeight="48dp"
     android:minWidth="48dp"
     android:resizeMode="horizontal|vertical"

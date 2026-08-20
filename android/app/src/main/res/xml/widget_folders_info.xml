@@ -1,5 +1,6 @@
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:initialLayout="@layout/widget_folders"
+    android:previewImage="@drawable/widget_folders_art"
     android:minHeight="160dp"
     android:minWidth="180dp"
     android:resizeMode="horizontal|vertical"

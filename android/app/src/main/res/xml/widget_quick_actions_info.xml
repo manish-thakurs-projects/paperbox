@@ -1,5 +1,6 @@
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:initialLayout="@layout/widget_quick_actions"
+    android:previewImage="@drawable/widget_quick_actions_art"
     android:minHeight="72dp"
     android:minWidth="180dp"
     android:resizeMode="horizontal"
