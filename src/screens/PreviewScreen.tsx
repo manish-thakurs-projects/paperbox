@@ -287,6 +287,9 @@ export function PreviewScreen({ route, navigation }: Props) {
   ).toLowerCase();
   const isOfficeFile = isOfficeExtension(officeExtension);
   const isPdfFile = file.kind === "pdf" || officeExtension === "pdf";
+  const isImageFile =
+    file.kind === "image" ||
+    ["jpg", "jpeg", "png", "gif", "webp"].includes(officeExtension);
 
   const [loading, setLoading] = useState<boolean>(false);
   const [localUri, setLocalUri] = useState<string | null>(null);
@@ -324,14 +327,14 @@ export function PreviewScreen({ route, navigation }: Props) {
         fontWeight: "500",
       },
       headerRight: () =>
-        isPdfFile || convertedFilename ? (
+        isPdfFile || convertedFilename || isImageFile ? (
           <Pressable
             onPress={() => setMenuVisible(true)}
             disabled={Boolean(actionLoading) || loading}
             style={styles.headerMenuButton}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="PDF actions"
+            accessibilityLabel="Preview actions"
           >
             <Feather name="more-vertical" size={22} color={colors.text} />
           </Pressable>
@@ -346,6 +349,7 @@ export function PreviewScreen({ route, navigation }: Props) {
     loading,
     isOfficeFile,
     isPdfFile,
+    isImageFile,
     convertedFilename,
     name,
   ]);
@@ -451,9 +455,7 @@ export function PreviewScreen({ route, navigation }: Props) {
     ext || extension || mimeExtension || "bin",
   );
 
-  const isImage =
-    file.kind === "image" ||
-    ["jpg", "jpeg", "png", "gif", "webp"].includes(ext);
+  const isImage = isImageFile;
   const isVideo =
     file.kind === "video" || ["mp4", "mov", "mkv", "webm"].includes(ext);
   const isPdf = file.kind === "pdf" || ext === "pdf";
@@ -1090,7 +1092,7 @@ export function PreviewScreen({ route, navigation }: Props) {
     }
   };
 
-  const pdfActionMenu = isPdfPreview ? (
+  const previewActionMenu = isPdfPreview || isImage ? (
     <Modal
       visible={menuVisible}
       transparent
@@ -1123,7 +1125,7 @@ export function PreviewScreen({ route, navigation }: Props) {
               <Text style={styles.pdfMenuItemText}>Open in other app</Text>
             </TouchableOpacity>
           ) : null}
-          {vaultFile ? (
+          {isPdfPreview && vaultFile ? (
             <TouchableOpacity
               style={styles.pdfMenuItem}
               onPress={() => void addPageToPdf()}
@@ -1207,6 +1209,8 @@ export function PreviewScreen({ route, navigation }: Props) {
             backgroundColor={colors.background}
           />
         </Modal>
+        {previewActionMenu}
+        {actionLoader}
       </>
     );
   }
@@ -1374,7 +1378,7 @@ export function PreviewScreen({ route, navigation }: Props) {
               }}
             />
           </Screen>
-          {pdfActionMenu}
+          {previewActionMenu}
           {actionLoader}
         </>
       );
@@ -1396,7 +1400,7 @@ export function PreviewScreen({ route, navigation }: Props) {
             </Text>
           </View>
         </Screen>
-        {pdfActionMenu}
+        {previewActionMenu}
         {actionLoader}
       </>
     );

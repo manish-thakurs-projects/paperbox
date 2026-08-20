@@ -3,7 +3,7 @@ import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
 import { usePaperTheme } from "../theme/usePaperTheme";
 
 const WEBSITE_URL = "https://paperbox.dustmedia.org";
-const CONTACT_EMAIL = "dustmedianetwork@gmail.com";
+const CONTACT_EMAIL = "paperbox@dustmedia.org";
 const EFFECTIVE_DATE = "August 18, 2026";
 
 export function PrivacyPolicyScreen() {
