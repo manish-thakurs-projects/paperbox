@@ -7,7 +7,7 @@
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "paperbox.dustmedia.org",
-      "versionCode": 5,
+      "versionCode": 6,
       "permissions": ["CAMERA"],
       "blockedPermissions": [
         "android.permission.READ_MEDIA_IMAGES",
