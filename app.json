@@ -9,6 +9,10 @@
       "package": "paperbox.dustmedia.org",
       "versionCode": 5,
       "permissions": ["CAMERA"],
+      "blockedPermissions": [
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_EXTERNAL_STORAGE"
+      ],
       "allowBackup": false
     },
     "ios": {
