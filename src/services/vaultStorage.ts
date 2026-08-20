@@ -802,7 +802,9 @@ export async function saveVault(data: {
 }
 
 // External SAF tree URI storage key (stores the user-selected tree URI so it can be reused)
-const EXTERNAL_TREE_KEY = "@paper-box/external-tree-uri";
+// SecureStore keys may contain only letters, numbers, '.', '-' and '_'.
+// Keep this separate from the AsyncStorage namespace keys, which may use '@'.
+const EXTERNAL_TREE_KEY = "paperbox.external-tree-uri";
 
 export async function pickAndSaveExternalVaultFolder(): Promise<string> {
   const uri = await saf.pickFolder();

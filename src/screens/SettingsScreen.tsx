@@ -202,7 +202,7 @@ export function SettingsScreen() {
           onPress={async () => {
             try {
               const mailto =
-                "mailto:dustmedianetwork@gmail.com?subject=" +
+                "mailto:contact@dustmedia.org?subject=" +
                 encodeURIComponent("PaperBox support");
               const supported = await Linking.canOpenURL(mailto);
               if (supported) await Linking.openURL(mailto);
