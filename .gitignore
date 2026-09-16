@@ -6,9 +6,12 @@ outputs/
 
 # Android signing
 android/key.properties
+android/app/debug.keystore
 android/app/release.keystore
 android/app/*.jks
 android/app/*.keystore
+android/app/*.keystore.backup*
+android/app/*.pem
 
 # Build logs
 android/*.log
@@ -21,6 +24,11 @@ android/build/
 
 # Local Android configuration
 android/local.properties
+
+# Environment files
+.env
+.env.*
+!.env.example
 
 # Gradle
 .gradle/
