@@ -125,6 +125,6 @@ run the typecheck, and avoid adding generated build output or personal data.
 Security issues should be reported privately to the maintainer rather than
 posted publicly with exploit details.
 
-There is currently no license file in this repository. Add a license before
-accepting contributions or distributing modified copies.
+## License
 
+This project is open-source and licensed under the [MIT License](LICENSE). See the LICENSE file for details.
