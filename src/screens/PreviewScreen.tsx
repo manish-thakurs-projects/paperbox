@@ -14,7 +14,7 @@ import {
   PermissionsAndroid,
   Pressable,
 } from "react-native";
-import { showAlert } from "../services/alertService";
+import { showAlert, showToast } from "../services/alertService";
 
 const Alert = {
   alert: (title?: string, message?: string, buttons?: any[]) => {
@@ -48,14 +48,10 @@ import {
 } from "../services/officeToPdfService";
 import { shouldShowExternalPdfOption } from "../services/externalPdfService";
 import { PdfDraft, VaultFile } from "../types";
+import { kindOf } from "../utils/files";
 
 type Props = NativeStackScreenProps<RootStackParams, "Preview">;
 
-// Ignore AppState "active" transitions that happen within this window of a backgrounding event
-// that was caused by us launching an external viewer/chooser. Android frequently flickers the
-// host app through background -> active -> background again while a chooser sheet or a
-// permission dialog is shown; treating every one of those blips as "the user came back" causes
-// us to clear the decrypted cache out from under a file that's still being read.
 const EXTERNAL_HANDOFF_GRACE_MS = 1500;
 
 const extFromUri = (uri: string) => {
@@ -260,8 +256,10 @@ export function PreviewScreen({ route, navigation }: Props) {
           tags: [],
         }
       : undefined);
+  const addFiles = useVaultStore((s) => s.addFiles);
   const addConvertedPdf = useVaultStore((s) => s.addConvertedPdf);
   const addPdfDraft = useVaultStore((s) => s.addPdfDraft);
+  const isExternalFile = Boolean(externalUri || !vaultFile);
   const savedConvertedPdf = useVaultStore((s) => {
     const source = s.files.find((f) => f.id === route.params.fileId);
     return source?.convertedPdfId
@@ -515,6 +513,79 @@ export function PreviewScreen({ route, navigation }: Props) {
       } else {
         Alert.alert("Download failed", "Unable to save file to device.");
       }
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const importToVaultFromMenu = async () => {
+    if (actionLoading || !file) return;
+    closeActionMenu();
+    setActionLoading("Importing to vault…");
+    try {
+      let sourceUri = localUriRef.current || localUri;
+      if (!sourceUri) {
+        sourceUri = await saveUriToCache(uri, filename);
+      }
+      if (!sourceUri) {
+        throw new Error("Could not access file to import.");
+      }
+
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const extension = ext || extensionFromMimeType(file.mimeType) || "pdf";
+      const cleanName = file.name || "Imported Document";
+      const filenameWithoutExt = cleanName.replace(/\.[^/.]+$/, "");
+
+      const vaultUri = await persistVaultFile(
+        sourceUri,
+        `${id}-${filenameWithoutExt}`,
+        extension,
+        false,
+      );
+
+      let fileSize = file.size ?? 0;
+      if (!fileSize) {
+        try {
+          const info = await (FileSystem as any).getInfoAsync(sourceUri, {
+            size: true,
+          });
+          if (info.exists && info.size) {
+            fileSize = info.size;
+          }
+        } catch (_) {}
+      }
+
+      const sourceKey = `${cleanName.trim().toLowerCase()}|${fileSize}|${(
+        file.mimeType || ""
+      ).toLowerCase()}`;
+
+      const importedVaultFile: VaultFile = {
+        id,
+        name: cleanName,
+        uri: vaultUri,
+        mimeType:
+          file.mimeType ||
+          mimeTypeFromExtension(extension) ||
+          "application/pdf",
+        size: fileSize,
+        extension,
+        kind: kindOf(extension),
+        createdAt: new Date().toISOString(),
+        isFavorite: false,
+        isPinned: false,
+        tags: [],
+        source: "import",
+        sourceKey,
+      };
+
+      addFiles([importedVaultFile]);
+      showToast("File imported to vault");
+      navigation.replace("Preview", { fileId: importedVaultFile.id });
+    } catch (e: any) {
+      Alert.alert(
+        "Import failed",
+        e?.message || "Unable to encrypt and import file into vault.",
+      );
     } finally {
       setActionLoading(null);
     }
@@ -1109,13 +1180,23 @@ export function PreviewScreen({ route, navigation }: Props) {
             <Feather name="refresh-cw" size={18} color={colors.text} />
             <Text style={styles.pdfMenuItemText}>Refresh</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.pdfMenuItem}
-            onPress={() => void downloadFromMenu()}
-          >
-            <Feather name="download" size={18} color={colors.text} />
-            <Text style={styles.pdfMenuItemText}>Download</Text>
-          </TouchableOpacity>
+          {isExternalFile ? (
+            <TouchableOpacity
+              style={styles.pdfMenuItem}
+              onPress={() => void importToVaultFromMenu()}
+            >
+              <Feather name="download-cloud" size={18} color={colors.text} />
+              <Text style={styles.pdfMenuItemText}>Import</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.pdfMenuItem}
+              onPress={() => void downloadFromMenu()}
+            >
+              <Feather name="download" size={18} color={colors.text} />
+              <Text style={styles.pdfMenuItemText}>Download</Text>
+            </TouchableOpacity>
+          )}
           {showExternalPdfOption ? (
             <TouchableOpacity
               style={styles.pdfMenuItem}
